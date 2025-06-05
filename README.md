@@ -15,7 +15,7 @@ Based on community feedback and continued development, this addon aims to offer 
 * **Multiple Providers:** Access streams from ShowBox, SoaperTV, Hianime (for anime), VidSrc, Xprime.tv, and Cuevana (self-hosted only).
 * **Personal Cookie Configuration:** **Extremely Recommended** for ShowBox to get the best performance, avoid shared quotas, and unlock all stream qualities (including 4K HDR/DV).
 * **Provider & Quality Customization:** Tailor the addon to your needs by selecting active providers and setting minimum stream qualities.
-* **No Torrents/P2P:** Nuvio Streams only scrapes direct HTTP streams.
+* **Nuvio Streams only scrapes direct HTTP streams.
 * **TMDB & IMDb Support:** Works with both ID types.
 * **User-Friendly Configuration:** All settings are managed through the addon's main page.
 
