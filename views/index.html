@@ -1835,12 +1835,16 @@
                                 <input type="checkbox" id="providerEinthusan" name="providerSelect" value="einthusan" checked style="margin-right: 0.5rem; accent-color: var(--primary);">
                                 <label for="providerEinthusan" style="font-size: 0.9rem;">Einthusan</label>
                             </div>
-                            <select id="qualityEinthusan" name="providerQuality" data-provider="einthusan" class="provider-sort-select">
-                                <option value="all" selected>All Qualities</option>
-                                <option value="480p">480p & Up</option>
-                                <option value="720p">720p & Up</option>
-                                <option value="1080p">1080p & Up</option>
-                            </select>
+                        </div>
+                        <div id="einthusanLangContainer" style="margin: 0.5rem 0 0 1.5rem; display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                            <label style="font-size: 0.8rem;"><input type="checkbox" name="einthusanLang" value="tamil" checked style="margin-right: 0.25rem; accent-color: var(--primary);">Tamil</label>
+                            <label style="font-size: 0.8rem;"><input type="checkbox" name="einthusanLang" value="hindi" checked style="margin-right: 0.25rem; accent-color: var(--primary);">Hindi</label>
+                            <label style="font-size: 0.8rem;"><input type="checkbox" name="einthusanLang" value="telugu" checked style="margin-right: 0.25rem; accent-color: var(--primary);">Telugu</label>
+                            <label style="font-size: 0.8rem;"><input type="checkbox" name="einthusanLang" value="malayalam" checked style="margin-right: 0.25rem; accent-color: var(--primary);">Malayalam</label>
+                            <label style="font-size: 0.8rem;"><input type="checkbox" name="einthusanLang" value="kannada" checked style="margin-right: 0.25rem; accent-color: var(--primary);">Kannada</label>
+                            <label style="font-size: 0.8rem;"><input type="checkbox" name="einthusanLang" value="bengali" checked style="margin-right: 0.25rem; accent-color: var(--primary);">Bengali</label>
+                            <label style="font-size: 0.8rem;"><input type="checkbox" name="einthusanLang" value="marathi" checked style="margin-right: 0.25rem; accent-color: var(--primary);">Marathi</label>
+                            <label style="font-size: 0.8rem;"><input type="checkbox" name="einthusanLang" value="punjabi" checked style="margin-right: 0.25rem; accent-color: var(--primary);">Punjabi</label>
                         </div>
                         <div style="margin-top: 1rem;">
                             <button id="selectAllProvidersBtn" style="padding: 0.4rem 0.8rem; font-size: 0.8rem; background-color: rgba(0, 163, 255, 0.15); border: 1px solid rgba(0, 163, 255, 0.4); color: var(--primary); border-radius: 0.4rem; cursor: pointer; transition: all 0.2s ease; margin-right: 0.5rem;">Select All</button>
@@ -2184,6 +2188,7 @@
         const xprimeCheckbox = document.getElementById('providerXprime'); // Get Xprime checkbox
         const vidzeeCheckbox = document.getElementById('providerVidzee'); // NEW: Get VidZee checkbox
         const einthusanCheckbox = document.getElementById('providerEinthusan'); // NEW: Einthusan
+        const einthusanLangCheckboxes = document.querySelectorAll('input[name="einthusanLang"]');
 
         // Function to update region selector enabled state based on cookie validity
         function updateRegionSelectorState() {
@@ -2267,6 +2272,14 @@
                 }
             });
 
+            const selectedEinthusanLangs = [];
+            einthusanLangCheckboxes.forEach(cb => {
+                if (cb.checked) {
+                    selectedEinthusanLangs.push(cb.value);
+                }
+            });
+            const totalEinthusanLangs = einthusanLangCheckboxes.length;
+
             const qualityPreferences = {};
             let hasQualityPreferences = false;
             providerCheckboxes.forEach(checkbox => {
@@ -2303,6 +2316,13 @@
             if (selectedProviders.length > 0 && selectedProviders.length < totalProviders) {
                 pathParams.push(`providers=${selectedProviders.join(',')}`);
                 queryParams.push(`providers=${selectedProviders.join(',')}`);
+                manifestPersonalized = true;
+            }
+
+            // Einthusan languages handling
+            if (selectedEinthusanLangs.length > 0 && selectedEinthusanLangs.length < totalEinthusanLangs) {
+                pathParams.push(`einthusan_langs=${selectedEinthusanLangs.join(',')}`);
+                queryParams.push(`einthusan_langs=${selectedEinthusanLangs.join(',')}`);
                 manifestPersonalized = true;
             }
 
@@ -2423,6 +2443,12 @@
                 });
             }
         });
+
+        if (einthusanLangCheckboxes) {
+            einthusanLangCheckboxes.forEach(cb => {
+                cb.addEventListener('change', regeneratePersonalizedManifest);
+            });
+        }
         
         // Add event listener for ScraperAPI key input (on blur)
         if (scraperApiKeyInput) {
@@ -2728,6 +2754,7 @@
             const regionFromUrl = pathParams.region || urlParams.get('region');
             const providersFromUrl = pathParams.providers || urlParams.get('providers');
             const minQualitiesFromUrl = pathParams.min_qualities || urlParams.get('min_qualities');
+            const einthusanLangsFromUrl = pathParams.einthusan_langs || urlParams.get('einthusan_langs');
             const scraperApiKeyFromUrl = pathParams.scraper_api_key || urlParams.get('scraper_api_key');
             
             // Set cookie and region
@@ -2768,6 +2795,14 @@
                 updateCookieSectionState();
                 updateQualityDropdownStates();
                 updateScraperApiKeyInputState();
+            }
+
+            // Set Einthusan languages
+            if (einthusanLangsFromUrl && einthusanLangCheckboxes) {
+                const langs = einthusanLangsFromUrl.split(',').map(l => l.trim().toLowerCase());
+                einthusanLangCheckboxes.forEach(cb => {
+                    cb.checked = langs.includes(cb.value.toLowerCase());
+                });
             }
             
             // Set minimum qualities

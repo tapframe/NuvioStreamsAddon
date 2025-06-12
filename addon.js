@@ -462,6 +462,10 @@ builder.defineStreamHandler(async (args) => {
     } else {
         console.log(`[addon.js] No minimum quality preferences set by user.`);
     }
+    const einthusanLanguages = requestSpecificConfig.einthusan_langs || null;
+    if (einthusanLanguages) {
+        console.log(`[addon.js] Einthusan languages set by user: ${einthusanLanguages.join(',')}`);
+    }
 
     console.log("--- FULL ARGS OBJECT (from SDK) ---");
     console.log(JSON.stringify(args, null, 2));
@@ -1036,7 +1040,7 @@ builder.defineStreamHandler(async (args) => {
 
             try {
                 console.log(`[Einthusan] Fetching new streams...`);
-                const streams = await getAllEinthusanStreams(initialTitleFromConversion, id);
+                const streams = await getAllEinthusanStreams(initialTitleFromConversion, id, einthusanLanguages);
 
                 if (streams && streams.length > 0) {
                     console.log(`[Einthusan] Successfully fetched ${streams.length} streams.`);
