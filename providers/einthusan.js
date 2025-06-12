@@ -179,23 +179,30 @@ function delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-async function getAllEinthusanStreams(title, imdbId = null) {
-    const langs = [
+async function getAllEinthusanStreams(title, imdbId = null, languages = null) {
+    const langGroups = [
         ["tamil", "hindi"],
         ["telugu", "malayalam"],
         ["kannada", "bengali"],
         ["marathi", "punjabi"]
     ];
 
+    const langsToFetch = Array.isArray(languages) && languages.length > 0
+        ? languages.map(l => l.toLowerCase())
+        : EinthusanSupportedLanguages;
+
     const results = [];
 
-    for (const langPair of langs) {
+    for (const group of langGroups) {
+        const activeLangs = group.filter(l => langsToFetch.includes(l));
+        if (activeLangs.length === 0) continue;
+
         const streams = await Promise.all(
-            langPair.map(lang => getEinthusanStream(title, lang, imdbId))
+            activeLangs.map(lang => getEinthusanStream(title, lang, imdbId))
         );
         results.push(...streams);
 
-        // Delay between batches (e.g., 1000 ms = 1 second)
+        // Delay between batches
         await delay(500);
     }
 
