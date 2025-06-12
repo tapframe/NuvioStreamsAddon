@@ -180,30 +180,19 @@ function delay(ms) {
 }
 
 async function getAllEinthusanStreams(title, imdbId = null, languages = null) {
-    const langGroups = [
-        ["tamil", "hindi"],
-        ["telugu", "malayalam"],
-        ["kannada", "bengali"],
-        ["marathi", "punjabi"]
-    ];
-
     const langsToFetch = Array.isArray(languages) && languages.length > 0
         ? languages.map(l => l.toLowerCase())
         : EinthusanSupportedLanguages;
 
     const results = [];
 
-    for (const group of langGroups) {
-        const activeLangs = group.filter(l => langsToFetch.includes(l));
-        if (activeLangs.length === 0) continue;
-
-        const streams = await Promise.all(
-            activeLangs.map(lang => getEinthusanStream(title, lang, imdbId))
-        );
+    for (const lang of langsToFetch) {
+        const streams = await getEinthusanStream(title, lang, imdbId);
         results.push(...streams);
 
-        // Delay between batches
-        await delay(500);
+        // Delay between fetches to prevent rate limiting
+        // TODO: Figure out a work around
+        await delay(300);
     }
 
     return results.flat();
