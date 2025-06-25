@@ -1166,6 +1166,8 @@ const _searchAndExtractShowboxUrl = async (searchTerm, originalTmdbTitle, mediaY
 
     // Final decision based on all strategies with STRICTER validation
     if (bestResult.url) {
+
+
         let isAiValidated = false;
         let useResult = false;
 
@@ -1220,6 +1222,7 @@ const _searchAndExtractShowboxUrl = async (searchTerm, originalTmdbTitle, mediaY
             console.log(`  Best overall match: ${bestResult.url} (Score: ${bestResult.score.toFixed(1)}, Strategy: ${bestResult.strategy}) ${confidenceMsg}`);
             
             // Always save AI-validated or high-score results to cache
+
             if (process.env.DISABLE_CACHE !== 'true') {
                 await saveToCache(searchTermKey, bestResult.url, cacheSubDir);
             }
