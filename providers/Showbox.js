@@ -9,6 +9,8 @@ const Redis = require('ioredis'); // Added for Redis
 
 // --- Redis Cache Initialization ---
 let redisClient = null;
+let redisKeepAliveInterval = null; // Variable to manage the keep-alive interval
+
 if (process.env.USE_REDIS_CACHE === 'true') { // Modified condition
     try { // Added try-catch for initialization
         console.log(`[Showbox Cache] Initializing Redis in Showbox.js. REDIS_URL from env: ${process.env.REDIS_URL ? 'exists and has value' : 'MISSING or empty'}`);
@@ -29,6 +31,11 @@ if (process.env.USE_REDIS_CACHE === 'true') { // Modified condition
                 }
                 return false;
             },
+            // --- BEGIN: Upstash Compatibility Fix ---
+            // Upstash requires a TLS connection, and ioredis needs this explicit
+            // empty object to properly enable and configure TLS.
+            tls: {},
+            // --- END: Upstash Compatibility Fix ---
             enableOfflineQueue: true,
             enableReadyCheck: true,
             autoResubscribe: true,
@@ -38,17 +45,43 @@ if (process.env.USE_REDIS_CACHE === 'true') { // Modified condition
 
         redisClient.on('connect', () => {
             console.log('[Showbox Cache] Successfully connected to Redis server.'); // Added prefix for clarity
+
+            // --- BEGIN: Redis Keep-Alive ---
+            // Managed Redis services like Upstash close idle connections after a few minutes.
+            // To prevent this and avoid the reconnect loop, we send a PING command periodically.
+            if (redisKeepAliveInterval) {
+                clearInterval(redisKeepAliveInterval); // Clear previous interval if reconnecting
+            }
+
+            redisKeepAliveInterval = setInterval(() => {
+                if (redisClient && redisClient.status === 'ready') {
+                    redisClient.ping((err) => { // No need to log success, just handle error
+                        if (err) {
+                            console.error('[Showbox Redis Keep-Alive] Ping failed:', err.message);
+                        }
+                        // else { console.log('[Showbox Redis Keep-Alive] Ping sent successfully.'); } // Uncomment for debugging
+                    });
+                }
+            }, 4 * 60 * 1000); // 4 minutes
+            // --- END: Redis Keep-Alive ---
         });
 
         redisClient.on('error', (err) => {
             // Using optional chaining for host and port from options as err.host/err.port might not always be populated
             console.error(`[Showbox Redis Error] ${err.message}. Falling back to FS. Showbox Redis Opts Host: ${redisClient?.options?.host}, Port: ${redisClient?.options?.port}`);
+            
+            // --- BEGIN: Clear Keep-Alive on Error ---
+            // If the connection errors out, clear the interval. A new one will be set on 'connect'.
+            if (redisKeepAliveInterval) {
+                clearInterval(redisKeepAliveInterval);
+                redisKeepAliveInterval = null;
+            }
+            // --- END: Clear Keep-Alive on Error ---
         });
         
-        // Attempt an initial connection check
-        redisClient.connect().catch(err => {
-            console.error(`Initial Redis connection failed: ${err.message}. Ensure Redis is running and accessible.`);
-        });
+        // No need to explicitly call .connect() when lazyConnect is false (the default).
+        // The client connects automatically upon instantiation.
+        // The 'connect' and 'error' event listeners will handle the connection status.
 
     } catch (initError) { // Catch errors from new Redis() or the explicit REDIS_URL check
         console.error(`[Showbox Cache] Failed to initialize Redis client: ${initError.message}`);
@@ -470,6 +503,78 @@ const validateTmdbImage = (showboxImagePath, tmdbApiBackdropPaths = []) => {
     }
     return match;
 };
+
+// --- BEGIN: NEW GEMINI AI VALIDATION HELPER ---
+const validateTitleWithGemini = async (tmdbData, candidateData) => {
+    const geminiApiKey = process.env.GEMINI_API_KEY;
+    if (!geminiApiKey) {
+        console.log('[Gemini] Skipping validation: GEMINI_API_KEY is not set.');
+        return { match: null, reason: "API key not provided." }; // Return a neutral state
+    }
+
+    // Sanity check on input data
+    if (!tmdbData || !tmdbData.title || !candidateData || !candidateData.title) {
+        console.log('[Gemini] Skipping validation: Insufficient data provided.');
+        return { match: null, reason: "Insufficient data." };
+    }
+
+    const { title: tmdbTitle, year: tmdbYear, type: tmdbType, alternativeTitles = [] } = tmdbData;
+    const { title: candidateTitle, year: candidateYear } = candidateData;
+
+    const prompt = `You are an expert movie and TV show database assistant with deep linguistic knowledge. Your task is to determine if two titles refer to the same primary media content, considering translations, alternative titles, and romanization.
+Analyze the following two sources. Pay close attention to the possibility that one title is a romanized version of the other, a direct translation, or a common alternative name. Respond with ONLY a valid JSON object in the format: {"match": boolean, "reason": "A brief explanation for your decision, including any linguistic reasoning."}. Do not include any other text or markdown formatting, always try to give responses as fast as possible..
+
+Source 1 (from TMDB - The Movie Database):
+- Title: "${tmdbTitle}"
+- Type: ${tmdbType}
+- Year: ${tmdbYear}
+- Known Alternative Titles: ${alternativeTitles.length > 0 ? `["${alternativeTitles.join('", "')}"]` : "None"}
+
+Source 2 (from a streaming website):
+- Title: "${candidateTitle}"
+- Year: ${candidateYear || "Not specified"}
+
+Based on your expert analysis, do these two sources refer to the same media content?`;
+
+    const geminiApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${geminiApiKey}`;
+    
+    console.log(`[Gemini] Validating: TMDB:"${tmdbTitle}" vs Candidate:"${candidateTitle}"`);
+
+    try {
+        const response = await axios.post(geminiApiUrl, {
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: {
+                temperature: 0.1,
+                topK: 1,
+                topP: 1,
+                maxOutputTokens: 2048,
+                stopSequences: []
+            }
+        }, { timeout: 15000 });
+
+        if (response.data && response.data.candidates && response.data.candidates[0].content) {
+            const rawResponse = response.data.candidates[0].content.parts[0].text;
+            // --- BEGIN: Robust JSON Parsing ---
+            // The AI is configured to return only JSON. A direct parse is more robust than a regex match.
+            try {
+                const geminiResult = JSON.parse(rawResponse);
+                console.log(`[Gemini] Validation result: ${geminiResult.match}. Reason: ${geminiResult.reason}`);
+                return geminiResult;
+            } catch (e) {
+                console.warn(`[Gemini] Failed to parse JSON from AI response. Error: ${e.message}. Raw response: "${rawResponse}"`);
+                return { match: null, reason: "Failed to parse AI response." };
+            }
+            // --- END: Robust JSON Parsing ---
+        }
+    } catch (error) {
+        const errorMessage = error.response ? JSON.stringify(error.response.data) : error.message;
+        console.error(`[Gemini] API call failed: ${errorMessage}`);
+        return { match: null, reason: "AI API call failed." };
+    }
+    
+    return { match: null, reason: "Unknown error during AI validation." };
+};
+// --- END: NEW GEMINI AI VALIDATION HELPER ---
 
 // Function to extract special title forms for anime (e.g., Romaji)
 const extractSpecialTitles = (tmdbData, alternativeTitles = []) => {
@@ -1061,83 +1166,73 @@ const _searchAndExtractShowboxUrl = async (searchTerm, originalTmdbTitle, mediaY
 
     // Final decision based on all strategies with STRICTER validation
     if (bestResult.url) {
-        // Calculate year difference for validation
-        let yearMismatch = false;
-        let yearDifference = 0;
-        if (mediaYear && bestResult.year) {
-            yearDifference = Math.abs(parseInt(mediaYear) - parseInt(bestResult.year));
-            yearMismatch = yearDifference > 0;
-        }
+        let isAiValidated = false;
+        let useResult = false;
 
-        // STRICT dealbreaker criteria - reject immediately for massive mismatches
-        const isDealbreaker = (
-            yearDifference > 15 || // >15 year difference is almost certainly wrong
-            bestResult.score < 0 || // Negative scores are definitely wrong
-            !bestResult.isCorrectType // Wrong media type (movie vs TV)
-        );
+        // --- BEGIN: Gemini as Primary Validator ---
+        if (process.env.GEMINI_API_KEY) {
+            console.log(`[Gemini] Best candidate found (score: ${bestResult.score.toFixed(1)}). Passing to AI for primary validation...`);
+            
+            const tmdbDataForAi = {
+                title: originalTmdbTitle,
+                year: mediaYear,
+                type: tmdbType,
+                alternativeTitles: tmdbAllTitles.filter(t => t !== originalTmdbTitle)
+            };
 
-        if (isDealbreaker) {
-            console.log(`  ❌ DEALBREAKER: Rejecting match due to: ${
-                yearDifference > 15 ? `Massive year difference (${yearDifference} years)` :
-                bestResult.score < 0 ? `Negative score (${bestResult.score.toFixed(1)})` :
-                !bestResult.isCorrectType ? 'Wrong media type' : 'Unknown reason'
-            }`);
-            console.log(`  No suitable match found on ShowBox search for: ${originalTmdbTitle} (${mediaYear || 'N/A'})`);
-            if (process.env.DISABLE_CACHE !== 'true') {
-                await saveToCache(searchTermKey, 'NO_MATCH_FOUND', cacheSubDir);
+            const candidateDataForAi = {
+                title: bestResult.title,
+                year: bestResult.year
+            };
+
+            const aiValidation = await validateTitleWithGemini(tmdbDataForAi, candidateDataForAi);
+
+            if (aiValidation.match === true) {
+                console.log(`[Gemini] AI CONFIRMED match. This is now the validated result.`);
+                isAiValidated = true;
+                useResult = true;
+            } else if (aiValidation.match === false) {
+                console.log(`[Gemini] AI REJECTED match. Discarding result.`);
+                bestResult.url = null; // Invalidate the result
+                useResult = false;
+            } else {
+                // AI validation was inconclusive, fall back to high-score-based logic
+                console.log(`[Gemini] AI validation was inconclusive. Falling back to score-based confidence.`);
+                if (bestResult.score >= 25 && bestResult.isCorrectType) {
+                    useResult = true;
+                }
             }
-            return { url: null, score: -1 };
-        }
-
-        // Analyze match confidence with STRICTER thresholds
-        let matchConfidence = "LOW";
-        if (bestResult.score >= 35 && bestResult.isCorrectType && yearDifference <= 1) {
-            matchConfidence = "HIGH";
-        } else if (bestResult.score >= 25 && bestResult.isCorrectType && yearDifference <= 3) {
-            matchConfidence = "MEDIUM";
-        }
-        
-        // STRICT: Only accept HIGH confidence for matches with year mismatches > 5 years
-        if (yearDifference > 5 && matchConfidence !== "HIGH") {
-            console.log(`  ❌ REJECTING: ${yearDifference}-year mismatch requires HIGH confidence, but got ${matchConfidence} (score: ${bestResult.score.toFixed(1)})`);
-            console.log(`  No suitable match found on ShowBox search for: ${originalTmdbTitle} (${mediaYear || 'N/A'})`);
-            if (process.env.DISABLE_CACHE !== 'true') {
-                await saveToCache(searchTermKey, 'NO_MATCH_FOUND', cacheSubDir);
+        } else {
+            // --- Fallback if no Gemini Key ---
+            console.log('[Gemini] No API key found. Using score-based confidence for validation.');
+            if (bestResult.score >= 25 && bestResult.isCorrectType) {
+                useResult = true;
+            } else {
+                 console.log(`  Low confidence match (Score: ${bestResult.score.toFixed(1)}). Discarding.`);
+                 useResult = false;
             }
-            return { url: null, score: -1 };
         }
+        // --- END: Gemini as Primary Validator ---
 
-        // STRICT: Only accept MEDIUM+ confidence for any year mismatch > 1 year
-        if (yearDifference > 1 && matchConfidence === "LOW") {
-            console.log(`  ❌ REJECTING: ${yearDifference}-year mismatch requires at least MEDIUM confidence, but got LOW (score: ${bestResult.score.toFixed(1)})`);
-            console.log(`  No suitable match found on ShowBox search for: ${originalTmdbTitle} (${mediaYear || 'N/A'})`);
-            if (process.env.DISABLE_CACHE !== 'true') {
-                await saveToCache(searchTermKey, 'NO_MATCH_FOUND', cacheSubDir);
-            }
-            return { url: null, score: -1 };
-        }
-        
-        const confidenceWarning = matchConfidence !== "HIGH" ? 
-            `[⚠️ ${matchConfidence} CONFIDENCE MATCH - may not be correct]` : "";
-        
-        const yearWarning = yearMismatch ? `[⚠️ YEAR MISMATCH: ${yearDifference} years]` : "";
-        
-        console.log(`  Best overall match: ${bestResult.url} (Score: ${bestResult.score.toFixed(1)}, Strategy: ${bestResult.strategy}) ${confidenceWarning} ${yearWarning}`);
-        
-        // Only save to cache if we have high confidence or perfect match
-        if (matchConfidence === "HIGH" || (bestResult.score > 20 && bestResult.isCorrectType && yearDifference <= 1)) {
+        if (useResult && bestResult.url) {
+            const confidenceMsg = isAiValidated ? `[✅ AI VALIDATED]` : `[⚠️ SCORE-BASED MATCH]`;
+            
+            console.log(`  Best overall match: ${bestResult.url} (Score: ${bestResult.score.toFixed(1)}, Strategy: ${bestResult.strategy}) ${confidenceMsg}`);
+            
+            // Always save AI-validated or high-score results to cache
             if (process.env.DISABLE_CACHE !== 'true') {
                 await saveToCache(searchTermKey, bestResult.url, cacheSubDir);
             }
+            return { url: bestResult.url, score: bestResult.score };
         }
-        return { url: bestResult.url, score: bestResult.score };
-    } else {
-        console.log(`  No suitable match found on ShowBox search for: ${originalTmdbTitle} (${mediaYear || 'N/A'})`);
-        if (process.env.DISABLE_CACHE !== 'true') {
-            await saveToCache(searchTermKey, 'NO_MATCH_FOUND', cacheSubDir);
-        }
-        return { url: null, score: -1 };
     }
+    
+    // This block will now be reached if the initial search found nothing, or if AI rejected the candidate.
+    console.log(`  No suitable match found on ShowBox search for: ${originalTmdbTitle} (${mediaYear || 'N/A'})`);
+    if (process.env.DISABLE_CACHE !== 'true') {
+        await saveToCache(searchTermKey, 'NO_MATCH_FOUND', cacheSubDir);
+    }
+    return { url: null, score: -1 };
 };
 
 // TMDB helper function to get ShowBox URL from TMDB ID
@@ -1407,6 +1502,29 @@ const getShowboxUrlFromTmdbInfo = async (tmdbType, tmdbId, regionPreference = nu
         }
     }
 
+    // --- BEGIN: AI-Powered Search Integration ---
+    // Try AI-powered search if direct URL construction fails and Gemini API key is available
+    if (process.env.GEMINI_API_KEY) {
+        console.log(`[Gemini] Direct URL construction failed. Attempting AI-powered search for ${tmdbType}/${tmdbId}`);
+        const aiFoundUrl = await findShowBoxUrlWithGemini(
+            tmdbType, 
+            tmdbId, 
+            mainTitle, 
+            year, 
+            allTitles, 
+            showboxScraperInstance
+        );
+        
+        if (aiFoundUrl) {
+            console.log(`[Gemini] AI search successfully found URL: ${aiFoundUrl}`);
+            console.timeEnd('getShowboxUrlFromTmdbInfo_total');
+            return { showboxUrl: aiFoundUrl, year: year, title: mainTitle };
+        } else {
+            console.log(`[Gemini] AI search did not find a match. Falling back to traditional search.`);
+        }
+    }
+    // --- END: AI-Powered Search Integration ---
+
     // Fallback to enhanced search logic if direct URL construction fails
     console.log(`  Falling back to ShowBox search for: "${mainTitle}" (Year: ${year || 'N/A'})`);
     const searchTerm = year ? `${mainTitle} ${year}` : mainTitle;
@@ -1466,7 +1584,9 @@ const getShowboxUrlFromTmdbInfo = async (tmdbType, tmdbId, regionPreference = nu
 
 // Function to fetch sources for a single FID
 // MODIFICATION: Remove scraperApiKey parameter
-const fetchSourcesForSingleFid = async (fidToProcess, shareKey, regionPreference = null, userCookie = null) => {
+const fetchSourcesForSingleFid = async (fidToProcess, shareKey, regionPreference = null, userCookie = null, retryAttempt = 0) => {
+    const MAX_RETRIES_SAME_REGION = 1; // Retry once on the same region before falling back
+
     const targetPostData = new URLSearchParams();
     targetPostData.append('fid', fidToProcess);
     targetPostData.append('share_key', shareKey);
@@ -1515,9 +1635,18 @@ const fetchSourcesForSingleFid = async (fidToProcess, shareKey, regionPreference
                         jsonResponse.msg.includes("region") || 
                         jsonResponse.msg.includes("location") ||
                         jsonResponse.msg.includes("unavailable")) {
-                        // Mark the region as unavailable
+                        
+                        // --- BEGIN: Retry Logic ---
+                        if (retryAttempt < MAX_RETRIES_SAME_REGION) {
+                            console.log(`    Region error on attempt ${retryAttempt + 1}. Retrying same region: ${global.lastRequestedRegion.used}`);
+                            await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+                            return fetchSourcesForSingleFid(fidToProcess, shareKey, regionPreference, userCookie, retryAttempt + 1);
+                        }
+                        // --- END: Retry Logic ---
+
+                        // Mark the region as unavailable after retries have failed
                         if (global.lastRequestedRegion && global.lastRequestedRegion.used) {
-                            console.log(`    Marking region ${global.lastRequestedRegion.used} as unavailable`);
+                            console.log(`    Marking region ${global.lastRequestedRegion.used} as unavailable after ${retryAttempt + 1} failed attempts.`);
                             global.regionAvailabilityStatus[global.lastRequestedRegion.used] = false;
                             
                             // Try again with a US fallback region if we haven't already
@@ -1525,7 +1654,8 @@ const fetchSourcesForSingleFid = async (fidToProcess, shareKey, regionPreference
                                 for (const fallbackRegion of US_FALLBACK_REGIONS) {
                                     if (fallbackRegion !== global.lastRequestedRegion.used) {
                                         console.log(`    Retrying with fallback US region: ${fallbackRegion}`);
-                                        return fetchSourcesForSingleFid(fidToProcess, shareKey, fallbackRegion, userCookie);
+                                        // Reset retryAttempt for the new region
+                                        return fetchSourcesForSingleFid(fidToProcess, shareKey, fallbackRegion, userCookie, 0);
                                     }
                                 }
                             }
@@ -1570,8 +1700,16 @@ const fetchSourcesForSingleFid = async (fidToProcess, shareKey, regionPreference
              error.message.includes('network') ||
              (error.response && (error.response.status === 403 || error.response.status === 404)))) {
             
+            // --- BEGIN: Retry Logic ---
+            if (retryAttempt < MAX_RETRIES_SAME_REGION) {
+                console.log(`    Network error on attempt ${retryAttempt + 1}. Retrying same region: ${global.lastRequestedRegion.used}`);
+                await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+                return fetchSourcesForSingleFid(fidToProcess, shareKey, regionPreference, userCookie, retryAttempt + 1);
+            }
+            // --- END: Retry Logic ---
+
             if (global.lastRequestedRegion && global.lastRequestedRegion.used) {
-                console.log(`    Marking region ${global.lastRequestedRegion.used} as potentially unavailable due to error`);
+                console.log(`    Marking region ${global.lastRequestedRegion.used} as potentially unavailable after ${retryAttempt + 1} failed attempts due to error.`);
                 global.regionAvailabilityStatus[global.lastRequestedRegion.used] = false;
                 
                 // Try again with a US fallback region if we haven't already
@@ -1579,7 +1717,8 @@ const fetchSourcesForSingleFid = async (fidToProcess, shareKey, regionPreference
                     for (const fallbackRegion of US_FALLBACK_REGIONS) {
                         if (fallbackRegion !== global.lastRequestedRegion.used) {
                             console.log(`    Retrying with fallback US region: ${fallbackRegion}`);
-                            return fetchSourcesForSingleFid(fidToProcess, shareKey, fallbackRegion, userCookie);
+                            // Reset retryAttempt for the new region
+                            return fetchSourcesForSingleFid(fidToProcess, shareKey, fallbackRegion, userCookie, 0);
                         }
                     }
                 }
@@ -2926,6 +3065,323 @@ loadFallbackCookies().then(fallbackCookies => {
 }).catch(err => {
     console.warn(`Failed to initialize fallback cookies: ${err.message}`);
 });
+
+// --- NEW: AI-Powered Search Function ---
+const findShowBoxUrlWithGemini = async (tmdbType, tmdbId, tmdbTitle, tmdbYear, tmdbAllTitles, showboxScraperInstance) => {
+    const geminiApiKey = process.env.GEMINI_API_KEY;
+    if (!geminiApiKey) {
+        console.log('[Gemini Search] Skipping AI search: GEMINI_API_KEY is not set.');
+        return null;
+    }
+
+    console.log(`[Gemini Search] Starting AI-powered search for ${tmdbTitle} (${tmdbYear || 'N/A'})`);
+    
+    // First, ask Gemini to generate the most likely ShowBox URL formats
+    const generateUrlPrompt = `You are an expert on movie and TV show databases, specifically the ShowBox streaming site.
+
+I need you to generate the most likely URL patterns for a ${tmdbType} on ShowBox.media. 
+ShowBox URLs typically follow these patterns:
+- https://www.showbox.media/movie/m-{slug}-{year} (for movies)
+- https://www.showbox.media/tv/t-{slug}-{year} (for TV shows)
+
+Where {slug} is a lowercase, hyphenated version of the title with special characters removed.
+
+For this ${tmdbType}:
+- TMDB Title: "${tmdbTitle}"
+- Year: ${tmdbYear || "Unknown"}
+- Alternative Titles: ${JSON.stringify(tmdbAllTitles)}
+
+Generate a JSON array of the 5 most likely ShowBox URL patterns for this content. Consider translations, romanizations, and alternative titles.
+Format your response as a valid JSON array of strings, nothing else. Example: ["https://www.showbox.media/movie/m-title-2023", "https://www.showbox.media/movie/m-alt-title-2023"]`;
+
+    try {
+        // Call Gemini to generate URL candidates
+        const geminiApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${geminiApiKey}`;
+        const urlGenResponse = await axios.post(geminiApiUrl, {
+            contents: [{ parts: [{ text: generateUrlPrompt }] }],
+            generationConfig: {
+                temperature: 0.2,
+                topK: 1,
+                topP: 1,
+                maxOutputTokens: 2048
+            }
+        }, { timeout: 15000 });
+
+        // Parse the response to get URL candidates
+        let urlCandidates = [];
+        if (urlGenResponse.data && 
+            urlGenResponse.data.candidates && 
+            urlGenResponse.data.candidates.length > 0 && 
+            urlGenResponse.data.candidates[0].content && 
+            urlGenResponse.data.candidates[0].content.parts && 
+            urlGenResponse.data.candidates[0].content.parts.length > 0) {
+            
+            const rawResponse = urlGenResponse.data.candidates[0].content.parts[0].text;
+            if (!rawResponse) {
+                console.warn(`[Gemini Search] Empty response from API`);
+                return null;
+            }
+            
+            try {
+                // Clean up the response to handle markdown formatting
+                let cleanedResponse = rawResponse;
+                // Remove markdown code blocks if present
+                cleanedResponse = cleanedResponse.replace(/```(?:json)?\s*|\s*```/g, '');
+                // Remove any other non-JSON text before or after the array
+                cleanedResponse = cleanedResponse.trim();
+                // Ensure it starts with [ and ends with ]
+                if (!cleanedResponse.startsWith('[') || !cleanedResponse.endsWith(']')) {
+                    const startIndex = cleanedResponse.indexOf('[');
+                    const endIndex = cleanedResponse.lastIndexOf(']');
+                    if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
+                        cleanedResponse = cleanedResponse.substring(startIndex, endIndex + 1);
+                    }
+                }
+                
+                console.log(`[Gemini Search] Cleaned response for parsing: ${cleanedResponse}`);
+                urlCandidates = JSON.parse(cleanedResponse);
+                console.log(`[Gemini Search] Generated ${urlCandidates.length} URL candidates:`);
+                urlCandidates.forEach((url, i) => console.log(`  ${i+1}. ${url}`));
+            } catch (e) {
+                console.warn(`[Gemini Search] Failed to parse URL candidates: ${e.message}. Raw response: "${rawResponse}"`);
+                return null;
+            }
+        } else {
+            console.warn(`[Gemini Search] Invalid or empty response structure from API`);
+            return null;
+        }
+
+        // Try each URL candidate
+        for (const candidateUrl of urlCandidates) {
+            console.log(`[Gemini Search] Trying candidate URL: ${candidateUrl}`);
+            const htmlContent = await showboxScraperInstance._makeRequest(candidateUrl);
+            
+            if (htmlContent) {
+                console.log(`[Gemini Search] Successfully fetched content from URL: ${candidateUrl}`);
+                const pageInfo = showboxScraperInstance.extractContentIdAndType(candidateUrl, htmlContent);
+                
+                if (pageInfo && pageInfo.title) {
+                    console.log(`[Gemini Search] Extracted title from page: "${pageInfo.title}"`);
+                    
+                    // Verify this is the correct content using Gemini
+                    const verifyPrompt = `You are an expert movie and TV show database assistant with deep linguistic knowledge.
+Determine if these two titles refer to the same media content, considering translations and alternative names:
+
+Source 1 (from TMDB):
+- Title: "${tmdbTitle}"
+- Type: ${tmdbType}
+- Year: ${tmdbYear || "Unknown"}
+
+Source 2 (from ShowBox):
+- Title: "${pageInfo.title}"
+- URL: ${candidateUrl}
+
+Respond with ONLY a valid JSON object: {"match": boolean, "reason": "brief explanation"}`;
+
+                    const verifyResponse = await axios.post(geminiApiUrl, {
+                        contents: [{ parts: [{ text: verifyPrompt }] }],
+                        generationConfig: { temperature: 0.1 }
+                    }, { timeout: 15000 });
+
+                    if (verifyResponse.data && 
+                        verifyResponse.data.candidates && 
+                        verifyResponse.data.candidates.length > 0 && 
+                        verifyResponse.data.candidates[0].content && 
+                        verifyResponse.data.candidates[0].content.parts && 
+                        verifyResponse.data.candidates[0].content.parts.length > 0) {
+                        
+                        const rawVerifyResponse = verifyResponse.data.candidates[0].content.parts[0].text;
+                        if (!rawVerifyResponse) {
+                            console.warn(`[Gemini Search] Empty verification response from API`);
+                            continue;
+                        }
+                        
+                        try {
+                            // Clean up the response to handle markdown formatting
+                            let cleanedResponse = rawVerifyResponse;
+                            // Remove markdown code blocks if present
+                            cleanedResponse = cleanedResponse.replace(/```(?:json)?\s*|\s*```/g, '');
+                            cleanedResponse = cleanedResponse.trim();
+                            // Extract JSON object if surrounded by other text
+                            if (!cleanedResponse.startsWith('{') || !cleanedResponse.endsWith('}')) {
+                                const startIndex = cleanedResponse.indexOf('{');
+                                const endIndex = cleanedResponse.lastIndexOf('}');
+                                if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
+                                    cleanedResponse = cleanedResponse.substring(startIndex, endIndex + 1);
+                                }
+                            }
+                            
+                            const verifyResult = JSON.parse(cleanedResponse);
+                            console.log(`[Gemini Search] Verification result: ${verifyResult.match}. Reason: ${verifyResult.reason}`);
+                            
+                            if (verifyResult.match === true) {
+                                console.log(`[Gemini Search] SUCCESS: AI confirmed match for ${candidateUrl}`);
+                                return candidateUrl;
+                            }
+                        } catch (e) {
+                            console.warn(`[Gemini Search] Failed to parse verification result: ${e.message}. Raw response: "${rawVerifyResponse}"`);
+                        }
+                    } else {
+                        console.warn(`[Gemini Search] Invalid or empty verification response structure from API`);
+                    }
+                }
+            }
+        }
+
+        // If no direct URL matches, try to generate search terms
+        console.log(`[Gemini Search] Direct URL attempts failed. Generating search terms...`);
+        const searchTermPrompt = `You are an expert on finding movies and TV shows on streaming sites.
+
+I'm looking for this ${tmdbType} on ShowBox.media:
+- TMDB Title: "${tmdbTitle}"
+- Year: ${tmdbYear || "Unknown"}
+- Alternative Titles: ${JSON.stringify(tmdbAllTitles)}
+
+Generate 3 search terms that would be most effective for finding this content on ShowBox.
+Consider translations, romanizations, and how ShowBox might list this title.
+Format your response as a valid JSON array of strings, nothing else. Example: ["Exact Title 2023", "Alternative Title", "Translated Title"]`;
+
+        const searchTermResponse = await axios.post(geminiApiUrl, {
+            contents: [{ parts: [{ text: searchTermPrompt }] }],
+            generationConfig: { temperature: 0.2 }
+        }, { timeout: 15000 });
+
+        if (searchTermResponse.data && 
+            searchTermResponse.data.candidates && 
+            searchTermResponse.data.candidates.length > 0 && 
+            searchTermResponse.data.candidates[0].content && 
+            searchTermResponse.data.candidates[0].content.parts && 
+            searchTermResponse.data.candidates[0].content.parts.length > 0) {
+            
+            const rawSearchTerms = searchTermResponse.data.candidates[0].content.parts[0].text;
+            if (!rawSearchTerms) {
+                console.warn(`[Gemini Search] Empty search terms response from API`);
+                return null;
+            }
+            
+            try {
+                // Clean up the response to handle markdown formatting
+                let cleanedResponse = rawSearchTerms;
+                // Remove markdown code blocks if present
+                cleanedResponse = cleanedResponse.replace(/```(?:json)?\s*|\s*```/g, '');
+                cleanedResponse = cleanedResponse.trim();
+                // Ensure it starts with [ and ends with ]
+                if (!cleanedResponse.startsWith('[') || !cleanedResponse.endsWith(']')) {
+                    const startIndex = cleanedResponse.indexOf('[');
+                    const endIndex = cleanedResponse.lastIndexOf(']');
+                    if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
+                        cleanedResponse = cleanedResponse.substring(startIndex, endIndex + 1);
+                    }
+                }
+                
+                const searchTerms = JSON.parse(cleanedResponse);
+                console.log(`[Gemini Search] Generated search terms: ${searchTerms.join(', ')}`);
+                
+                // Try each search term
+                for (const searchTerm of searchTerms) {
+                    const searchUrl = `https://www.showbox.media/search?keyword=${encodeURIComponent(searchTerm)}`;
+                    console.log(`[Gemini Search] Searching with term: "${searchTerm}"`);
+                    
+                    const searchHtml = await showboxScraperInstance._makeRequest(searchUrl);
+                    if (!searchHtml) continue;
+                    
+                    const $ = cheerio.load(searchHtml);
+                    const searchResults = [];
+                    
+                    $('div.film-poster').each((i, elem) => {
+                        const linkElement = $(elem).find('a.film-poster-ahref');
+                        const itemTitle = linkElement.attr('title');
+                        const itemHref = linkElement.attr('href');
+                        
+                        if (itemTitle && itemHref) {
+                            searchResults.push({
+                                title: itemTitle,
+                                href: `https://www.showbox.media${itemHref}`
+                            });
+                        }
+                    });
+                    
+                    console.log(`[Gemini Search] Found ${searchResults.length} results for "${searchTerm}"`);
+                    
+                    if (searchResults.length > 0) {
+                        // Ask Gemini to pick the best match from search results
+                        const pickBestPrompt = `You are an expert movie and TV show database assistant.
+
+I'm looking for this ${tmdbType} on ShowBox:
+- TMDB Title: "${tmdbTitle}"
+- Type: ${tmdbType} 
+- Year: ${tmdbYear || "Unknown"}
+
+Here are search results from ShowBox:
+${searchResults.map((r, i) => `${i+1}. "${r.title}" - ${r.href}`).join('\n')}
+
+Identify which result (if any) is the correct match for the TMDB title, considering translations and alternative names.
+Respond with ONLY a valid JSON object: {"matchIndex": number or null, "reason": "brief explanation"}
+Use null for matchIndex if none match.`;
+
+                        const pickResponse = await axios.post(geminiApiUrl, {
+                            contents: [{ parts: [{ text: pickBestPrompt }] }],
+                            generationConfig: { temperature: 0.1 }
+                        }, { timeout: 15000 });
+                        
+                        if (pickResponse.data && 
+                            pickResponse.data.candidates && 
+                            pickResponse.data.candidates.length > 0 && 
+                            pickResponse.data.candidates[0].content && 
+                            pickResponse.data.candidates[0].content.parts && 
+                            pickResponse.data.candidates[0].content.parts.length > 0) {
+                            
+                            const rawPickResult = pickResponse.data.candidates[0].content.parts[0].text;
+                            if (!rawPickResult) {
+                                console.warn(`[Gemini Search] Empty pick result response from API`);
+                                continue;
+                            }
+                            
+                            try {
+                                // Clean up the response to handle markdown formatting
+                                let cleanedResponse = rawPickResult;
+                                // Remove markdown code blocks if present
+                                cleanedResponse = cleanedResponse.replace(/```(?:json)?\s*|\s*```/g, '');
+                                cleanedResponse = cleanedResponse.trim();
+                                // Extract JSON object if surrounded by other text
+                                if (!cleanedResponse.startsWith('{') || !cleanedResponse.endsWith('}')) {
+                                    const startIndex = cleanedResponse.indexOf('{');
+                                    const endIndex = cleanedResponse.lastIndexOf('}');
+                                    if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
+                                        cleanedResponse = cleanedResponse.substring(startIndex, endIndex + 1);
+                                    }
+                                }
+                                
+                                const pickResult = JSON.parse(cleanedResponse);
+                                console.log(`[Gemini Search] Best match selection: ${JSON.stringify(pickResult)}`);
+                                
+                                if (pickResult.matchIndex !== null && searchResults[pickResult.matchIndex - 1]) {
+                                    const bestMatch = searchResults[pickResult.matchIndex - 1];
+                                    console.log(`[Gemini Search] SUCCESS: AI selected "${bestMatch.title}" as best match`);
+                                    return bestMatch.href;
+                                }
+                            } catch (e) {
+                                console.warn(`[Gemini Search] Failed to parse best match selection: ${e.message}. Raw response: "${rawPickResult}"`);
+                            }
+                        } else {
+                            console.warn(`[Gemini Search] Invalid or empty pick result response structure from API`);
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn(`[Gemini Search] Failed to parse search terms: ${e.message}`);
+            }
+        }
+        
+        console.log(`[Gemini Search] All AI search methods failed for ${tmdbTitle} (${tmdbYear || 'N/A'})`);
+        return null;
+        
+    } catch (error) {
+        console.error(`[Gemini Search] Error during AI search: ${error.message}`);
+        return null;
+    }
+};
+// --- END: AI-Powered Search Function ---
 
 module.exports = {
     getStreamsFromTmdbId,

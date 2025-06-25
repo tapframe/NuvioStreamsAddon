@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Nuvio Streams Addon</title>
+    <title>Nuvio Streams | Elfhosted</title>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap">
     <style>
         :root {
@@ -1774,6 +1774,11 @@
             }
         }
 
+        /* Add MP4Hydra icon style after VidZee icon */
+        .mp4hydra-icon {
+            background: linear-gradient(135deg, #ff9800, #ff5722); /* Orange gradient for MP4Hydra */
+        }
+
     </style>
 </head>
 <body>
@@ -1802,11 +1807,11 @@
         <div class="card main-card">
             <div class="elfhosted-badge">Private Instance</div>
             <div class="card-header">
-                <div class="elfhosted-logo-container">
-                    <img src="https://raw.githubusercontent.com/tapframe/NuvioStreaming/main/assets/titlelogo.png" alt="Nuvio Streams Logo" class="logo" style="max-width: 150px;">
-                    <img src="https://store.elfhosted.com/wp-content/uploads/2024/11/logo.svg" alt="ElfHosted Logo" style="max-width: 80px; height: auto;">
+                <div style="display: flex; justify-content: center; align-items: center; margin-bottom: 1.5rem;">
+                    <img src="https://raw.githubusercontent.com/tapframe/NuvioStreaming/main/assets/titlelogo.png" alt="Nuvio Streams Logo" class="logo" style="max-width: 180px; height: auto; margin-right: 1.5rem; margin-bottom: 0;">
+                    <img src="https://store.elfhosted.com/wp-content/uploads/2024/11/logo.svg" alt="ElfHosted Logo" style="height: 100px; margin-left: 1.5rem;">
                 </div>
-                <h1>Nuvio Streams <span class="premium-title">ElfHosted Edition</span></h1>
+                <h1>Nuvio Streams | Elfhosted</h1>
             </div>
             <div class="card-body">
                 <!-- REMOVE URGENT MIGRATION TOOL SECTION -->
@@ -1818,12 +1823,53 @@
                     <p style="font-size: 1.1rem; margin-bottom: 0.5rem; color: #fff;">
                         <span style="font-weight: 600; color: var(--elfhosted-primary-light);"> PREMIUM PRIVATE INSTANCE </span>
                     </p>
-                    <p style="margin-bottom: 0.75rem; font-size: 0.95rem;">
-                        Your dedicated instance is hosted by <a href="https://elfhosted.com/" target="_blank" style="color: var(--elfhosted-secondary-light); font-weight: 600; text-decoration: none;">ElfHosted</a> and maintained by <a href="https://hayd.uk" target="_blank" style="color: var(--elfhosted-primary-light); font-weight: 600; text-decoration: none;">Hayduk</a>.
+                    <p style="text-align: center; margin-bottom: 0.75rem;">
+                        Hosting infrastructure donated by <a href="https://elfhosted.com/" target="_blank" style="color: #00c16e; font-weight: 600; text-decoration: none;">ElfHosted</a> ❤️, and independently maintained by <a href="https://hayd.uk" target="_blank" style="color: #00a3ff; font-weight: 600; text-decoration: none;">Hayduk</a>. See the <a href="https://stremio-addons-guide.elfhosted.com/" target="_blank" style="color: #00a3ff; font-weight: 600; text-decoration: none;">ElfHosted Stremio Addons Guide</a> for more addons, or grab <a href="https://store.elfhosted.com/product/nuviostreams/" target="_blank" style="color: #00c16e; font-weight: 600; text-decoration: none;">your own isolated, private instance</a> (<i>directly supports your developer!</i>)
                     </p>
-                    <p style="margin-bottom: 0; font-size: 0.95rem;">
-                        This private instance features <strong style="color: var(--elfhosted-secondary-light);">all providers enabled</strong>, <strong style="color: var(--elfhosted-primary-light);">direct server connections</strong> where possible, and <strong style="color: var(--elfhosted-secondary-light);">dedicated resources</strong> for optimal performance.
-                    </p>
+                    
+                    <!-- Toggle button for private instance features -->
+                    <div style="text-align: center; margin-bottom: 0.5rem;">
+                        <button id="togglePrivateFeatures" class="toggle-btn" style="display: inline-flex; align-items: center; background-color: rgba(140, 82, 255, 0.2); border-radius: 0.4rem; padding: 0.4rem 0.8rem; border: 1px solid rgba(140, 82, 255, 0.4); cursor: pointer;">
+                            <span class="toggle-icon" style="margin-right: 0.5rem; transition: transform 0.3s ease;">▼</span>
+                            <span style="font-weight: 500; color: #8c52ff;">View Private Instance Features</span>
+                        </button>
+                    </div>
+                    
+                    <!-- Collapsible features section -->
+                    <div id="privateInstanceFeatures" class="cookie-config collapsed" style="background: rgba(15, 15, 15, 0.5); margin-top: 0.5rem;">
+                        <div style="padding: 0.75rem;">
+                            <h3 style="font-size: 0.95rem; margin-bottom: 0.75rem; color: #fff; text-align: center;">ElfHosted Private Instance Information</h3>
+                            
+                            <ul style="list-style-type: none; padding: 0; margin: 0;">
+                                <li style="display: flex; align-items: flex-start; margin-bottom: 0.6rem;">
+                                    <span style="color: #00c16e; margin-right: 0.5rem;">•</span>
+                                    <span style="font-size: 0.85rem; color: #fff;">Private instance with separate rate-limits</span>
+                                </li>
+                                <li style="display: flex; align-items: flex-start; margin-bottom: 0.6rem;">
+                                    <span style="color: #00c16e; margin-right: 0.5rem;">•</span>
+                                    <span style="font-size: 0.85rem; color: #fff;">Includes <strong>Cuevana</strong> provider with LATAM content</span>
+                                </li>
+                                <li style="display: flex; align-items: flex-start; margin-bottom: 0.6rem;">
+                                    <span style="color: #00c16e; margin-right: 0.5rem;">•</span>
+                                    <span style="font-size: 0.85rem; color: #fff;">Additional regional providers in development</span>
+                                </li>
+                                <li style="display: flex; align-items: flex-start; margin-bottom: 0;">
+                                    <span style="color: #00c16e; margin-right: 0.5rem;">•</span>
+                                    <span style="font-size: 0.85rem; color: #fff;">33% of hosting fees go to addon development</span>
+                                </li>
+                            </ul>
+                            
+                            <div style="margin-top: 1rem; background: rgba(10, 10, 10, 0.4); border-radius: 0.5rem; padding: 0.75rem; border: 1px dashed rgba(140, 82, 255, 0.3);">
+                                <p style="font-size: 0.85rem; color: #fff; margin: 0; text-align: center;">
+                                    Hosted by ElfHosted with free trial available
+                                </p>
+                            </div>
+                            
+                            <div style="text-align: center; margin-top: 1rem;">
+                                <a href="https://store.elfhosted.com/product/nuvio-streams/" target="_blank" style="display: inline-block; padding: 0.5rem 1rem; background: rgba(140, 82, 255, 0.2); color: #8c52ff; font-weight: 500; font-size: 0.85rem; border-radius: 0.5rem; text-decoration: none; border: 1px solid rgba(140, 82, 255, 0.4);">View on ElfHosted</a>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 
                 <button class="more-addons-btn full-width" id="moreAddonsBtn">
@@ -1839,16 +1885,6 @@
                         <span class="provider-detail">May contain 4K/DV/HDR</span>
                     </div>
                     <div class="provider-item">
-                        <div class="provider-icon hianime-icon">🍥</div>
-                        <div class="provider-name">Hianime</div>
-                        <span class="provider-detail">Anime (Dub/Sub)</span>
-                    </div>
-                    <div class="provider-item">
-                        <div class="provider-icon xprime-icon">⚡</div>
-                        <div class="provider-name">Xprime.tv</div>
-                        <span class="provider-detail" style="color: #ff8c00;">Public (w/ API Key) / Self-host</span>
-                    </div>
-                    <div class="provider-item">
                         <div class="provider-icon hollymovie-icon">🎬</div>
                         <div class="provider-name">HollyMovieHD</div>
                         <span class="provider-detail">Multiple Qualities</span>
@@ -1859,23 +1895,40 @@
                         <span class="provider-detail">Auto Quality</span>
                     </div>
                     <div class="provider-item">
-                        <div class="provider-icon vidzee-icon">📺</div>
-                        <div class="provider-name">VidZee</div>
-                        <span class="provider-detail">Auto Quality</span>
-                    </div>
-                    <div class="provider-item">
                         <div class="provider-icon cuevana-icon">🇨</div> <!-- Placeholder icon, can be updated -->
                         <div class="provider-name">Cuevana</div>
-                        <span class="provider-detail">LATAM Provider</span>
+                        <span class="provider-detail" style="color: #ff8c00;">LATAM Provider (ElfHosted Private Instance Exclusive)</span>
                     </div>
                     <div class="provider-item">
                         <div class="provider-icon vidsrc-icon">🎬</div>
                         <div class="provider-name">VidSrc</div>
                         <span class="provider-detail">Auto Quality</span>
                     </div>
+                    <div class="provider-item">
+                        <div class="provider-icon mp4hydra-icon">🎥</div>
+                        <div class="provider-name">MP4Hydra</div>
+                        <span class="provider-detail">Multiple Qualities - Only works on native Stremio apps (Android TV/Mobile)</span>
+                    </div>
+                    <div class="provider-item">
+                        <div class="provider-icon vidzee-icon">📺</div>
+                        <div class="provider-name">VidZee</div>
+                        <span class="provider-detail">Auto Quality</span>
+                    </div>
+
+                    <h2 style="margin-top: 1.25rem; color: #ff6b6b;">Offline Providers</h2>
+                    <div class="provider-item">
+                        <div class="provider-icon hianime-icon">🍥</div>
+                        <div class="provider-name">Hianime</div>
+                        <span class="provider-detail" style="color: #ff3a3a;">Anime (Dub/Sub) - Offline</span>
+                    </div>
+                    <div class="provider-item">
+                        <div class="provider-icon xprime-icon">⚡</div>
+                        <div class="provider-name">Xprime.tv</div>
+                        <span class="provider-detail" style="color: #ff3a3a;">Offline</span>
+                    </div>
                 </div>
                 
-                <!-- Updated Provider info note for ElfHosted -->
+                <!-- Provider info note remains in place -->
                 <div class="provider-info-note">
                     <span class="info-icon" style="color: var(--elfhosted-primary-light);">💡</span> 
                     <span>The flag emoji (e.g., 🇺🇸, 🇬🇧) next to ShowBox stream names indicates the server location, not the content's language.</span>
@@ -1901,13 +1954,13 @@
                 <div class="provider-selection-container full-width" style="margin-top: 1.5rem;">
                     <h2 style="font-size: 1rem; font-weight: 500; margin-bottom: 0.75rem; color: var(--text); opacity: 0.9;">Customize Your Providers</h2>
                     <p style="font-size: 0.85rem; line-height: 1.5; margin-bottom: 1rem; color: var(--text-light);">
-                        Select the providers you want to use. Unchecking providers can speed up results if you only use specific sources. If all are checked (default), the addon fetches from all.
+                        Select the providers you want to use. Unchecking providers can speed up results if you only use specific sources. Each provider adds to the total loading time, with average fetch times shown below.
                     </p>
                     <div class="provider-checkbox-list" style="background-color: rgba(15, 15, 15, 0.7); border-radius: 0.6rem; padding: 1rem; border: 1px solid var(--border);">
                         <div class="provider-checkbox-item" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
                             <div style="display: flex; align-items: center;">
                                 <input type="checkbox" id="providerShowbox" name="providerSelect" value="showbox" checked style="margin-right: 0.5rem; accent-color: var(--primary);">
-                                <label for="providerShowbox" style="font-size: 0.9rem;">ShowBox</label>
+                                <label for="providerShowbox" style="font-size: 0.9rem;">ShowBox <span style="font-size: 0.75rem; color: var(--text-light);">(~5.3s)</span></label>
                             </div>
                             <select id="qualityShowbox" name="providerQuality" data-provider="showbox" class="provider-sort-select">
                                 <option value="all" selected>All Qualities</option>
@@ -1916,22 +1969,22 @@
                                 <option value="1080p">1080p & Up</option>
                             </select>
                         </div>
-                        <div class="provider-checkbox-item" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
+                        <div class="provider-checkbox-item" style="display: none; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
                             <div style="display: flex; align-items: center;">
-                                <input type="checkbox" id="providerXprime" name="providerSelect" value="xprime" checked style="margin-right: 0.5rem; accent-color: var(--primary);">
-                                <label for="providerXprime" style="font-size: 0.9rem;">Xprime.tv</label>
+                                <input type="checkbox" id="providerXprime" name="providerSelect" value="xprime" disabled style="margin-right: 0.5rem; accent-color: var(--primary); opacity: 0.5;">
+                                <label for="providerXprime" style="font-size: 0.9rem; opacity: 0.5;">Xprime.tv (Offline)</label>
                             </div>
-                            <select id="qualityXprime" name="providerQuality" data-provider="xprime" class="provider-sort-select">
+                            <select id="qualityXprime" name="providerQuality" data-provider="xprime" class="provider-sort-select" disabled>
                                 <option value="all" selected>All Qualities</option>
                                 <option value="480p">480p & Up</option>
                                 <option value="720p">720p & Up</option>
                                 <option value="1080p">1080p & Up</option>
                             </select>
                         </div>
-                        <div class="provider-checkbox-item" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
+                        <div class="provider-checkbox-item" style="display: none; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
                             <div style="display: flex; align-items: center;">
-                                <input type="checkbox" id="providerCuevana" name="providerSelect" value="cuevana" checked style="margin-right: 0.5rem; accent-color: var(--primary);">
-                                <label for="providerCuevana" style="font-size: 0.9rem;">Cuevana</label>
+                                <input type="checkbox" id="providerCuevana" name="providerSelect" value="cuevana" disabled style="margin-right: 0.5rem; accent-color: var(--primary); opacity: 0.5;">
+                                <label for="providerCuevana" style="font-size: 0.9rem; opacity: 0.5;">Cuevana (ElfHosted Private Instance Exclusive)</label>
                             </div>
                             <select id="qualityCuevana" name="providerQuality" data-provider="cuevana" class="provider-sort-select">
                                 <option value="all" selected>All Qualities</option>
@@ -1943,7 +1996,7 @@
                         <div class="provider-checkbox-item" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
                             <div style="display: flex; align-items: center;">
                                 <input type="checkbox" id="providerHollymoviehd" name="providerSelect" value="hollymoviehd" checked style="margin-right: 0.5rem; accent-color: var(--primary);">
-                                <label for="providerHollymoviehd" style="font-size: 0.9rem;">HollyMovieHD</label>
+                                <label for="providerHollymoviehd" style="font-size: 0.9rem;">HollyMovieHD <span style="font-size: 0.75rem; color: var(--text-light);">(~3.5s)</span></label>
                             </div>
                             <select id="qualityHollymoviehd" name="providerQuality" data-provider="hollymoviehd" class="provider-sort-select">
                                 <option value="all" selected>All Qualities</option>
@@ -1955,7 +2008,7 @@
                         <div class="provider-checkbox-item" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
                             <div style="display: flex; align-items: center;">
                                 <input type="checkbox" id="providerSoapertv" name="providerSelect" value="soapertv" checked style="margin-right: 0.5rem; accent-color: var(--primary);">
-                                <label for="providerSoapertv" style="font-size: 0.9rem;">Soaper TV</label>
+                                <label for="providerSoapertv" style="font-size: 0.9rem;">Soaper TV <span style="font-size: 0.75rem; color: var(--text-light);">(~7.6s)</span></label>
                             </div>
                             <select id="qualitySoapertv" name="providerQuality" data-provider="soapertv" class="provider-sort-select" disabled>
                                 <option value="all" selected>All Qualities</option>
@@ -1967,7 +2020,7 @@
                         <div class="provider-checkbox-item" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
                             <div style="display: flex; align-items: center;">
                                 <input type="checkbox" id="providerVidzee" name="providerSelect" value="vidzee" checked style="margin-right: 0.5rem; accent-color: var(--primary);">
-                                <label for="providerVidzee" style="font-size: 0.9rem;">VidZee</label>
+                                <label for="providerVidzee" style="font-size: 0.9rem;">VidZee <span style="font-size: 0.75rem; color: var(--text-light);">(~5.5s)</span></label>
                             </div>
                              <select id="qualityVidzee" name="providerQuality" data-provider="vidzee" class="provider-sort-select">
                                 <option value="all" selected>All Qualities</option>
@@ -1976,22 +2029,22 @@
                                 <option value="1080p">1080p & Up</option>
                             </select>
                         </div>
-                        <div class="provider-checkbox-item" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
+                        <div class="provider-checkbox-item" style="display: none; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
                             <div style="display: flex; align-items: center;">
-                                <input type="checkbox" id="providerHianime" name="providerSelect" value="hianime" checked style="margin-right: 0.5rem; accent-color: var(--primary);">
-                                <label for="providerHianime" style="font-size: 0.9rem;">Hianime</label>
+                                <input type="checkbox" id="providerHianime" name="providerSelect" value="hianime" disabled style="margin-right: 0.5rem; accent-color: var(--primary); opacity: 0.5;">
+                                <label for="providerHianime" style="font-size: 0.9rem; opacity: 0.5;">Hianime (Offline)</label>
                             </div>
-                            <select id="qualityHianime" name="providerQuality" data-provider="hianime" class="provider-sort-select">
+                            <select id="qualityHianime" name="providerQuality" data-provider="hianime" class="provider-sort-select" disabled>
                                 <option value="all" selected>All Qualities</option>
                                 <option value="480p">480p & Up</option>
                                 <option value="720p">720p & Up</option>
                                 <option value="1080p">1080p & Up</option>
                             </select>
                         </div>
-                        <div class="provider-checkbox-item" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0;">
+                        <div class="provider-checkbox-item" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
                             <div style="display: flex; align-items: center;">
                                 <input type="checkbox" id="providerVidsrc" name="providerSelect" value="vidsrc" checked style="margin-right: 0.5rem; accent-color: var(--primary);">
-                                <label for="providerVidsrc" style="font-size: 0.9rem;">VidSrc</label>
+                                <label for="providerVidsrc" style="font-size: 0.9rem;">VidSrc <span style="font-size: 0.75rem; color: var(--text-light);">(~5.4s)</span></label>
                             </div>
                              <select id="qualityVidsrc" name="providerQuality" data-provider="vidsrc" class="provider-sort-select">
                                 <option value="all" selected>All Qualities</option>
@@ -1999,6 +2052,22 @@
                                 <option value="720p">720p & Up</option>
                                 <option value="1080p">1080p & Up</option>
                             </select>
+                        </div>
+                        <div class="provider-checkbox-item" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
+                            <div style="display: flex; align-items: center;">
+                                <input type="checkbox" id="providerMp4hydra" name="providerSelect" value="mp4hydra" checked style="margin-right: 0.5rem; accent-color: var(--primary);">
+                                <label for="providerMp4hydra" style="font-size: 0.9rem;">MP4Hydra <span style="font-size: 0.75rem; color: var(--text-light);">(~8.1s)</span> <span style="font-size: 0.75rem; color: #ff8c00;">Android TV/Mobile only</span></label>
+                            </div>
+                             <select id="qualityMp4hydra" name="providerQuality" data-provider="mp4hydra" class="provider-sort-select">
+                                <option value="all" selected>All Qualities</option>
+                                <option value="480p">480p & Up</option>
+                                <option value="720p">720p & Up</option>
+                                <option value="1080p">1080p & Up</option>
+                            </select>
+                        </div>
+                        <div class="provider-info-note" style="margin-top: 0.75rem; margin-bottom: 0.75rem; padding: 0.5rem; font-size: 0.8rem;">
+                            <span class="info-icon">⏱️</span> 
+                            <span>Average fetch times shown above include a 3-second buffer. Enabling multiple providers will increase total loading time. For faster results, select only the providers you need.</span>
                         </div>
                          <div style="margin-top: 1rem;">
                             <button id="selectAllProvidersBtn" style="padding: 0.4rem 0.8rem; font-size: 0.8rem; background-color: rgba(0, 163, 255, 0.15); border: 1px solid rgba(0, 163, 255, 0.4); color: var(--primary); border-radius: 0.4rem; cursor: pointer; transition: all 0.2s ease; margin-right: 0.5rem;">Select All</button>
@@ -2010,7 +2079,7 @@
                 <!-- END NEW: Provider Selection Section -->
 
                 <!-- ScraperAPI Key Input - MOVED OUTSIDE of cookie-config -->
-                <div class="scraper-api-key-container full-width" style="margin-top: 1.5rem;">
+                <div class="scraper-api-key-container full-width" style="margin-top: 1.5rem; display: none;">
                     <div style="background-color: rgba(15, 15, 15, 0.7); border-radius: 0.6rem; padding: 1rem; border: 1px solid var(--border);">
                         <label for="scraperApiKeyInput" style="display: block; font-size: 0.9rem; font-weight: 500; margin-bottom: 0.25rem;">ScraperAPI Key (Optional for Xprime):</label>
                         <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
@@ -2096,7 +2165,7 @@
                 </div>
             </div>
             <div class="card-footer">
-                <span class="footer-text">Nuvio Streams Addon • <span style="color: var(--elfhosted-primary-light);">ElfHosted Premium Edition</span></span>
+                <span class="footer-text">Nuvio Streams | Elfhosted • Seamless Streaming, Elevated</span>
                 <div class="footer-text">
                     Developed by <a href="https://github.com/tapframe" target="_blank" class="github-link">TapFrame</a> 
                     <span style="margin: 0 0.5rem;">•</span>
@@ -3249,6 +3318,10 @@
             });
         }
 
+        // Combine streams in the preferred provider order
+        combinedRawStreams = [];
+        const providerOrder = ['ShowBox', 'Hianime', 'Xprime.tv', 'HollyMovieHD', 'Soaper TV', 'VidZee', 'MP4Hydra', 'Cuevana', 'VidSrc']; // NEW: Add MP4Hydra provider
+
     </script>
     <script src="/_vercel/insights/script.js" defer></script>
     <!-- Buy Me a Coffee Widget -->
@@ -3328,6 +3401,27 @@
             if (vercelToKoyebBanner) {
                 vercelToKoyebBanner.style.display = 'none';
             }
+            
+            // Add toggle functionality for the private instance features section
+            const togglePrivateFeaturesBtn = document.getElementById('togglePrivateFeatures');
+            const privateInstanceFeatures = document.getElementById('privateInstanceFeatures');
+            
+            if (togglePrivateFeaturesBtn && privateInstanceFeatures) {
+                togglePrivateFeaturesBtn.addEventListener('click', () => {
+                    const isCollapsed = privateInstanceFeatures.classList.toggle('collapsed');
+                    const toggleIcon = togglePrivateFeaturesBtn.querySelector('.toggle-icon');
+                    
+                    if (toggleIcon) {
+                        if (isCollapsed) {
+                            toggleIcon.textContent = '▼';
+                            togglePrivateFeaturesBtn.querySelector('span:last-child').textContent = 'View Private Instance Features';
+                        } else {
+                            toggleIcon.textContent = '▲';
+                            togglePrivateFeaturesBtn.querySelector('span:last-child').textContent = 'Hide Private Instance Features';
+                        }
+                    }
+                });
+            }
 
         })();
     </script>
@@ -3342,25 +3436,15 @@
         'floating-chat.donateButton.text-color': '#fff'
       });
     </script>
-
-    <!-- Apply ElfHosted Theme -->
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            // Apply ElfHosted theme to body
-            document.body.classList.add('elfhosted-theme');
-            
-            // Hide all instance banners for ElfHosted private instances
-            const banners = document.querySelectorAll('.instance-banner');
-            banners.forEach(banner => {
-                banner.style.display = 'none';
-            });
-            
-            // Show ElfHosted info section
-            const elfhostedInfoSection = document.getElementById('elfhostedInfoSection');
-            if (elfhostedInfoSection) {
-                elfhostedInfoSection.style.display = 'block';
-            }
-        });
-    </script>
+    
+    <!-- Discord button -->
+    <div style="position: fixed; bottom: 20px; right: 20px; z-index: 999;">
+        <a href="https://discord.gg/6w8dr3TSDN" target="_blank" rel="noopener noreferrer" style="display: flex; align-items: center; justify-content: center; background-color: #5865F2; color: white; border-radius: 8px; padding: 10px 15px; text-decoration: none; font-weight: 500; box-shadow: 0 2px 10px rgba(0,0,0,0.2);">
+            <svg width="24" height="24" viewBox="0 0 71 55" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-right: 8px;">
+                <path d="M60.1045 4.8978C55.5792 2.8214 50.7265 1.2916 45.6527 0.41542C45.5603 0.39851 45.468 0.440769 45.4204 0.525289C44.7963 1.6353 44.105 3.0834 43.6209 4.2216C38.1637 3.4046 32.7345 3.4046 27.3892 4.2216C26.905 3.0581 26.1886 1.6353 25.5617 0.525289C25.5141 0.443589 25.4218 0.40133 25.3294 0.41542C20.2584 1.2888 15.4057 2.8186 10.8776 4.8978C10.8384 4.9147 10.8048 4.9429 10.7825 4.9795C1.57795 18.7309 -0.943561 32.1443 0.293408 45.3914C0.299005 45.4562 0.335386 45.5182 0.385761 45.5576C6.45866 50.0174 12.3413 52.7249 18.1147 54.5195C18.2071 54.5477 18.305 54.5139 18.3638 54.4378C19.7295 52.5728 20.9469 50.6063 21.9907 48.5383C22.0523 48.4172 21.9935 48.2735 21.8676 48.2256C19.9366 47.4931 18.0979 46.6 16.3292 45.5858C16.1893 45.5041 16.1781 45.304 16.3068 45.2082C16.679 44.9293 17.0513 44.6391 17.4067 44.3461C17.471 44.2926 17.5606 44.2813 17.6362 44.3151C29.2558 49.6202 41.8354 49.6202 53.3179 44.3151C53.3935 44.2785 53.4831 44.2898 53.5502 44.3433C53.9057 44.6363 54.2779 44.9293 54.6529 45.2082C54.7816 45.304 54.7732 45.5041 54.6333 45.5858C52.8646 46.6197 51.0259 47.4931 49.0921 48.2228C48.9662 48.2707 48.9102 48.4172 48.9718 48.5383C50.038 50.6034 51.2554 52.5699 52.5959 54.435C52.6519 54.5139 52.7526 54.5477 52.845 54.5195C58.6464 52.7249 64.529 50.0174 70.6019 45.5576C70.6551 45.5182 70.6887 45.459 70.6943 45.3942C72.1747 30.0791 68.2147 16.7757 60.1968 4.9823C60.1772 4.9429 60.1437 4.9147 60.1045 4.8978ZM23.7259 37.3253C20.2276 37.3253 17.3451 34.1136 17.3451 30.1693C17.3451 26.225 20.1717 23.0133 23.7259 23.0133C27.308 23.0133 30.1626 26.2532 30.1066 30.1693C30.1066 34.1136 27.28 37.3253 23.7259 37.3253ZM47.3178 37.3253C43.8196 37.3253 40.9371 34.1136 40.9371 30.1693C40.9371 26.225 43.7636 23.0133 47.3178 23.0133C50.9 23.0133 53.7545 26.2532 53.6986 30.1693C53.6986 34.1136 50.9 37.3253 47.3178 37.3253Z" fill="#ffffff"/>
+            </svg>
+            Join Discord
+        </a>
+    </div>
 </body>
 </html> 

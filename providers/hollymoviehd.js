@@ -119,104 +119,74 @@ async function getHollymovieStreams(tmdbId, mediaType = 'movie', season = '', ep
       return [];
     }
     
-    for (const sourceEntry of initialData.sources) {
+    const streamPromises = initialData.sources.map(async (sourceEntry) => {
       if (!sourceEntry || !sourceEntry.file) {
         console.warn('[HollyMovieHD] Skipping a source entry due to missing file property:', sourceEntry);
-        continue;
+        return []; // Return empty array for this invalid entry
       }
       const mainPlaylistUrl = sourceEntry.file;
-      // You could potentially use sourceEntry.label here if useful, e.g., for logging or initial quality hint
       console.log(`[HollyMovieHD] Processing source file from API: ${mainPlaylistUrl}` + (sourceEntry.label ? ` (Label: ${sourceEntry.label})` : ''));
       
-      const mainPlaylistContent = await directFetchM3U8(mainPlaylistUrl);
-
-      if (typeof mainPlaylistContent !== 'string' || !mainPlaylistContent.trim().startsWith('#EXTM3U')) {
-          console.error(`[HollyMovieHD] Fetched content for ${mainPlaylistUrl} is not a valid M3U8 format.`);
-          console.log(`[HollyMovieHD] Content snippet: ${String(mainPlaylistContent).substring(0, 300)}`);
-          // Optionally, if the URL itself might be playable, add it as a fallback for this specific sourceEntry
-          // For now, we'll just skip if it's not M3U8, as per original logic for the first item.
-          continue; // Skip this sourceEntry if its M3U8 content is invalid
-      }
-
       try {
-          const playlist = parse(mainPlaylistContent);
-          const streamsFromThisSource = []; // Temporary array for streams from the current sourceEntry.file
+        const mainPlaylistContent = await directFetchM3U8(mainPlaylistUrl);
 
-          if (playlist.isMasterPlaylist && playlist.variants && playlist.variants.length > 0) {
-              playlist.variants.forEach((variant, index) => {
-                  let absoluteVariantUri = variant.uri;
-                  if (!absoluteVariantUri.startsWith('http://') && !absoluteVariantUri.startsWith('https://')) {
-                      try {
-                          absoluteVariantUri = new URL(variant.uri, mainPlaylistUrl).href;
-                      } catch (e) {
-                          console.warn(`[HollyMovieHD] Could not resolve relative URI: ${variant.uri} against base ${mainPlaylistUrl}. Skipping.`);
-                          return; 
-                      }
-                  }
-                  const quality = parseQualityFromVariant(variant, index);
-                  streamsFromThisSource.push({
-                      url: absoluteVariantUri,
-                      quality: quality,
-                      provider: 'HollyMovieHD',
-                      codecs: [], 
-                      size: 'N/A' 
-                  });
-              });
-          } else { 
-              console.log(`[HollyMovieHD] ${mainPlaylistUrl} is not a master playlist with variants, or has no variants. Treating as media playlist or single quality master.`);
-              if (!playlist.isMasterPlaylist && mainPlaylistContent.includes('.ts')) {
-                  const baseUrl = mainPlaylistUrl.substring(0, mainPlaylistUrl.lastIndexOf('/') + 1);
-                  let modifiedPlaylist = createModifiedM3U8(mainPlaylistContent, baseUrl);
-                  const encodedPlaylist = Buffer.from(modifiedPlaylist).toString('base64');
-                  const dataUri = `data:application/vnd.apple.mpegurl;base64,${encodedPlaylist}`;
-                  streamsFromThisSource.push({
-                      url: dataUri, 
-                      quality: 'Auto Quality', // Or try to derive from sourceEntry.label if available
-                      provider: 'HollyMovieHD',
-                      codecs: [],
-                      size: 'N/A'
-                  });
-                  // Fallback with original URL
-                  streamsFromThisSource.push({
-                    url: mainPlaylistUrl,
-                    quality: 'Original URL', // Differentiate this fallback
+        if (typeof mainPlaylistContent !== 'string' || !mainPlaylistContent.trim().startsWith('#EXTM3U')) {
+            console.error(`[HollyMovieHD] Fetched content for ${mainPlaylistUrl} is not a valid M3U8 format.`);
+            console.log(`[HollyMovieHD] Content snippet: ${String(mainPlaylistContent).substring(0, 300)}`);
+            return [];
+        }
+
+        const playlist = parse(mainPlaylistContent);
+        const streamsFromThisSource = [];
+
+        if (playlist.isMasterPlaylist && playlist.variants && playlist.variants.length > 0) {
+            playlist.variants.forEach((variant, index) => {
+                let absoluteVariantUri = variant.uri;
+                if (!absoluteVariantUri.startsWith('http://') && !absoluteVariantUri.startsWith('https://')) {
+                    try {
+                        absoluteVariantUri = new URL(variant.uri, mainPlaylistUrl).href;
+                    } catch (e) {
+                        console.warn(`[HollyMovieHD] Could not resolve relative URI: ${variant.uri} against base ${mainPlaylistUrl}. Skipping.`);
+                        return; 
+                    }
+                }
+                const quality = parseQualityFromVariant(variant, index);
+                streamsFromThisSource.push({
+                    url: absoluteVariantUri,
+                    quality: quality,
                     provider: 'HollyMovieHD',
-                    codecs: [],
-                    size: 'N/A'
-                  });
-              } else {
-                  // General fallback: Use the mainPlaylistUrl itself if it's not a master with variants
-                  // and not a .ts media playlist (or if .ts handling fails to add anything)
-                  streamsFromThisSource.push({
-                      url: mainPlaylistUrl,
-                      quality: 'Auto Quality', // Or try to derive from sourceEntry.label
-                      provider: 'HollyMovieHD',
-                      codecs: [],
-                      size: 'N/A'
-                  });
-              }
-          }
-          
-          if (streamsFromThisSource.length > 0) {
-            console.log(`[HollyMovieHD] Extracted ${streamsFromThisSource.length} stream options from ${mainPlaylistUrl}.`);
-            allStreams.push(...streamsFromThisSource);
-          } else {
-            console.log(`[HollyMovieHD] No stream variants extracted from ${mainPlaylistUrl}.`);
-          }
+                    codecs: [], 
+                    size: 'N/A' 
+                });
+            });
+        } else { 
+            console.log(`[HollyMovieHD] ${mainPlaylistUrl} is not a master playlist with variants. Treating as single quality.`);
+            streamsFromThisSource.push({
+                url: mainPlaylistUrl,
+                quality: 'Auto Quality',
+                provider: 'HollyMovieHD',
+                codecs: [],
+                size: 'N/A'
+            });
+        }
+        
+        return streamsFromThisSource;
 
-      } catch (parseError) {
-          console.error(`[HollyMovieHD] Error parsing M3U8 playlist content from ${mainPlaylistUrl}:`, parseError.message);
-          console.log(`[HollyMovieHD] Content snippet that failed to parse:`, mainPlaylistContent.substring(0, 500));
-          // Fallback for this specific sourceEntry if parsing fails
-          allStreams.push({
+      } catch (error) {
+          console.error(`[HollyMovieHD] Error processing source ${mainPlaylistUrl}:`, error.message);
+          // Fallback for this specific sourceEntry if any error occurs
+          return [{
               url: mainPlaylistUrl,
               quality: 'Auto Quality', // Or sourceEntry.label
               provider: 'HollyMovieHD',
               codecs: [],
               size: 'N/A'
-          });
+          }];
       }
-    } // End of loop for initialData.sources
+    });
+
+    const settledStreams = await Promise.all(streamPromises);
+    const allStreams = settledStreams.flat();
     
   } catch (error) {
     console.error(`[HollyMovieHD] Error in getHollymovieStreams for ${tmdbId}:`, error.message);
