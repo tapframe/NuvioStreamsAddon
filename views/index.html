@@ -3,6 +3,57 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    
+    <!-- Google Analytics 4 -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        
+        // Replace 'G-XXXXXXXXXX' with your actual GA4 Measurement ID
+        gtag('config', 'G-XXXXXXXXXX', {
+            // Enhanced measurement settings
+            send_page_view: true,
+            allow_google_signals: true,
+            allow_ad_personalization_signals: false, // Set to true if you want ads personalization
+            
+            // Custom parameters for your addon
+            custom_map: {
+                'custom_parameter_1': 'provider_used',
+                'custom_parameter_2': 'content_type'
+            }
+        });
+        
+        // Custom event tracking functions for your addon
+        function trackProviderUsage(providerName, contentType) {
+            gtag('event', 'provider_usage', {
+                'provider_name': providerName,
+                'content_type': contentType,
+                'event_category': 'streaming',
+                'event_label': providerName + '_' + contentType
+            });
+        }
+        
+        function trackStreamRequest(tmdbId, title, type) {
+            gtag('event', 'stream_request', {
+                'tmdb_id': tmdbId,
+                'content_title': title,
+                'content_type': type,
+                'event_category': 'content',
+                'event_label': type + '_' + tmdbId
+            });
+        }
+        
+        function trackPageSection(sectionName) {
+            gtag('event', 'page_interaction', {
+                'section_name': sectionName,
+                'event_category': 'navigation',
+                'event_label': sectionName
+            });
+        }
+    </script>
+    
     <title>Nuvio Streams | Elfhosted</title>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap">
     <style>
@@ -2081,6 +2132,13 @@
             installLink.href = currentInstallUrl; // Set initial href
 
             installLink.addEventListener('click', () => {
+                // Analytics: Track addon installation
+                gtag('event', 'addon_install', {
+                    'event_category': 'engagement',
+                    'event_label': 'install_addon_clicked',
+                    'install_type': currentInstallUrl === defaultInstallProtocolUrl ? 'default' : 'personalized'
+                });
+                
                 if (currentInstallUrl === defaultInstallProtocolUrl) {
                     toast.innerHTML = "Installing with default settings.<br>Note: ShowBox streams are limited to &lt;9GB. Use a personal cookie for full access to all formats (HDR/DV etc.).";
                     toast.classList.add('show');
@@ -2093,6 +2151,13 @@
 
         if (copyLinkBtn) {
             copyLinkBtn.addEventListener('click', async () => {
+                // Analytics: Track manifest copy
+                gtag('event', 'manifest_copy', {
+                    'event_category': 'engagement', 
+                    'event_label': 'copy_manifest_clicked',
+                    'manifest_type': currentManifestUrlToCopy === defaultManifestUrl ? 'default' : 'personalized'
+                });
+                
                 try {
                     await navigator.clipboard.writeText(currentManifestUrlToCopy);
                     if (currentManifestUrlToCopy === defaultManifestUrl) {
@@ -2114,12 +2179,24 @@
 
         // --- UI Interaction for More Addons (unchanged) ---
         const handleMoreAddonsClick = function() {
+            // Analytics: Track more addons exploration
+            gtag('event', 'explore_catalog', {
+                'event_category': 'navigation',
+                'event_label': 'more_addons_clicked'
+            });
+            
             if (cardsContainer) {
                 cardsContainer.classList.toggle('expanded');
             }
         };
 
         const handleCloseCatalogClick = function() {
+            // Analytics: Track catalog closure
+            gtag('event', 'close_catalog', {
+                'event_category': 'navigation',
+                'event_label': 'catalog_closed'
+            });
+            
             if (cardsContainer) {
                 cardsContainer.classList.remove('expanded');
             }
@@ -2376,12 +2453,32 @@
 
         // Add event listener for the Apply button (now calls the new function)
         if (applyProvidersBtn) {
-            applyProvidersBtn.addEventListener('click', regeneratePersonalizedManifest);
+            applyProvidersBtn.addEventListener('click', () => {
+                // Analytics: Track provider configuration
+                const selectedProviders = Array.from(providerCheckboxes)
+                    .filter(checkbox => checkbox.checked)
+                    .map(checkbox => checkbox.value);
+                
+                gtag('event', 'provider_configuration', {
+                    'event_category': 'configuration',
+                    'event_label': 'apply_providers_clicked',
+                    'provider_count': selectedProviders.length,
+                    'selected_providers': selectedProviders.join(',')
+                });
+                
+                regeneratePersonalizedManifest();
+            });
         }
 
         // --- Event listeners for provider selection ---
         if (selectAllProvidersBtn) {
             selectAllProvidersBtn.addEventListener('click', () => {
+                // Analytics: Track provider bulk selection
+                gtag('event', 'provider_bulk_action', {
+                    'event_category': 'configuration',
+                    'event_label': 'select_all_providers'
+                });
+                
                 providerCheckboxes.forEach(checkbox => checkbox.checked = true);
                 updateCookieSectionState(); // Update cookie section state
                 updateQualityDropdownStates(); 
@@ -2394,6 +2491,12 @@
 
         if (deselectAllProvidersBtn) {
             deselectAllProvidersBtn.addEventListener('click', () => {
+                // Analytics: Track provider bulk deselection
+                gtag('event', 'provider_bulk_action', {
+                    'event_category': 'configuration',
+                    'event_label': 'deselect_all_providers'
+                });
+                
                 providerCheckboxes.forEach(checkbox => checkbox.checked = false);
                 updateCookieSectionState(); // Update cookie section state
                 updateQualityDropdownStates(); 
@@ -2671,6 +2774,12 @@
         if (setCookieBtn) {
             // Make it async
             setCookieBtn.addEventListener('click', async () => {
+                // Analytics: Track cookie configuration
+                gtag('event', 'cookie_configuration', {
+                    'event_category': 'configuration',
+                    'event_label': 'set_cookie_clicked'
+                });
+                
                 const cookieValue = cookieInput.value.trim();
                 // const regionValue = regionSelector.value; // Not needed here, regeneratePersonalizedManifest will get it
                 // const scraperApiKeyValue = document.getElementById('scraperApiKeyInput').value.trim(); // Not needed here
@@ -2859,6 +2968,12 @@
 
         if (howToGetBtn && videoTutorialPanel) {
             howToGetBtn.addEventListener('click', () => {
+                // Analytics: Track tutorial access
+                gtag('event', 'tutorial_access', {
+                    'event_category': 'help',
+                    'event_label': 'cookie_tutorial_opened'
+                });
+                
                 videoTutorialPanel.classList.add('show');
             });
         }

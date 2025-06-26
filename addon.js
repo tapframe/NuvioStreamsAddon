@@ -1,3 +1,21 @@
+// ================================================================================
+// Nuvio Streams Addon for Stremio
+// ================================================================================
+// 
+// GOOGLE ANALYTICS SETUP:
+// 1. Go to https://analytics.google.com/ and create a new GA4 property
+// 2. Get your Measurement ID (format: G-XXXXXXXXXX)
+// 3. Replace 'G-XXXXXXXXXX' in views/index.html with your actual Measurement ID
+// 4. The addon will automatically track:
+//    - Addon installations (install_addon_clicked)
+//    - Manifest copies (copy_manifest_clicked)
+//    - Provider configurations (apply_providers_clicked)
+//    - Cookie configurations (set_cookie_clicked)
+//    - Tutorial access (cookie_tutorial_opened)
+//    - Stream requests (will be added to server-side logging)
+//
+// ================================================================================
+
 const { addonBuilder } = require('stremio-addon-sdk');
 require('dotenv').config(); // Ensure environment variables are loaded
 const fs = require('fs').promises;
