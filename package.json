@@ -19,6 +19,7 @@
     "node-fetch": "^2.7.0",
     "redis": "^5.5.5",
     "stremio-addon-sdk": "^1.6.10",
+    "ttl-cache": "^1.0.2",
     "yargs": "^17.7.2"
   },
   "engines": {
