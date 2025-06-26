@@ -522,6 +522,39 @@ function compareMedia(mediaInfo, searchResult) {
   return true;
 }
 
+// Function to parse size string into MB
+function parseSize(sizeString) {
+  if (!sizeString || typeof sizeString !== 'string') {
+    return 0;
+  }
+
+  const upperCaseSizeString = sizeString.toUpperCase();
+  
+  // Regex to find a number (integer or float) followed by GB, MB, or KB
+  const match = upperCaseSizeString.match(/([0-9.,]+)\s*(GB|MB|KB)/);
+
+  if (!match) {
+    return 0;
+  }
+
+  const sizeValue = parseFloat(match[1].replace(/,/g, ''));
+  if (isNaN(sizeValue)) {
+    return 0;
+  }
+  
+  const unit = match[2];
+
+  if (unit === 'GB') {
+    return sizeValue * 1024;
+  } else if (unit === 'MB') {
+    return sizeValue;
+  } else if (unit === 'KB') {
+    return sizeValue / 1024;
+  }
+  
+  return 0;
+}
+
 // Main function to get streams for TMDB content
 async function getUHDMoviesStreams(tmdbId, mediaType = 'movie', season = null, episode = null) {
   console.log(`[UHDMovies] Attempting to fetch streams for TMDB ID: ${tmdbId}, Type: ${mediaType}${mediaType === 'tv' ? `, S:${season}E:${episode}` : ''}`);
@@ -631,6 +664,13 @@ async function getUHDMoviesStreams(tmdbId, mediaType = 'movie', season = null, e
         
         if (streams.length > 0) {
             console.log(`[UHDMovies] Successfully extracted ${streams.length} streams.`);
+            // Sort streams by size in descending order
+            streams.sort((a, b) => {
+              const sizeA = parseSize(a.size);
+              const sizeB = parseSize(b.size);
+              return sizeB - sizeA;
+            });
+            
             // Cache the result
             saveToCache(cacheType, searchCacheKey, streams);
             return streams;

@@ -193,6 +193,27 @@ function parseQuality(qualityString) {
     return 0; // Default for anything else not recognized
 }
 
+// NEW: Helper function to parse size strings into a number (in MB)
+function parseSize(sizeString) {
+    if (!sizeString || typeof sizeString !== 'string') {
+        return 0;
+    }
+    const match = sizeString.match(/([0-9.,]+)\s*(GB|MB|KB)/i);
+    if (!match) {
+        return 0;
+    }
+    const sizeValue = parseFloat(match[1].replace(/,/g, ''));
+    const unit = match[2].toUpperCase();
+    if (unit === 'GB') {
+        return sizeValue * 1024;
+    } else if (unit === 'MB') {
+        return sizeValue;
+    } else if (unit === 'KB') {
+        return sizeValue / 1024;
+    }
+    return 0;
+}
+
 // NEW: Helper function to filter streams by minimum quality
 function filterStreamsByQuality(streams, minQualitySetting, providerName) {
     if (!minQualitySetting || minQualitySetting.toLowerCase() === 'all') {
@@ -1241,14 +1262,24 @@ builder.defineStreamHandler(async (args) => {
             'UHDMovies': ENABLE_UHDMOVIES_PROVIDER && shouldFetch('uhdmovies') ? filterStreamsByQuality(providerResults[9], minQualitiesPreferences.uhdmovies, 'UHDMovies') : [] // NEW: Add UHDMovies provider
         };
 
-        // Sort streams by quality for each provider
+        // Sort streams for each provider by size, then quality
+        console.log('Sorting streams for each provider by size, then quality...');
         for (const provider in streamsByProvider) {
-            streamsByProvider[provider] = sortStreamsByQuality(streamsByProvider[provider]);
+            streamsByProvider[provider].sort((a, b) => {
+                const sizeA = parseSize(a.size);
+                const sizeB = parseSize(b.size);
+                if (sizeB !== sizeA) {
+                    return sizeB - sizeA;
+                }
+                const qualityA = parseQuality(a.quality);
+                const qualityB = parseQuality(b.quality);
+                return qualityB - qualityA;
+            });
         }
 
         // Combine streams in the preferred provider order
         combinedRawStreams = [];
-        const providerOrder = ['ShowBox', 'Hianime', 'Xprime.tv', 'HollyMovieHD', 'Soaper TV', 'VidZee', 'MP4Hydra', 'UHDMovies', 'Cuevana', 'VidSrc']; // NEW: Add UHDMovies provider
+        const providerOrder = ['ShowBox', 'UHDMovies', 'Hianime', 'Xprime.tv', 'HollyMovieHD', 'Soaper TV', 'VidZee', 'MP4Hydra', 'Cuevana', 'VidSrc'];
         providerOrder.forEach(providerKey => {
             if (streamsByProvider[providerKey] && streamsByProvider[providerKey].length > 0) {
                 combinedRawStreams.push(...streamsByProvider[providerKey]);
@@ -1267,12 +1298,10 @@ builder.defineStreamHandler(async (args) => {
         return { streams: [] };
     }
     
-    // We'll skip global quality sorting, as we've already sorted each provider's streams by quality
-    // const sortedCombinedStreams = sortStreamsByQuality(combinedRawStreams);
-    const sortedCombinedStreams = combinedRawStreams;
-    console.log(`Total streams after provider-ordered sorting: ${sortedCombinedStreams.length}`);
-        
-    const stremioStreamObjects = sortedCombinedStreams.map((stream) => {
+    console.log(`Total streams after provider-level sorting: ${combinedRawStreams.length}`);
+
+    // Format and send the response
+    const stremioStreamObjects = combinedRawStreams.map((stream) => {
         const qualityLabel = stream.quality || 'UNK'; // UNK for unknown
         
         let displayTitle;
