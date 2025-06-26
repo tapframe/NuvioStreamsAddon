@@ -93,12 +93,13 @@ function extractCleanQuality(fullQualityText) {
     return 'Unknown Quality';
   }
   
-  const text = fullQualityText.toLowerCase();
+  const cleanedFullQualityText = fullQualityText.replace(/(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff])/g, '').trim();
+  const text = cleanedFullQualityText.toLowerCase();
   let quality = [];
   
   // Extract resolution
   if (text.includes('2160p') || text.includes('4k')) {
-    quality.push('4K/2160p');
+    quality.push('4K');
   } else if (text.includes('1080p')) {
     quality.push('1080p');
   } else if (text.includes('720p')) {
@@ -109,7 +110,7 @@ function extractCleanQuality(fullQualityText) {
   
   // Extract codec/format
   if (text.includes('hevc') || text.includes('x265')) {
-    quality.push('HEVC/x265');
+    quality.push('HEVC');
   } else if (text.includes('x264')) {
     quality.push('x264');
   }
@@ -118,14 +119,14 @@ function extractCleanQuality(fullQualityText) {
   if (text.includes('hdr')) {
     quality.push('HDR');
   }
+  if (text.includes('dolby vision') || text.includes('dovi') || /\bdv\b/.test(text)) {
+    quality.push('DV');
+  }
   if (text.includes('10bit')) {
     quality.push('10-bit');
   }
   if (text.includes('imax')) {
     quality.push('IMAX');
-  }
-  if (text.includes('web-dl') || text.includes('webdl')) {
-    quality.push('WEB-DL');
   }
   if (text.includes('bluray') || text.includes('blu-ray')) {
     quality.push('BluRay');
@@ -150,18 +151,18 @@ function extractCleanQuality(fullQualityText) {
   ];
   
   for (const pattern of patterns) {
-    const match = fullQualityText.match(pattern);
+    const match = cleanedFullQualityText.match(pattern);
     if (match && match[1].trim().length < 100) {
-      return match[1].trim();
+      return match[1].trim().replace(/x265/ig, 'HEVC');
     }
   }
   
   // Final fallback: truncate if too long
-  if (fullQualityText.length > 80) {
-    return fullQualityText.substring(0, 77) + '...';
+  if (cleanedFullQualityText.length > 80) {
+    return cleanedFullQualityText.substring(0, 77).replace(/x265/ig, 'HEVC') + '...';
   }
   
-  return fullQualityText;
+  return cleanedFullQualityText.replace(/x265/ig, 'HEVC');
 }
 
 // Function to extract download links for TV shows from a page
@@ -174,61 +175,87 @@ async function extractTvShowDownloadLinks(showPageUrl, season, episode) {
     const showTitle = $('h1').first().text().trim();
     const downloadLinks = [];
 
-    // Find all quality blocks which are usually in paragraphs with a strong tag
-    $('p:has(strong)').each((index, element) => {
-      const qualityText = $(element).find('strong').text().trim();
-      
-      // Regex to extract season number. e.g. S01, S02...
-      const seasonMatch = qualityText.match(/S(\d{1,2})/i);
-      if (seasonMatch) {
-        const foundSeason = parseInt(seasonMatch[1], 10);
+    // Approach 1: Look for explicit season headers
+    const seasonHeaders = $('h3, h4, p > strong, pre > b, p > b, pre > span > b');
+    seasonHeaders.each((index, header) => {
+      const headerText = $(header).text().trim();
+      const seasonMatch = headerText.match(/Season\s+(\d{1,2})/i);
+
+      if (seasonMatch && parseInt(seasonMatch[1], 10) === season) {
+        let qualityText = '';
+        let linksParagraph = null;
+        let currentNode = $(header).closest('p, pre');
+
+        for (let k = 0; k < 5; k++) { // Scan next 5 sibling elements
+          currentNode = currentNode.next();
+          if (!currentNode.length) break;
+
+          const currentText = currentNode.text().trim();
+          if (!qualityText && currentText.match(/(\d{3,4}p|4k|HEVC|x264|DD\+?5\.1)/i)) {
+            qualityText = currentText;
+          }
+
+          if (currentNode.is('p') && currentNode.find(`a[href*="driveleech.net"]`).length > 0) {
+            linksParagraph = currentNode;
+            if (qualityText) break; // If we have both, we can stop
+          }
+        }
         
-        // Check if this block is for the season we want
-        if (foundSeason === season) {
-          // The episode links are expected in the next <p> element
-          const linksParagraph = $(element).next('p');
-          
-          if (linksParagraph.length > 0) {
-            // Regex to find the link for the specific episode, allowing for optional leading zero
-            const episodeRegex = new RegExp(`Episode\\s+0*${episode}(?!\\d)`, 'i');
-            let targetEpisodeLink = null;
+        // If we didn't get quality from siblings, maybe it was in the header itself
+        if (!qualityText && headerText.match(/(\d{3,4}p|4k|HEVC|x264|DD\+?5\.1)/i)) {
+            qualityText = headerText;
+        }
 
-            linksParagraph.find('a').each((i, el) => {
-              if (episodeRegex.test($(el).text().trim())) {
-                targetEpisodeLink = $(el);
-                return false; // break the .each loop once found
-              }
-            });
+        if (linksParagraph) {
+          const episodeRegex = new RegExp(`Episode\\s+0*${episode}(?!\\d)`, 'i');
+          const targetEpisodeLink = linksParagraph.find('a').filter((i, el) => episodeRegex.test($(el).text().trim())).first();
 
-            if (targetEpisodeLink && targetEpisodeLink.attr('href')) {
-              const link = targetEpisodeLink.attr('href');
-              if (!downloadLinks.some(item => item.link === link)) {
-                
-                // Extract size from quality text if present
-                let size = 'Unknown';
-                const sizeMatch = qualityText.match(/\[([0-9.,]+\s*[KMGT]B[^\]]*)\]/);
-                if (sizeMatch) {
-                  size = sizeMatch[1];
-                }
-
-                const cleanQuality = extractCleanQuality(qualityText);
-
-                downloadLinks.push({
-                  quality: cleanQuality,
-                  size: size,
-                  link: link
-                });
-              }
+          if (targetEpisodeLink.length > 0) {
+            const link = targetEpisodeLink.attr('href');
+            if (link && !downloadLinks.some(item => item.link === link)) {
+              let size = 'Unknown';
+              const sizeMatch = (qualityText || '').match(/\[([0-9.,]+\s*[KMGT]B[^\]]*)\]/);
+              if (sizeMatch) { size = sizeMatch[1]; }
+              
+              const cleanQuality = extractCleanQuality(qualityText || 'Unknown Quality');
+              downloadLinks.push({ quality: cleanQuality, size: size, link: link });
             }
           }
         }
       }
     });
 
-    return {
-      title: showTitle,
-      links: downloadLinks
-    };
+    if (downloadLinks.length > 0) {
+        return { title: showTitle, links: downloadLinks };
+    }
+
+    // Approach 2: If no headers, find quality strings with season numbers
+    console.log('[UHDMovies] Season header scan failed, trying quality string scan...');
+    $(`p, pre`).each((index, element) => {
+        const qualityText = $(element).text().trim();
+        const seasonRegex = new RegExp(`S(0${season}|${season})\\b`, 'i'); // \b for word boundary
+        if(qualityText.match(seasonRegex) && qualityText.match(/(\d{3,4}p|4k|HEVC|x264)/i)){
+             const linksParagraph = $(element).nextAll('p').has('a[href*="driveleech.net"]').first();
+             if(linksParagraph.length > 0){
+                const episodeRegex = new RegExp(`Episode\\s+0*${episode}(?!\\d)`, 'i');
+                const targetEpisodeLink = linksParagraph.find('a').filter((i, el) => episodeRegex.test($(el).text().trim())).first();
+
+                if (targetEpisodeLink.length > 0) {
+                    const link = targetEpisodeLink.attr('href');
+                    if (link && !downloadLinks.some(item => item.link === link)) {
+                      let size = 'Unknown';
+                      const sizeMatch = qualityText.match(/\[([0-9.,]+\s*[KMGT]B[^\]]*)\]/);
+                      if (sizeMatch) { size = sizeMatch[1]; }
+                      
+                      const cleanQuality = extractCleanQuality(qualityText);
+                      downloadLinks.push({ quality: cleanQuality, size: size, link: link });
+                    }
+                }
+             }
+        }
+    });
+    
+    return { title: showTitle, links: downloadLinks };
 
   } catch (error) {
     console.error(`[UHDMovies] Error extracting TV show download links: ${error.message}`);
@@ -488,7 +515,9 @@ async function getFinalLink(redirectUrl) {
 // Compare media to find matching result
 function compareMedia(mediaInfo, searchResult) {
   const normalizeString = (str) => String(str || '').toLowerCase().replace(/[^a-zA-Z0-9]/g, '');
-  const normalizedMediaTitle = normalizeString(mediaInfo.title);
+  
+  const titleWithAnd = mediaInfo.title.replace(/\s*&\s*/g, ' and ');
+  const normalizedMediaTitle = normalizeString(titleWithAnd);
   const normalizedResultTitle = normalizeString(searchResult.title);
   
   // Check if titles match or result title contains media title
@@ -552,7 +581,11 @@ async function getUHDMoviesStreams(tmdbId, mediaType = 'movie', season = null, e
     }
     
     // Search for the media
-    const searchResults = await searchMovies(mediaInfo.title);
+    const searchTitle = mediaInfo.title.replace(/\s*&\s*/g, ' and ');
+    if (searchTitle !== mediaInfo.title) {
+      console.log(`[UHDMovies] Modified search title from "${mediaInfo.title}" to "${searchTitle}"`);
+    }
+    const searchResults = await searchMovies(searchTitle);
     
     if (searchResults.length === 0) {
       console.log(`[UHDMovies] No search results found for "${mediaInfo.title}".`);

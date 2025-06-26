@@ -1332,7 +1332,7 @@ builder.defineStreamHandler(async (args) => {
                 providerDisplayName = 'MP4Hydra';
             }
         } else if (stream.provider === 'UHDMovies') {
-            providerDisplayName = 'UHDMovies 🎬';
+            providerDisplayName = 'UHDMovies';
         }
 
         let nameDisplay;
