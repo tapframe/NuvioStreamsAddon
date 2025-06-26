@@ -175,85 +175,68 @@ async function extractTvShowDownloadLinks(showPageUrl, season, episode) {
     const showTitle = $('h1').first().text().trim();
     const downloadLinks = [];
 
-    // Approach 1: Look for explicit season headers
-    const seasonHeaders = $('h3, h4, p > strong, pre > b, p > b, pre > span > b');
-    seasonHeaders.each((index, header) => {
-      const headerText = $(header).text().trim();
-      const seasonMatch = headerText.match(/Season\s+(\d{1,2})/i);
+    // New, more robust scanning logic
+    const qualityHeaders = $('.entry-content').find('pre, p:has(strong), p:has(b), h3, h4');
 
-      if (seasonMatch && parseInt(seasonMatch[1], 10) === season) {
-        let qualityText = '';
-        let linksParagraph = null;
-        let currentNode = $(header).closest('p, pre');
+    qualityHeaders.each((index, header) => {
+        const $header = $(header);
+        let qualityText = $header.text().trim();
 
-        for (let k = 0; k < 5; k++) { // Scan next 5 sibling elements
-          currentNode = currentNode.next();
-          if (!currentNode.length) break;
-
-          const currentText = currentNode.text().trim();
-          if (!qualityText && currentText.match(/(\d{3,4}p|4k|HEVC|x264|DD\+?5\.1)/i)) {
-            qualityText = currentText;
-          }
-
-          if (currentNode.is('p') && currentNode.find(`a[href*="driveleech.net"]`).length > 0) {
-            linksParagraph = currentNode;
-            if (qualityText) break; // If we have both, we can stop
-          }
+        // Filter out irrelevant headers and sections
+        if (qualityText.length < 4 || qualityText.length > 250 || /plot|download|screenshot|trailer|join|powered by/i.test(qualityText)) {
+            return; // = continue to the next iteration
         }
-        
-        // If we didn't get quality from siblings, maybe it was in the header itself
-        if (!qualityText && headerText.match(/(\d{3,4}p|4k|HEVC|x264|DD\+?5\.1)/i)) {
-            qualityText = headerText;
+
+        let linksParagraph = null;
+        let currentElement = $header;
+
+        // Scan the next few sibling elements to find the link paragraph
+        for (let i = 0; i < 3; i++) { 
+            currentElement = currentElement.next();
+            if (!currentElement.length) break;
+
+            const currentText = currentElement.text().trim();
+            
+            // If the sibling looks like another quality header, we've gone too far.
+            if (i > 0 && currentElement.is('pre, h3, h4')) break;
+            if (i > 0 && currentElement.is('p') && currentElement.find('strong, b').length > 0 && /p|4k|hevc/i.test(currentText)) break;
+            
+            // If the element is a paragraph and has the download links, we've found our target.
+            if (currentElement.is('p') && currentElement.find('a[href*="driveleech.net"]').length > 0) {
+                linksParagraph = currentElement;
+                break;
+            }
+
+            // If it's a paragraph without links, it's likely more quality info. Append it.
+            if (currentElement.is('p') && currentText) {
+                qualityText += ' ' + currentText;
+            }
         }
 
         if (linksParagraph) {
-          const episodeRegex = new RegExp(`Episode\\s+0*${episode}(?!\\d)`, 'i');
-          const targetEpisodeLink = linksParagraph.find('a').filter((i, el) => episodeRegex.test($(el).text().trim())).first();
+            const episodeRegex = new RegExp(`^Episode\\s+0*${episode}(?!\\d)`, 'i');
+            const targetEpisodeLink = linksParagraph.find('a').filter((i, el) => {
+                return episodeRegex.test($(el).text().trim());
+            }).first();
+            
+            if (targetEpisodeLink.length > 0) {
+                const link = targetEpisodeLink.attr('href');
+                if (link && !downloadLinks.some(item => item.link === link)) {
+                    const sizeMatch = qualityText.match(/\[\s*([0-9.,]+\s*[KMGT]B)/i);
+                    const size = sizeMatch ? sizeMatch[1] : 'Unknown';
 
-          if (targetEpisodeLink.length > 0) {
-            const link = targetEpisodeLink.attr('href');
-            if (link && !downloadLinks.some(item => item.link === link)) {
-              let size = 'Unknown';
-              const sizeMatch = (qualityText || '').match(/\[([0-9.,]+\s*[KMGT]B[^\]]*)\]/);
-              if (sizeMatch) { size = sizeMatch[1]; }
-              
-              const cleanQuality = extractCleanQuality(qualityText || 'Unknown Quality');
-              downloadLinks.push({ quality: cleanQuality, size: size, link: link });
+                    const cleanQuality = extractCleanQuality(qualityText);
+                    downloadLinks.push({ quality: cleanQuality, size: size, link: link });
+                }
             }
-          }
         }
-      }
     });
 
     if (downloadLinks.length > 0) {
-        return { title: showTitle, links: downloadLinks };
+      console.log(`[UHDMovies] Found ${downloadLinks.length} links using primary scan.`);
+    } else {
+      console.log(`[UHDMovies] Primary scan failed to find links.`);
     }
-
-    // Approach 2: If no headers, find quality strings with season numbers
-    console.log('[UHDMovies] Season header scan failed, trying quality string scan...');
-    $(`p, pre`).each((index, element) => {
-        const qualityText = $(element).text().trim();
-        const seasonRegex = new RegExp(`S(0${season}|${season})\\b`, 'i'); // \b for word boundary
-        if(qualityText.match(seasonRegex) && qualityText.match(/(\d{3,4}p|4k|HEVC|x264)/i)){
-             const linksParagraph = $(element).nextAll('p').has('a[href*="driveleech.net"]').first();
-             if(linksParagraph.length > 0){
-                const episodeRegex = new RegExp(`Episode\\s+0*${episode}(?!\\d)`, 'i');
-                const targetEpisodeLink = linksParagraph.find('a').filter((i, el) => episodeRegex.test($(el).text().trim())).first();
-
-                if (targetEpisodeLink.length > 0) {
-                    const link = targetEpisodeLink.attr('href');
-                    if (link && !downloadLinks.some(item => item.link === link)) {
-                      let size = 'Unknown';
-                      const sizeMatch = qualityText.match(/\[([0-9.,]+\s*[KMGT]B[^\]]*)\]/);
-                      if (sizeMatch) { size = sizeMatch[1]; }
-                      
-                      const cleanQuality = extractCleanQuality(qualityText);
-                      downloadLinks.push({ quality: cleanQuality, size: size, link: link });
-                    }
-                }
-             }
-        }
-    });
     
     return { title: showTitle, links: downloadLinks };
 
@@ -593,63 +576,70 @@ async function getUHDMoviesStreams(tmdbId, mediaType = 'movie', season = null, e
       return [];
     }
     
-    // Find matching result
-    const matchingResult = searchResults.find(result => compareMedia(mediaInfo, result));
+    // Find all matching results
+    const matchingResults = searchResults.filter(result => compareMedia(mediaInfo, result));
     
-    if (!matchingResult) {
+    if (matchingResults.length === 0) {
       console.log(`[UHDMovies] No matching content found for "${mediaInfo.title}" (${mediaInfo.year || 'N/A'}).`);
       saveToCache(cacheType, searchCacheKey, []);
       return [];
     }
     
-    console.log(`[UHDMovies] Found matching content: "${matchingResult.title}" at ${matchingResult.link}`);
+    console.log(`[UHDMovies] Found ${matchingResults.length} matching results. Trying each one...`);
+
+    for (const matchingResult of matchingResults) {
+        console.log(`[UHDMovies] Found matching content: "${matchingResult.title}" at ${matchingResult.link}`);
+        
+        // Extract download links from the page
+        const downloadInfo = await (isTvShow ? extractTvShowDownloadLinks(matchingResult.link, season, episode) : extractDownloadLinks(matchingResult.link));
+        
+        if (downloadInfo.links.length === 0) {
+          console.log('[UHDMovies] No download links found on this page, trying next result.');
+          continue;
+        }
+        
+        console.log(`[UHDMovies] Processing ${downloadInfo.links.length} download links...`);
+        
+        // Process all links to get final URLs
+        const streamPromises = downloadInfo.links.map(async (link) => {
+          try {
+            const finalLink = await getFinalLink(link.link);
+            if (finalLink) {
+              const streamTitle = isTvShow
+                ? `UHDMovies - S${season}E${episode} - ${link.quality}`
+                : `UHDMovies - ${link.quality}`;
     
-    // Extract download links from the page
-    const downloadInfo = await (isTvShow ? extractTvShowDownloadLinks(matchingResult.link, season, episode) : extractDownloadLinks(matchingResult.link));
-    
-    if (downloadInfo.links.length === 0) {
-      console.log('[UHDMovies] No download links found.');
-      saveToCache(cacheType, searchCacheKey, []);
-      return [];
+              return {
+                title: streamTitle,
+                url: finalLink.url,
+                quality: link.quality,
+                size: finalLink.size !== 'Unknown' ? finalLink.size : link.size,
+                provider: 'UHDMovies',
+                languages: ['English'], // UHDMovies primarily has English content
+                subtitles: [],
+                codecs: [] // Could be enhanced to parse codecs from quality string
+              };
+            }
+            return null;
+          } catch (error) {
+            console.error(`[UHDMovies] Error processing link: ${error.message}`);
+            return null;
+          }
+        });
+        
+        const streams = (await Promise.all(streamPromises)).filter(stream => stream !== null);
+        
+        if (streams.length > 0) {
+            console.log(`[UHDMovies] Successfully extracted ${streams.length} streams.`);
+            // Cache the result
+            saveToCache(cacheType, searchCacheKey, streams);
+            return streams;
+        }
     }
     
-    console.log(`[UHDMovies] Processing ${downloadInfo.links.length} download links...`);
-    
-    // Process all links to get final URLs
-    const streamPromises = downloadInfo.links.map(async (link) => {
-      try {
-        const finalLink = await getFinalLink(link.link);
-        if (finalLink) {
-          const streamTitle = isTvShow
-            ? `UHDMovies - S${season}E${episode} - ${link.quality}`
-            : `UHDMovies - ${link.quality}`;
-
-          return {
-            title: streamTitle,
-            url: finalLink.url,
-            quality: link.quality,
-            size: finalLink.size !== 'Unknown' ? finalLink.size : link.size,
-            provider: 'UHDMovies',
-            languages: ['English'], // UHDMovies primarily has English content
-            subtitles: [],
-            codecs: [] // Could be enhanced to parse codecs from quality string
-          };
-        }
-        return null;
-      } catch (error) {
-        console.error(`[UHDMovies] Error processing link: ${error.message}`);
-        return null;
-      }
-    });
-    
-    const streams = (await Promise.all(streamPromises)).filter(stream => stream !== null);
-    
-    console.log(`[UHDMovies] Successfully extracted ${streams.length} streams.`);
-    
-    // Cache the result
-    saveToCache(cacheType, searchCacheKey, streams);
-    
-    return streams;
+    console.log(`[UHDMovies] All matching results processed, but no valid streams found.`);
+    saveToCache(cacheType, searchCacheKey, []);
+    return [];
     
   } catch (error) {
     console.error(`[UHDMovies] Error fetching streams: ${error.message}`);
