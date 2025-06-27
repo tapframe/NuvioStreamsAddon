@@ -988,27 +988,11 @@ const _searchAndExtractShowboxUrl = async (searchTerm, originalTmdbTitle, mediaY
                     itemYear = yearMatch[1];
                 }
                 
-                // Extract year from URL if possible - IMPROVED regex to catch years anywhere in URL
+                // Extract year from URL if possible
                 if (!itemYear && itemHref) {
-                    // Try multiple patterns to extract year from URLs
-                    const urlYearPatterns = [
-                        /-(\d{4})$/, // Year at the end: "-1998"
-                        /-(\d{4})-/, // Year in middle: "-1998-"
-                        /\/(\d{4})$/, // Year at end with slash: "/1998"
-                        /\/(\d{4})\//, // Year with slashes: "/1998/"
-                        /-(\d{4})(?=\W|$)/ // Year followed by non-word or end
-                    ];
-                    
-                    for (const pattern of urlYearPatterns) {
-                        const urlYearMatch = itemHref.match(pattern);
-                        if (urlYearMatch && urlYearMatch[1]) {
-                            const extractedYear = parseInt(urlYearMatch[1]);
-                            // Only accept reasonable years (1900-2030)
-                            if (extractedYear >= 1900 && extractedYear <= 2030) {
-                                itemYear = urlYearMatch[1];
-                                break;
-                            }
-                        }
+                    const urlYearMatch = itemHref.match(/-(20\d{2})$/);
+                    if (urlYearMatch) {
+                        itemYear = urlYearMatch[1];
                     }
                 }
 
@@ -1068,23 +1052,19 @@ const _searchAndExtractShowboxUrl = async (searchTerm, originalTmdbTitle, mediaY
                     score += wordMatchPercent * 5; // Up to 5 points for word matches
                 }
                 
-                // YEAR MATCHING - now much more important with STRICTER penalties
+                // YEAR MATCHING - now much more important
                 if (mediaYear && itemYear) {
                     if (mediaYear === itemYear) {
                         score += 18; // MUCH stronger bonus for exact year match
                     } else {
-                        // MUCH STRONGER penalties for year mismatch
+                        // Penalty for year mismatch, larger for bigger differences
                         const yearDiff = Math.abs(parseInt(mediaYear) - parseInt(itemYear));
                         if (yearDiff <= 1) {
                             score -= 3; // Small penalty for 1 year difference
                         } else if (yearDiff <= 3) {
                             score -= 10; // Medium penalty for 2-3 year difference
-                        } else if (yearDiff <= 5) {
-                            score -= 25; // Large penalty for 4-5 year difference
-                        } else if (yearDiff <= 10) {
-                            score -= 40; // Very large penalty for 6-10 year difference
                         } else {
-                            score -= 100; // MASSIVE penalty for >10 year difference (should be dealbreaker)
+                            score -= 20; // Large penalty for > 3 year difference
                         }
                     }
                 } else if (mediaYear && !itemYear) {
@@ -1145,8 +1125,8 @@ const _searchAndExtractShowboxUrl = async (searchTerm, originalTmdbTitle, mediaY
             strategyResults[strategy.description] = { success: false, score: 0 };
         }
         
-        // RAISED THRESHOLD: Require higher score for early termination to prevent false matches
-        if (bestResult.score > 30 && bestResult.isCorrectType) {
+        // LOWERED THRESHOLD: If we found a good enough match (score > 20 instead of 25), stop searching
+        if (bestResult.score > 20 && bestResult.isCorrectType) {
             console.log(`  Found good match with score ${bestResult.score.toFixed(1)} using strategy "${bestResult.strategy}", stopping search`);
             break;
         }
@@ -1164,10 +1144,8 @@ const _searchAndExtractShowboxUrl = async (searchTerm, originalTmdbTitle, mediaY
         }
     });
 
-    // Final decision based on all strategies with STRICTER validation
+    // Final decision based on all strategies
     if (bestResult.url) {
-
-
         let isAiValidated = false;
         let useResult = false;
 
@@ -1222,7 +1200,6 @@ const _searchAndExtractShowboxUrl = async (searchTerm, originalTmdbTitle, mediaY
             console.log(`  Best overall match: ${bestResult.url} (Score: ${bestResult.score.toFixed(1)}, Strategy: ${bestResult.strategy}) ${confidenceMsg}`);
             
             // Always save AI-validated or high-score results to cache
-
             if (process.env.DISABLE_CACHE !== 'true') {
                 await saveToCache(searchTermKey, bestResult.url, cacheSubDir);
             }

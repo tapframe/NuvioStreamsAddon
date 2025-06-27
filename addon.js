@@ -1,3 +1,21 @@
+// ================================================================================
+// Nuvio Streams Addon for Stremio
+// ================================================================================
+// 
+// GOOGLE ANALYTICS SETUP:
+// 1. Go to https://analytics.google.com/ and create a new GA4 property
+// 2. Get your Measurement ID (format: G-XXXXXXXXXX)
+// 3. Replace 'G-XXXXXXXXXX' in views/index.html with your actual Measurement ID
+// 4. The addon will automatically track:
+//    - Addon installations (install_addon_clicked)
+//    - Manifest copies (copy_manifest_clicked)
+//    - Provider configurations (apply_providers_clicked)
+//    - Cookie configurations (set_cookie_clicked)
+//    - Tutorial access (cookie_tutorial_opened)
+//    - Stream requests (will be added to server-side logging)
+//
+// ================================================================================
+
 const { addonBuilder } = require('stremio-addon-sdk');
 require('dotenv').config(); // Ensure environment variables are loaded
 const fs = require('fs').promises;
@@ -94,6 +112,14 @@ console.log(`[addon.js] VidZee provider fetching enabled: ${ENABLE_VIDZEE_PROVID
 const ENABLE_MP4HYDRA_PROVIDER = process.env.ENABLE_MP4HYDRA_PROVIDER !== 'false'; // Defaults to true if not set or not 'false'
 console.log(`[addon.js] MP4Hydra provider fetching enabled: ${ENABLE_MP4HYDRA_PROVIDER}`);
 
+// NEW: Read environment variable for HiAnime
+const ENABLE_HIANIME_PROVIDER = process.env.ENABLE_HIANIME_PROVIDER !== 'false'; // Defaults to true if not set or not 'false'
+console.log(`[addon.js] HiAnime provider fetching enabled: ${ENABLE_HIANIME_PROVIDER}`);
+
+// NEW: Read environment variable for UHDMovies
+const ENABLE_UHDMOVIES_PROVIDER = process.env.ENABLE_UHDMOVIES_PROVIDER !== 'false'; // Defaults to true if not set or not 'false'
+console.log(`[addon.js] UHDMovies provider fetching enabled: ${ENABLE_UHDMOVIES_PROVIDER}`);
+
 // NEW: Stream caching config
 const STREAM_CACHE_DIR = process.env.VERCEL ? path.join('/tmp', '.streams_cache') : path.join(__dirname, '.streams_cache');
 const STREAM_CACHE_TTL_MS = 9 * 60 * 1000; // 9 minutes
@@ -109,6 +135,7 @@ const { getHianimeStreams } = require('./providers/hianime.js'); // Import from 
 const { getStreamContent } = require('./providers/vidsrcextractor.js'); // Import from vidsrcextractor.js
 const { getVidZeeStreams } = require('./providers/VidZee.js'); // NEW: Import from VidZee.js
 const { getMP4HydraStreams } = require('./providers/MP4Hydra.js'); // NEW: Import from MP4Hydra.js
+const { getUHDMoviesStreams } = require('./providers/uhdmovies.js'); // NEW: Import from uhdmovies.js
 
 // --- Constants ---
 const TMDB_API_URL = 'https://api.themoviedb.org/3';
@@ -164,6 +191,27 @@ function parseQuality(qualityString) {
 
 
     return 0; // Default for anything else not recognized
+}
+
+// NEW: Helper function to parse size strings into a number (in MB)
+function parseSize(sizeString) {
+    if (!sizeString || typeof sizeString !== 'string') {
+        return 0;
+    }
+    const match = sizeString.match(/([0-9.,]+)\s*(GB|MB|KB)/i);
+    if (!match) {
+        return 0;
+    }
+    const sizeValue = parseFloat(match[1].replace(/,/g, ''));
+    const unit = match[2].toUpperCase();
+    if (unit === 'GB') {
+        return sizeValue * 1024;
+    } else if (unit === 'MB') {
+        return sizeValue;
+    } else if (unit === 'KB') {
+        return sizeValue / 1024;
+    }
+    return 0;
 }
 
 // NEW: Helper function to filter streams by minimum quality
@@ -966,12 +1014,16 @@ builder.defineStreamHandler(async (args) => {
 
         // Hianime provider with cache integration
         hianime: async () => {
+            if (!ENABLE_HIANIME_PROVIDER) {
+                console.log('[Hianime] Skipping fetch: Disabled by environment variable.');
+                return [];
+            }
             if (!shouldFetch('hianime') || !(tmdbTypeFromId === 'tv' && seasonNum !== null && episodeNum !== null && isAnimation)) {
                 if (!shouldFetch('hianime')) {
                     console.log('[Hianime] Skipping fetch: Not selected by user.');
                 } else if (tmdbTypeFromId === 'tv' && !isAnimation) {
                     console.log('[Hianime] Skipping fetch: Content is a TV show but not identified as Animation.');
-    } else {
+                } else {
                     console.log('[Hianime] Skipping fetch: Not applicable content type or missing parameters.');
                 }
                 return [];
@@ -1133,6 +1185,48 @@ builder.defineStreamHandler(async (args) => {
                 await saveStreamToCache('mp4hydra', tmdbTypeFromId, tmdbId, [], 'failed', seasonNum, episodeNum);
                 return [];
             }
+        },
+
+        // UHDMovies provider with cache integration
+        uhdmovies: async () => {
+            if (!ENABLE_UHDMOVIES_PROVIDER) {
+                console.log('[UHDMovies] Skipping fetch: Disabled by environment variable.');
+                return [];
+            }
+            if (!shouldFetch('uhdmovies')) {
+                console.log('[UHDMovies] Skipping fetch: Not selected by user.');
+                return [];
+            }
+            
+            // Try to get cached streams first
+            const cachedStreams = await getStreamFromCache('uhdmovies', tmdbTypeFromId, tmdbId, seasonNum, episodeNum);
+            if (cachedStreams) {
+                console.log(`[UHDMovies] Using ${cachedStreams.length} streams from cache.`);
+                return cachedStreams.map(stream => ({ ...stream, provider: 'UHDMovies' }));
+            }
+            
+            // No cache or expired, fetch fresh
+            try {
+                console.log(`[UHDMovies] Fetching new streams...`);
+                const streams = await getUHDMoviesStreams(tmdbId, tmdbTypeFromId, seasonNum, episodeNum);
+                
+                if (streams && streams.length > 0) {
+                    console.log(`[UHDMovies] Successfully fetched ${streams.length} streams.`);
+                    // Save to cache
+                    await saveStreamToCache('uhdmovies', tmdbTypeFromId, tmdbId, streams, 'ok', seasonNum, episodeNum);
+                    return streams.map(stream => ({ ...stream, provider: 'UHDMovies' }));
+                } else {
+                    console.log(`[UHDMovies] No streams returned.`);
+                    // Save empty result
+                    await saveStreamToCache('uhdmovies', tmdbTypeFromId, tmdbId, [], 'failed', seasonNum, episodeNum);
+                    return [];
+                }
+            } catch (err) {
+                console.error(`[UHDMovies] Error fetching streams:`, err.message);
+                // Save error status to cache
+                await saveStreamToCache('uhdmovies', tmdbTypeFromId, tmdbId, [], 'failed', seasonNum, episodeNum);
+                return [];
+            }
         }
     };
 
@@ -1150,7 +1244,8 @@ builder.defineStreamHandler(async (args) => {
             timeProvider('Hianime', providerFetchFunctions.hianime()),
             timeProvider('VidSrc', providerFetchFunctions.vidsrc()),
             timeProvider('VidZee', providerFetchFunctions.vidzee()),
-            timeProvider('MP4Hydra', providerFetchFunctions.mp4hydra()) // NEW: Add MP4Hydra provider
+            timeProvider('MP4Hydra', providerFetchFunctions.mp4hydra()),
+            timeProvider('UHDMovies', providerFetchFunctions.uhdmovies()) // NEW: Add UHDMovies provider
         ]);
         
         // Process results into streamsByProvider object
@@ -1163,17 +1258,28 @@ builder.defineStreamHandler(async (args) => {
             'Hianime': shouldFetch('hianime') ? filterStreamsByQuality(providerResults[5], minQualitiesPreferences.hianime, 'Hianime') : [],
             'VidSrc': shouldFetch('vidsrc') ? filterStreamsByQuality(providerResults[6], minQualitiesPreferences.vidsrc, 'VidSrc') : [],
             'VidZee': ENABLE_VIDZEE_PROVIDER && shouldFetch('vidzee') ? filterStreamsByQuality(providerResults[7], minQualitiesPreferences.vidzee, 'VidZee') : [],
-            'MP4Hydra': ENABLE_MP4HYDRA_PROVIDER && shouldFetch('mp4hydra') ? filterStreamsByQuality(providerResults[8], minQualitiesPreferences.mp4hydra, 'MP4Hydra') : [] // NEW: Add MP4Hydra provider
+            'MP4Hydra': ENABLE_MP4HYDRA_PROVIDER && shouldFetch('mp4hydra') ? filterStreamsByQuality(providerResults[8], minQualitiesPreferences.mp4hydra, 'MP4Hydra') : [],
+            'UHDMovies': ENABLE_UHDMOVIES_PROVIDER && shouldFetch('uhdmovies') ? filterStreamsByQuality(providerResults[9], minQualitiesPreferences.uhdmovies, 'UHDMovies') : [] // NEW: Add UHDMovies provider
         };
 
-        // Sort streams by quality for each provider
+        // Sort streams for each provider by size, then quality
+        console.log('Sorting streams for each provider by size, then quality...');
         for (const provider in streamsByProvider) {
-            streamsByProvider[provider] = sortStreamsByQuality(streamsByProvider[provider]);
+            streamsByProvider[provider].sort((a, b) => {
+                const sizeA = parseSize(a.size);
+                const sizeB = parseSize(b.size);
+                if (sizeB !== sizeA) {
+                    return sizeB - sizeA;
+                }
+                const qualityA = parseQuality(a.quality);
+                const qualityB = parseQuality(b.quality);
+                return qualityB - qualityA;
+            });
         }
 
         // Combine streams in the preferred provider order
         combinedRawStreams = [];
-        const providerOrder = ['ShowBox', 'Hianime', 'Xprime.tv', 'HollyMovieHD', 'Soaper TV', 'VidZee', 'MP4Hydra', 'Cuevana', 'VidSrc']; // NEW: Add MP4Hydra provider
+        const providerOrder = ['ShowBox', 'UHDMovies', 'Hianime', 'Xprime.tv', 'HollyMovieHD', 'Soaper TV', 'VidZee', 'MP4Hydra', 'Cuevana', 'VidSrc'];
         providerOrder.forEach(providerKey => {
             if (streamsByProvider[providerKey] && streamsByProvider[providerKey].length > 0) {
                 combinedRawStreams.push(...streamsByProvider[providerKey]);
@@ -1192,12 +1298,10 @@ builder.defineStreamHandler(async (args) => {
         return { streams: [] };
     }
     
-    // We'll skip global quality sorting, as we've already sorted each provider's streams by quality
-    // const sortedCombinedStreams = sortStreamsByQuality(combinedRawStreams);
-    const sortedCombinedStreams = combinedRawStreams;
-    console.log(`Total streams after provider-ordered sorting: ${sortedCombinedStreams.length}`);
-        
-    const stremioStreamObjects = sortedCombinedStreams.map((stream) => {
+    console.log(`Total streams after provider-level sorting: ${combinedRawStreams.length}`);
+
+    // Format and send the response
+    const stremioStreamObjects = combinedRawStreams.map((stream) => {
         const qualityLabel = stream.quality || 'UNK'; // UNK for unknown
         
         let displayTitle;
@@ -1256,6 +1360,8 @@ builder.defineStreamHandler(async (args) => {
             } else {
                 providerDisplayName = 'MP4Hydra';
             }
+        } else if (stream.provider === 'UHDMovies') {
+            providerDisplayName = 'UHDMovies';
         }
 
         let nameDisplay;
@@ -1284,6 +1390,10 @@ builder.defineStreamHandler(async (args) => {
             // nameDisplay = stream.title; 
         } else if (stream.provider === 'MP4Hydra') {
             // For MP4Hydra, we want to show the server number prominently
+            const qualityLabel = stream.quality || 'UNK';
+            nameDisplay = `${providerDisplayName} - ${qualityLabel}`;
+        } else if (stream.provider === 'UHDMovies') {
+            // For UHDMovies, show quality prominently
             const qualityLabel = stream.quality || 'UNK';
             nameDisplay = `${providerDisplayName} - ${qualityLabel}`;
         } else { // For other providers (ShowBox, Xprime, etc.)

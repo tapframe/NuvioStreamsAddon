@@ -448,6 +448,8 @@ async function fetchEpisodeSources(hianimeFullEpisodeId, server, category) {
   console.log(`[HianimeScraperVPS] Fetching sources for ep ${hianimeFullEpisodeId}, ${server}/${category} from ${sourceApiUrl}`);
   try {
     const data = await fetchJson(sourceApiUrl, { headers: API_HEADERS });
+    console.log(`[HianimeScraperVPS] Raw API response for ${server}/${category}:`, JSON.stringify(data, null, 2));
+    
     if (!data.success || !data.data.sources || data.data.sources.length === 0) {
       console.warn(`[HianimeScraperVPS] No sources found from ${server}/${category}.`);
       return null;
@@ -457,10 +459,12 @@ async function fetchEpisodeSources(hianimeFullEpisodeId, server, category) {
       console.warn(`[HianimeScraperVPS] No HLS master playlist URL found for ${server}/${category}.`);
       return null;
     }
-    if (!masterPlaylistUrl.includes('netmagcdn.com')) {
-        console.log(`[HianimeScraperVPS] Skipping non-netmagcdn.com link: ${masterPlaylistUrl}`);
-        return null;
-    }
+    // TEMPORARY: Comment out the netmagcdn.com filter to allow other CDN domains
+    // if (!masterPlaylistUrl.includes('netmagcdn.com')) {
+    //     console.log(`[HianimeScraperVPS] Skipping non-netmagcdn.com link: ${masterPlaylistUrl}`);
+    //     return null;
+    // }
+    console.log(`[HianimeScraperVPS] Found HLS source: ${masterPlaylistUrl}`);
     const sourceData = {
         playlistUrl: masterPlaylistUrl,
         headers: data.data.headers || {},
