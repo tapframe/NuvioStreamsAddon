@@ -279,6 +279,18 @@ async function resolveDriveseedLink(driveseedUrl) {
 
             const $ = cheerio.load(finalResponse.data);
             const downloadOptions = [];
+            let size = null;
+            let fileName = null;
+
+            // Extract size and filename from the list
+            $('ul.list-group li').each((i, el) => {
+                const text = $(el).text();
+                if (text.includes('Size :')) {
+                    size = text.split(':')[1].trim();
+                } else if (text.includes('Name :')) {
+                    fileName = text.split(':')[1].trim();
+                }
+            });
 
             // Find Resume Cloud button (primary)
             const resumeCloudLink = $('a:contains("Resume Cloud")').attr('href');
@@ -315,12 +327,12 @@ async function resolveDriveseedLink(driveseedUrl) {
 
             // Sort by priority
             downloadOptions.sort((a, b) => a.priority - b.priority);
-            return downloadOptions;
+            return { downloadOptions, size, fileName };
         }
-        return [];
+        return { downloadOptions: [], size: null, fileName: null };
     } catch (error) {
         console.error(`[MoviesMod] Error resolving Driveseed link: ${error.message}`);
-        return [];
+        return { downloadOptions: [], size: null, fileName: null };
     }
 }
 
@@ -574,6 +586,7 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
         console.log(`[MoviesMod] Filtered out 480p links. Removed ${initialCount - relevantLinks.length} links. Remaining: ${relevantLinks.length}`);
 
         const streams = [];
+        const processedFileNames = new Set(); // Set to track processed filenames for deduplication
 
         // Process each relevant link in parallel for better performance
         const linkPromises = relevantLinks.map(async (link) => {
@@ -608,8 +621,16 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
 
                 // Process each target link in parallel (usually just one for movies, or specific episode for TV)
                 const targetLinkPromises = targetLinks.map(async (targetLink) => {
-                    const downloadOptions = await resolveDriveseedLink(targetLink.url);
+                    const { downloadOptions, size: driveseedSize, fileName } = await resolveDriveseedLink(targetLink.url);
                     
+                    if (fileName && processedFileNames.has(fileName)) {
+                        console.log(`[MoviesMod] Skipping duplicate file: ${fileName}`);
+                        return null;
+                    }
+                    if (fileName) {
+                        processedFileNames.add(fileName);
+                    }
+
                     if (downloadOptions.length === 0) {
                         console.log(`[MoviesMod] No download options found for ${targetLink.server}`);
                         return null;
@@ -664,18 +685,36 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
                     let additionalInfo = [];
                     let episodeInfo = '';
                     let sourceInfo = '';
+                    let sizeInfo = driveseedSize;
                     
+                    // --- 1. Extract Size Information First (if not already found) ---
+                    if (!sizeInfo) {
+                        if (targetLink.qualityInfo) {
+                            // For cinematickit links, size is in parentheses, e.g., "(220MB)"
+                            const sizeMatch = targetLink.qualityInfo.match(/\(([^)]+)\)/);
+                            if (sizeMatch && sizeMatch[1]) {
+                                sizeInfo = sizeMatch[1];
+                            }
+                        } else if (targetLink.quality) {
+                            // For main page links, size is in square brackets, e.g., "[1.9GB]"
+                            const sizeMatch = targetLink.quality.match(/\[([^\]]+)\]/);
+                            if (sizeMatch && sizeMatch[1]) {
+                                sizeInfo = sizeMatch[1];
+                            }
+                        }
+                    }
+
                     // Build episode information for TV series
                     if (mediaType === 'tv' && seasonNum !== null && episodeNum !== null) {
                         episodeInfo = `S${seasonNum.toString().padStart(2, '0')}E${episodeNum.toString().padStart(2, '0')}`;
                     }
                     
-                    // First priority: Use qualityInfo from cinematickit.org if available
+                    // --- 2. Extract Quality and Other Details ---
                     if (targetLink.qualityInfo) {
                         const qualityInfo = targetLink.qualityInfo;
                         console.log(`[MoviesMod] Using quality info from cinematickit: ${qualityInfo}`);
                         
-                        // Extract quality from qualityInfo (e.g., "480p x264 (220MB)" -> "480p")
+                        // Extract quality from qualityInfo
                         const qualityMatch = qualityInfo.match(/(480p|720p|1080p|2160p|4k)/i);
                         if (qualityMatch) {
                             actualQuality = qualityMatch[1];
@@ -688,8 +727,8 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
                         
                         // Extract size info from qualityInfo (e.g., "(220MB)", "(1.9GB)")
                         const sizeMatch = qualityInfo.match(/\(([^)]+)\)/);
-                        if (sizeMatch) {
-                            additionalInfo.push(sizeMatch[1]);
+                        if (sizeMatch && sizeMatch[1]) {
+                            sizeInfo = sizeMatch[1];
                         }
                         
                     } else if (selectedResult.url) {
@@ -757,8 +796,12 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
                     // Build detailed title with all information
                     let detailedTitle = '';
                     
-                    // Start with episode/movie info
-                    if (mediaType === 'tv' && seasonNum !== null && episodeNum !== null) {
+                    // Use filename from driveseed if available for a more accurate title
+                    if (fileName) {
+                        // Clean up filename (remove extension, replace dots with spaces)
+                        const cleanFileName = fileName.replace(/\.[^/.]+$/, "").replace(/\./g, ' ');
+                        detailedTitle = cleanFileName;
+                    } else if (mediaType === 'tv' && seasonNum !== null && episodeNum !== null) {
                         detailedTitle = `${title} S${seasonNum.toString().padStart(2, '0')}E${episodeNum.toString().padStart(2, '0')}`;
                         
                         // Try to extract episode title from filename
@@ -786,6 +829,10 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
                     // Add download method
                     techDetails.push(`[${selectedResult.method}]`);
                     
+                    if (sizeInfo) {
+                        techDetails.push(sizeInfo);
+                    }
+
                     // Add quality info
                     if (actualQuality !== 'Unknown') {
                         techDetails.push(actualQuality);
@@ -841,7 +888,8 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
                         quality: actualQuality,
                         provider: 'MoviesMod',
                         method: selectedResult.method,
-                        size: 'Unknown size'
+                        size: sizeInfo,
+                        fileName: fileName
                     };
                 });
 
