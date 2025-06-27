@@ -1613,6 +1613,11 @@
             background: linear-gradient(135deg, #ff9800, #ff5722); /* Orange gradient for MP4Hydra */
         }
 
+        /* Add UHDMovies icon style */
+        .uhdmovies-icon {
+            background: linear-gradient(135deg, #673ab7, #9c27b0); /* Purple gradient for UHDMovies */
+        }
+
     </style>
 </head>
 <body>
@@ -1741,6 +1746,11 @@
                         <div class="provider-icon vidzee-icon">📺</div>
                         <div class="provider-name">VidZee</div>
                         <span class="provider-detail">Auto Quality</span>
+                    </div>
+                    <div class="provider-item">
+                        <div class="provider-icon uhdmovies-icon">🎬</div>
+                        <div class="provider-name">UHDMovies</div>
+                        <span class="provider-detail">Multiple Qualities</span>
                     </div>
 
                     <h2 style="margin-top: 1.25rem; color: #ff6b6b;">Offline Providers</h2>
@@ -1888,6 +1898,18 @@
                                 <label for="providerMp4hydra" style="font-size: 0.9rem;">MP4Hydra <span style="font-size: 0.75rem; color: var(--text-light);">(~8.1s)</span> <span style="font-size: 0.75rem; color: #ff8c00;">Android TV/Mobile only</span></label>
                             </div>
                              <select id="qualityMp4hydra" name="providerQuality" data-provider="mp4hydra" class="provider-sort-select">
+                                <option value="all" selected>All Qualities</option>
+                                <option value="480p">480p & Up</option>
+                                <option value="720p">720p & Up</option>
+                                <option value="1080p">1080p & Up</option>
+                            </select>
+                        </div>
+                        <div class="provider-checkbox-item" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
+                            <div style="display: flex; align-items: center;">
+                                <input type="checkbox" id="providerUhdmovies" name="providerSelect" value="uhdmovies" checked style="margin-right: 0.5rem; accent-color: var(--primary);">
+                                <label for="providerUhdmovies" style="font-size: 0.9rem;">UHDMovies <span style="font-size: 0.75rem; color: var(--text-light);">(~6.5s)</span> <span style="font-size: 0.75rem; color: #00c16e;">4K</span></label>
+                            </div>
+                             <select id="qualityUhdmovies" name="providerQuality" data-provider="uhdmovies" class="provider-sort-select">
                                 <option value="all" selected>All Qualities</option>
                                 <option value="480p">480p & Up</option>
                                 <option value="720p">720p & Up</option>

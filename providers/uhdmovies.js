@@ -110,13 +110,6 @@ function extractCleanQuality(fullQualityText) {
     quality.push('480p');
   }
   
-  // Extract codec/format
-  if (text.includes('hevc') || text.includes('x265')) {
-    quality.push('HEVC');
-  } else if (text.includes('x264')) {
-    quality.push('x264');
-  }
-  
   // Extract special features
   if (text.includes('hdr')) {
     quality.push('HDR');
@@ -124,19 +117,11 @@ function extractCleanQuality(fullQualityText) {
   if (text.includes('dolby vision') || text.includes('dovi') || /\bdv\b/.test(text)) {
     quality.push('DV');
   }
-  if (text.includes('10bit')) {
-    quality.push('10-bit');
-  }
   if (text.includes('imax')) {
     quality.push('IMAX');
   }
   if (text.includes('bluray') || text.includes('blu-ray')) {
     quality.push('BluRay');
-  }
-  
-  // Extract audio info
-  if (text.includes('dual audio') || (text.includes('hindi') && text.includes('english'))) {
-    quality.push('Dual Audio');
   }
   
   // If we found any quality indicators, join them
@@ -320,7 +305,8 @@ async function extractDownloadLinks(moviePageUrl) {
         downloadLinks.push({
           quality: cleanQuality,
           size: size,
-          link: link
+          link: link,
+          rawQuality: quality.replace(/(\r\n|\n|\r)/gm," ").replace(/\s+/g, ' ').trim()
         });
       }
     });
@@ -334,6 +320,41 @@ async function extractDownloadLinks(moviePageUrl) {
     console.error(`[UHDMovies] Error extracting download links: ${error.message}`);
     return { title: 'Unknown', links: [] };
   }
+}
+
+function extractCodecs(rawQuality) {
+    const codecs = [];
+    const text = rawQuality.toLowerCase();
+
+    if (text.includes('hevc') || text.includes('x265')) {
+        codecs.push('H.265');
+    } else if (text.includes('x264')) {
+        codecs.push('H.264');
+    }
+
+    if (text.includes('10bit') || text.includes('10-bit')) {
+        codecs.push('10-bit');
+    }
+    
+    if (text.includes('atmos')) {
+        codecs.push('Atmos');
+    } else if (text.includes('dts-hd')) {
+        codecs.push('DTS-HD');
+    } else if (text.includes('dts')) {
+        codecs.push('DTS');
+    } else if (text.includes('ddp5.1') || text.includes('dd+ 5.1') || text.includes('eac3')) {
+        codecs.push('EAC3');
+    } else if (text.includes('ac3')) {
+        codecs.push('AC3');
+    }
+    
+    if (text.includes('dovi') || text.includes('dolby vision') || /\bdv\b/.test(text)) {
+        codecs.push('DV');
+    } else if (text.includes('hdr')) {
+        codecs.push('HDR');
+    }
+
+    return codecs;
 }
 
 // Function to try Instant Download method
@@ -767,13 +788,15 @@ async function getUHDMoviesStreams(tmdbId, mediaType = 'movie', season = null, e
 
               if (finalLinkData && finalLinkData.url) {
                 console.log(`[UHDMovies]  - Final URL found: ${finalLinkData.url}`);
+                const codecs = extractCodecs(link.rawQuality);
                 return {
                   name: `UHDMovies`,
                   title: `${link.quality}\n${finalLinkData.size || link.size}`,
                   url: finalLinkData.url,
                   quality: link.quality,
                   size: finalLinkData.size || link.size,
-                  fullTitle: downloadInfo.title,
+                  fullTitle: link.rawQuality,
+                  codecs: codecs,
                   behaviorHints: {
                     bingeGroup: `uhdmovies-${link.quality}`
                   }

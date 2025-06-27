@@ -1448,26 +1448,23 @@ builder.defineStreamHandler(async (args) => {
         }
 
         let titleParts = [];
-        if (stream.size && stream.size !== 'Unknown size' && !stream.size.toLowerCase().includes('n/a')) {
-            titleParts.push(stream.size);
+        
+        if (stream.codecs && Array.isArray(stream.codecs) && stream.codecs.length > 0) {
+            // A more specific order for codecs
+            const codecOrder = ['DV', 'HDR', 'Atmos', 'DTS-HD', 'DTS', 'EAC3', 'AC3', 'H.265', 'H.264', '10-bit'];
+            const sortedCodecs = stream.codecs.slice().sort((a, b) => {
+                const indexA = codecOrder.indexOf(a);
+                const indexB = codecOrder.indexOf(b);
+                if (indexA === -1 && indexB === -1) return 0;
+                if (indexA === -1) return 1;
+                if (indexB === -1) return -1;
+                return indexA - indexB;
+            });
+            titleParts.push(...sortedCodecs);
         }
 
-        if (stream.codecs && Array.isArray(stream.codecs) && stream.codecs.length > 0) {
-            stream.codecs.forEach(codec => {
-                if (['DV', 'HDR10+', 'HDR', 'SDR'].includes(codec)) {
-                    titleParts.push(codec);
-                } else if (['Atmos', 'TrueHD', 'DTS-HD MA'].includes(codec)) {
-                    titleParts.push(codec);
-                } else if (['H.265', 'H.264', 'AV1'].includes(codec)) {
-                    titleParts.push(codec);
-                } else if (['EAC3', 'AC3', 'AAC', 'Opus', 'MP3', 'DTS-HD', 'DTS'].includes(codec)) { 
-                    titleParts.push(codec);
-                } else if (['10-bit', '8-bit'].includes(codec)) {
-                    titleParts.push(codec);
-                } else {
-                    titleParts.push(codec); 
-                }
-            });
+        if (stream.size && stream.size !== 'Unknown size' && !stream.size.toLowerCase().includes('n/a')) {
+            titleParts.push(stream.size);
         }
             
         const titleSecondLine = titleParts.join(" • ");
