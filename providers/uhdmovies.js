@@ -689,8 +689,6 @@ async function resolveSidToDriveleech(sidUrl) {
 
     if (!finalLinkPath || !cookieName || !cookieValue) {
       console.error("  [SID] Error: Could not extract dynamic cookie/link from JS.");
-      await fs.writeFile(`sid_error_page_${Date.now()}.html`, responseStep2.data);
-      console.error("  [SID] Wrote final page HTML to file for debugging.");
       return null;
     }
     
@@ -726,8 +724,6 @@ async function resolveSidToDriveleech(sidUrl) {
     console.error(`  [SID] Error during SID resolution: ${error.message}`);
     if (error.response) {
       console.error(`  [SID] Status: ${error.response.status}`);
-      await fs.writeFile(`sid_error_response_${Date.now()}.html`, error.response.data);
-      console.error("  [SID] Wrote error response HTML to file for debugging.");
     }
     return null;
   }
