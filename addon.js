@@ -1432,8 +1432,8 @@ builder.defineStreamHandler(async (args) => {
                     nameVideoTechTags.push('HDR');
                 }
             }
-            // For any other provider, use the original behavior
-            else {
+            // For any other provider (that isn't UHDMovies), use the original behavior
+            else if (stream.provider !== 'UHDMovies') {
                 if (stream.codecs.includes('DV')) {
                     nameVideoTechTags.push('DV');
                 } else if (stream.codecs.includes('HDR10+')) {
@@ -1448,7 +1448,7 @@ builder.defineStreamHandler(async (args) => {
         }
 
         let titleParts = [];
-        
+
         if (stream.codecs && Array.isArray(stream.codecs) && stream.codecs.length > 0) {
             // A more specific order for codecs
             const codecOrder = ['DV', 'HDR', 'Atmos', 'DTS-HD', 'DTS', 'EAC3', 'AC3', 'H.265', 'H.264', '10-bit'];

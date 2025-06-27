@@ -197,67 +197,72 @@ async function extractTvShowDownloadLinks(showPageUrl, season, episode) {
     const showTitle = $('h1').first().text().trim();
     const downloadLinks = [];
 
-    // New, more robust scanning logic
-    const qualityHeaders = $('.entry-content').find('pre, p:has(strong), p:has(b), h3, h4');
+    // --- NEW LOGIC TO SCOPE SEARCH TO THE CORRECT SEASON ---
+    let inTargetSeason = false;
+    let qualityText = '';
 
-    qualityHeaders.each((index, header) => {
-        const $header = $(header);
-        let qualityText = $header.text().trim();
+    $('.entry-content').find('*').each((index, element) => {
+        const $el = $(element);
+        const text = $el.text().trim();
+        const seasonMatch = text.match(/^SEASON\s+(\d+)/i);
 
-        // Filter out irrelevant headers and sections
-        if (qualityText.length < 4 || qualityText.length > 250 || /plot|download|screenshot|trailer|join|powered by/i.test(qualityText)) {
-            return; // = continue to the next iteration
-        }
-
-        let linksParagraph = null;
-        let currentElement = $header;
-
-        // Scan the next few sibling elements to find the link paragraph
-        for (let i = 0; i < 3; i++) { 
-            currentElement = currentElement.next();
-            if (!currentElement.length) break;
-
-            const currentText = currentElement.text().trim();
-            
-            // If the sibling looks like another quality header, we've gone too far.
-            if (i > 0 && currentElement.is('pre, h3, h4')) break;
-            if (i > 0 && currentElement.is('p') && currentElement.find('strong, b').length > 0 && /p|4k|hevc/i.test(currentText)) break;
-            
-            // If the element is a paragraph and has the download links, we've found our target.
-            if (currentElement.is('p') && currentElement.find('a[href*="tech.unblockedgames.world"]').length > 0) {
-                linksParagraph = currentElement;
-                break;
-            }
-
-            // If it's a paragraph without links, it's likely more quality info. Append it.
-            if (currentElement.is('p') && currentText) {
-                qualityText += ' ' + currentText;
+        // Check if we are entering a new season block
+        if (seasonMatch) {
+            const currentSeasonNum = parseInt(seasonMatch[1], 10);
+            if (currentSeasonNum == season) {
+                inTargetSeason = true;
+                console.log(`[UHDMovies] Entering Season ${season} block.`);
+            } else if (inTargetSeason) {
+                // We've hit the next season, so we stop.
+                console.log(`[UHDMovies] Exiting Season ${season} block, now in Season ${currentSeasonNum}.`);
+                inTargetSeason = false;
+                return false; // Exit .each() loop
             }
         }
 
-        if (linksParagraph) {
-            const episodeRegex = new RegExp(`^Episode\\s+0*${episode}(?!\\d)`, 'i');
-            const targetEpisodeLink = linksParagraph.find('a').filter((i, el) => {
-                return episodeRegex.test($(el).text().trim());
-            }).first();
+        if (inTargetSeason) {
+            // This element is within the correct season's block.
             
-            if (targetEpisodeLink.length > 0) {
-                const link = targetEpisodeLink.attr('href');
-                if (link && !downloadLinks.some(item => item.link === link)) {
-                    const sizeMatch = qualityText.match(/\[\s*([0-9.,]+\s*[KMGT]B)/i);
-                    const size = sizeMatch ? sizeMatch[1] : 'Unknown';
+            // Is this a quality header? (e.g., a <pre> or a <p> with <strong>)
+            // It often contains resolution, release group, etc.
+            const isQualityHeader = $el.is('pre, p:has(strong), p:has(b), h3, h4');
+            if (isQualityHeader) {
+                const headerText = $el.text().trim();
+                // Filter out irrelevant headers. We can be more aggressive here.
+                if (headerText.length > 5 && !/plot|download|screenshot|trailer|join|powered by|season/i.test(headerText) && !($el.find('a').length > 0)) {
+                    qualityText = headerText; // Store the most recent quality header
+                }
+            }
 
-                    const cleanQuality = extractCleanQuality(qualityText);
-                    downloadLinks.push({ quality: cleanQuality, size: size, link: link });
+            // Is this a paragraph with episode links?
+            if ($el.is('p') && $el.find('a[href*="tech.unblockedgames.world"]').length > 0) {
+                const linksParagraph = $el;
+                const episodeRegex = new RegExp(`^Episode\\s+0*${episode}(?!\\d)`, 'i');
+                const targetEpisodeLink = linksParagraph.find('a').filter((i, el) => {
+                    return episodeRegex.test($(el).text().trim());
+                }).first();
+
+                if (targetEpisodeLink.length > 0) {
+                    const link = targetEpisodeLink.attr('href');
+                    if (link && !downloadLinks.some(item => item.link === link)) {
+                        const sizeMatch = qualityText.match(/\[\s*([0-9.,]+\s*[KMGT]B)/i);
+                        const size = sizeMatch ? sizeMatch[1] : 'Unknown';
+
+                        const cleanQuality = extractCleanQuality(qualityText);
+                        const rawQuality = qualityText.replace(/(\r\n|\n|\r)/gm," ").replace(/\s+/g, ' ').trim();
+                        
+                        console.log(`[UHDMovies] Found match: Quality='${qualityText}', Link='${link}'`);
+                        downloadLinks.push({ quality: cleanQuality, size: size, link: link, rawQuality: rawQuality });
+                    }
                 }
             }
         }
     });
 
     if (downloadLinks.length > 0) {
-      console.log(`[UHDMovies] Found ${downloadLinks.length} links using primary scan.`);
+      console.log(`[UHDMovies] Found ${downloadLinks.length} links for S${season}E${episode}.`);
     } else {
-      console.log(`[UHDMovies] Primary scan failed to find links.`);
+      console.log(`[UHDMovies] Could not find links for S${season}E${episode}. It's possible the logic needs adjustment or the links aren't on the page.`);
     }
     
     return { title: showTitle, links: downloadLinks };
@@ -733,7 +738,7 @@ async function resolveSidToDriveleech(sidUrl) {
 async function getUHDMoviesStreams(tmdbId, mediaType = 'movie', season = null, episode = null) {
   console.log(`[UHDMovies] Attempting to fetch streams for TMDB ID: ${tmdbId}, Type: ${mediaType}${mediaType === 'tv' ? `, S:${season}E:${episode}` : ''}`);
   
-  const cacheKey = `uhd_${tmdbId}_${mediaType}${season ? `_s${season}e${episode}` : ''}`;
+  const cacheKey = `uhd_v2_${tmdbId}_${mediaType}${season ? `_s${season}e${episode}` : ''}`;
 
   try {
     // 1. Check cache first
