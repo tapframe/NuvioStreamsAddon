@@ -2,6 +2,8 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 const { URLSearchParams, URL } = require('url');
 const FormData = require('form-data');
+const { CookieJar } = require('tough-cookie');
+const { wrapper } = require('axios-cookiejar-support');
 
 // Constants
 const BASE_URL = 'https://uhdmovies.email';
@@ -202,7 +204,7 @@ async function extractTvShowDownloadLinks(showPageUrl, season, episode) {
             if (i > 0 && currentElement.is('p') && currentElement.find('strong, b').length > 0 && /p|4k|hevc/i.test(currentText)) break;
             
             // If the element is a paragraph and has the download links, we've found our target.
-            if (currentElement.is('p') && currentElement.find('a[href*="driveleech.net"]').length > 0) {
+            if (currentElement.is('p') && currentElement.find('a[href*="tech.unblockedgames.world"]').length > 0) {
                 linksParagraph = currentElement;
                 break;
             }
@@ -256,8 +258,8 @@ async function extractDownloadLinks(moviePageUrl) {
     const movieTitle = $('h1').first().text().trim();
     const downloadLinks = [];
     
-    // Find all download links and their associated quality information
-    $('a[href*="driveleech.net"]').each((index, element) => {
+    // Find all download links (the new SID links) and their associated quality information
+    $('a[href*="tech.unblockedgames.world"]').each((index, element) => {
       const link = $(element).attr('href');
       
       if (link && !downloadLinks.some(item => item.link === link)) {
@@ -555,6 +557,126 @@ function parseSize(sizeString) {
   return 0;
 }
 
+// New function to resolve the tech.unblockedgames.world links
+async function resolveSidToDriveleech(sidUrl) {
+  console.log(`[UHDMovies] Resolving SID link: ${sidUrl}`);
+  const jar = new CookieJar();
+  const session = wrapper(axios.create({
+    jar,
+    headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1'
+    }
+  }));
+
+  try {
+    // Step 0: Get the _wp_http value
+    console.log("  [SID] Step 0: Fetching initial page...");
+    const responseStep0 = await session.get(sidUrl);
+    let $ = cheerio.load(responseStep0.data);
+    const initialForm = $('#landing');
+    const wp_http_step1 = initialForm.find('input[name="_wp_http"]').val();
+    const action_url_step1 = initialForm.attr('action');
+
+    if (!wp_http_step1 || !action_url_step1) {
+      console.error("  [SID] Error: Could not find _wp_http in initial form.");
+      return null;
+    }
+
+    // Step 1: POST to the first form's action URL
+    console.log("  [SID] Step 1: Submitting initial form...");
+    const step1Data = new URLSearchParams({ '_wp_http': wp_http_step1 });
+    const responseStep1 = await session.post(action_url_step1, step1Data, {
+      headers: { 'Referer': sidUrl, 'Content-Type': 'application/x-www-form-urlencoded' }
+    });
+
+    // Step 2: Parse verification page for second form
+    console.log("  [SID] Step 2: Parsing verification page...");
+    $ = cheerio.load(responseStep1.data);
+    const verificationForm = $('#landing');
+    const action_url_step2 = verificationForm.attr('action');
+    const wp_http2 = verificationForm.find('input[name="_wp_http2"]').val();
+    const token = verificationForm.find('input[name="token"]').val();
+
+    if (!action_url_step2) {
+      console.error("  [SID] Error: Could not find verification form.");
+      return null;
+    }
+
+    // Step 3: POST to the verification URL
+    console.log("  [SID] Step 3: Submitting verification...");
+    const step2Data = new URLSearchParams({ '_wp_http2': wp_http2, 'token': token });
+    const responseStep2 = await session.post(action_url_step2, step2Data, {
+      headers: { 'Referer': responseStep1.request.res.responseUrl, 'Content-Type': 'application/x-www-form-urlencoded' }
+    });
+
+    // Step 4: Find dynamic cookie and link from JavaScript
+    console.log("  [SID] Step 4: Parsing final page for JS data...");
+    let finalLinkPath = null;
+    let cookieName = null;
+    let cookieValue = null;
+
+    const scriptContent = responseStep2.data;
+    const cookieMatch = scriptContent.match(/s_343\('([^']+)',\s*'([^']+)'/);
+    const linkMatch = scriptContent.match(/c\.setAttribute\("href",\s*"([^"]+)"\)/);
+    
+    if (cookieMatch) {
+      cookieName = cookieMatch[1].trim();
+      cookieValue = cookieMatch[2].trim();
+    }
+    if (linkMatch) {
+      finalLinkPath = linkMatch[1].trim();
+    }
+
+    if (!finalLinkPath || !cookieName || !cookieValue) {
+      console.error("  [SID] Error: Could not extract dynamic cookie/link from JS.");
+      fs.writeFileSync(`sid_error_page_${Date.now()}.html`, responseStep2.data);
+      console.error("  [SID] Wrote final page HTML to file for debugging.");
+      return null;
+    }
+    
+    const finalUrl = new URL(finalLinkPath, 'https://tech.unblockedgames.world').href;
+    console.log(`  [SID] Dynamic link found: ${finalUrl}`);
+    console.log(`  [SID] Dynamic cookie found: ${cookieName}`);
+
+    // Step 5: Set cookie and make final request
+    console.log("  [SID] Step 5: Setting cookie and making final request...");
+    await jar.setCookie(`${cookieName}=${cookieValue}`, 'https://tech.unblockedgames.world');
+    
+    const finalResponse = await session.get(finalUrl, {
+      headers: { 'Referer': responseStep2.request.res.responseUrl }
+    });
+
+    // Step 6: Extract driveleech URL from meta refresh tag
+    $ = cheerio.load(finalResponse.data);
+    const metaRefresh = $('meta[http-equiv="refresh"]');
+    if (metaRefresh.length > 0) {
+        const content = metaRefresh.attr('content');
+        const urlMatch = content.match(/url=(.*)/i);
+        if (urlMatch && urlMatch[1]) {
+            const driveleechUrl = urlMatch[1].replace(/"/g, "").replace(/'/g, "");
+            console.log(`  [SID] SUCCESS! Resolved Driveleech URL: ${driveleechUrl}`);
+            return driveleechUrl;
+        }
+    }
+
+    console.error("  [SID] Error: Could not find meta refresh tag with Driveleech URL.");
+    return null;
+
+  } catch (error) {
+    console.error(`  [SID] Error during SID resolution: ${error.message}`);
+    if (error.response) {
+      console.error(`  [SID] Status: ${error.response.status}`);
+      fs.writeFileSync(`sid_error_response_${Date.now()}.html`, error.response.data);
+      console.error("  [SID] Wrote error response HTML to file for debugging.");
+    }
+    return null;
+  }
+}
+
 // Main function to get streams for TMDB content
 async function getUHDMoviesStreams(tmdbId, mediaType = 'movie', season = null, episode = null) {
   console.log(`[UHDMovies] Attempting to fetch streams for TMDB ID: ${tmdbId}, Type: ${mediaType}${mediaType === 'tv' ? `, S:${season}E:${episode}` : ''}`);
@@ -636,31 +758,39 @@ async function getUHDMoviesStreams(tmdbId, mediaType = 'movie', season = null, e
         // Process all links to get final URLs
         const streamPromises = downloadInfo.links.map(async (link) => {
           try {
-            const finalLink = await getFinalLink(link.link);
-            if (finalLink) {
-              const streamTitle = isTvShow
-                ? `UHDMovies - S${season}E${episode} - ${link.quality}`
-                : `UHDMovies - ${link.quality}`;
-    
-              return {
-                title: streamTitle,
-                url: finalLink.url,
-                quality: link.quality,
-                size: finalLink.size !== 'Unknown' ? finalLink.size : link.size,
-                provider: 'UHDMovies',
-                languages: ['English'], // UHDMovies primarily has English content
-                subtitles: [],
-                codecs: [] // Could be enhanced to parse codecs from quality string
-              };
+            console.log(`[UHDMovies]  - Resolving SID link for quality: ${link.quality}`);
+            const driveleechUrl = await resolveSidToDriveleech(link.link);
+
+            if (driveleechUrl) {
+              console.log(`[UHDMovies]  - SID resolved to: ${driveleechUrl}`);
+              const finalLinkData = await getFinalLink(driveleechUrl);
+
+              if (finalLinkData && finalLinkData.url) {
+                console.log(`[UHDMovies]  - Final URL found: ${finalLinkData.url}`);
+                return {
+                  name: `UHDMovies`,
+                  title: `${link.quality}\n${finalLinkData.size || link.size}`,
+                  url: finalLinkData.url,
+                  quality: link.quality,
+                  size: finalLinkData.size || link.size,
+                  fullTitle: downloadInfo.title,
+                  behaviorHints: {
+                    bingeGroup: `uhdmovies-${link.quality}`
+                  }
+                };
+              } else {
+                console.warn(`[UHDMovies]  - Failed to get final link from Driveleech for quality: ${link.quality}`);
+              }
+            } else {
+              console.warn(`[UHDMovies]  - Failed to resolve SID link for quality: ${link.quality}`);
             }
-            return null;
-          } catch (error) {
-            console.error(`[UHDMovies] Error processing link: ${error.message}`);
-            return null;
+          } catch (e) {
+            console.error(`[UHDMovies] Error processing link ${link.link}:`, e.message);
           }
+          return null;
         });
         
-        const streams = (await Promise.all(streamPromises)).filter(stream => stream !== null);
+        const streams = (await Promise.all(streamPromises)).filter(Boolean);
         
         if (streams.length > 0) {
             console.log(`[UHDMovies] Successfully extracted ${streams.length} streams.`);

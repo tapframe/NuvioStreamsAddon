@@ -1305,7 +1305,10 @@ builder.defineStreamHandler(async (args) => {
         const qualityLabel = stream.quality || 'UNK'; // UNK for unknown
         
         let displayTitle;
-        if (tmdbTypeFromId === 'tv' && seasonNum !== null && episodeNum !== null && movieOrSeriesTitle) {
+        
+        if (stream.provider === 'UHDMovies' && stream.fullTitle) {
+            displayTitle = stream.fullTitle;
+        } else if (tmdbTypeFromId === 'tv' && seasonNum !== null && episodeNum !== null && movieOrSeriesTitle) {
             displayTitle = `${movieOrSeriesTitle} S${String(seasonNum).padStart(2, '0')}E${String(episodeNum).padStart(2, '0')}`;
         } else if (movieOrSeriesTitle) {
             if (tmdbTypeFromId === 'movie' && movieOrSeriesYear) {

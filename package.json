@@ -9,6 +9,7 @@
   "dependencies": {
     "aromanize": "^0.1.5",
     "axios": "^1.9.0",
+    "axios-cookiejar-support": "^6.0.2",
     "body-parser": "^2.2.0",
     "cheerio": "^1.0.0",
     "cors": "^2.8.5",
@@ -17,8 +18,10 @@
     "hls-parser": "^0.13.5",
     "ioredis": "^5.6.1",
     "node-fetch": "^2.7.0",
+    "puppeteer": "^24.11.0",
     "redis": "^5.5.5",
     "stremio-addon-sdk": "^1.6.10",
+    "tough-cookie": "^5.1.2",
     "ttl-cache": "^1.0.2",
     "yargs": "^17.7.2"
   },
