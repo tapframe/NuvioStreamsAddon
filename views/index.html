@@ -1618,6 +1618,33 @@
             background: linear-gradient(135deg, #673ab7, #9c27b0); /* Purple gradient for UHDMovies */
         }
 
+        /* Add MoviesMod icon style */
+        .moviesmod-icon {
+            background: linear-gradient(135deg, #ff5757, #ff8c00); /* Red-orange gradient for MoviesMod */
+        }
+
+        .provider-option.uhdmovies.selected {
+            background-color: rgba(212, 175, 55, 0.15);
+            border-color: #D4AF37;
+        }
+
+        .provider-option.moviesmod {
+            background-image: linear-gradient(to right, rgba(255, 87, 87, 0.15), rgba(0, 0, 0, 0));
+        }
+        .provider-option.moviesmod.selected {
+            background-color: rgba(255, 87, 87, 0.15);
+            border-color: #FF5757;
+        }
+
+        .quality-tag.uhdmovies-tag {
+            background-color: #D4AF37;
+            color: #111;
+        }
+
+        .quality-tag.moviesmod-tag {
+            background-color: #FF5757;
+            color: #fff;
+        }
     </style>
 </head>
 <body>
@@ -1751,6 +1778,11 @@
                         <div class="provider-icon uhdmovies-icon">🎬</div>
                         <div class="provider-name">UHDMovies</div>
                         <span class="provider-detail">Multiple Qualities</span>
+                    </div>
+                    <div class="provider-item">
+                        <div class="provider-icon moviesmod-icon">🍿</div>
+                        <div class="provider-name">MoviesMod</div>
+                        <span class="provider-detail">Multi-Source</span>
                     </div>
 
                     <h2 style="margin-top: 1.25rem; color: #ff6b6b;">Offline Providers</h2>
@@ -1910,10 +1942,20 @@
                                 <label for="providerUhdmovies" style="font-size: 0.9rem;">UHDMovies <span style="font-size: 0.75rem; color: var(--text-light);">(~6.5s)</span> <span style="font-size: 0.75rem; color: #00c16e;">4K</span></label>
                             </div>
                              <select id="qualityUhdmovies" name="providerQuality" data-provider="uhdmovies" class="provider-sort-select">
-                                <option value="all" selected>All Qualities</option>
-                                <option value="480p">480p & Up</option>
-                                <option value="720p">720p & Up</option>
-                                <option value="1080p">1080p & Up</option>
+                                <option value="all">All</option>
+                                <option value="1080p">1080p+</option>
+                                <option value="720p">720p+</option>
+                            </select>
+                        </div>
+                        <div class="provider-checkbox-item" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
+                            <div style="display: flex; align-items: center;">
+                                <input type="checkbox" id="providerMoviesmod" name="providerSelect" value="moviesmod" checked style="margin-right: 0.5rem; accent-color: var(--primary);">
+                                <label for="providerMoviesmod" style="font-size: 0.9rem;">MoviesMod <span style="font-size: 0.75rem; color: var(--text-light);">(~8.5s)</span> <span style="font-size: 0.75rem; color: var(--text-light);">Multi-Source</span></label>
+                            </div>
+                             <select id="qualityMoviesmod" name="providerQuality" data-provider="moviesmod" class="provider-sort-select">
+                                <option value="all">All</option>
+                                <option value="1080p">1080p+</option>
+                                <option value="720p">720p+</option>
                             </select>
                         </div>
                         <div class="provider-info-note" style="margin-top: 0.75rem; margin-bottom: 0.75rem; padding: 0.5rem; font-size: 0.8rem;">
