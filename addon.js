@@ -128,6 +128,10 @@ console.log(`[addon.js] MoviesMod provider fetching enabled: ${ENABLE_MOVIESMOD_
 const ENABLE_TOPMOVIES_PROVIDER = process.env.ENABLE_TOPMOVIES_PROVIDER !== 'false'; // Defaults to true if not set or not 'false'
 console.log(`[addon.js] TopMovies provider fetching enabled: ${ENABLE_TOPMOVIES_PROVIDER}`);
 
+// NEW: Read environment variable for DramaDrip
+const ENABLE_DRAMADRIP_PROVIDER = process.env.ENABLE_DRAMADRIP_PROVIDER !== 'false'; // Defaults to true if not set or not 'false'
+console.log(`[addon.js] DramaDrip provider fetching enabled: ${ENABLE_DRAMADRIP_PROVIDER}`);
+
 // NEW: Stream caching config
 const STREAM_CACHE_DIR = process.env.VERCEL ? path.join('/tmp', '.streams_cache') : path.join(__dirname, '.streams_cache');
 const STREAM_CACHE_TTL_MS = 9 * 60 * 1000; // 9 minutes
@@ -146,6 +150,7 @@ const { getMP4HydraStreams } = require('./providers/MP4Hydra.js'); // NEW: Impor
 const { getUHDMoviesStreams } = require('./providers/uhdmovies.js'); // NEW: Import from uhdmovies.js
 const { getMoviesModStreams } = require('./providers/moviesmod.js'); // NEW: Import from moviesmod.js
 const { getTopMoviesStreams } = require('./providers/topmovies.js'); // NEW: Import from topmovies.js
+const { getDramaDripStreams } = require('./providers/dramadrip.js'); // NEW: Import from dramadrip.js
 
 // --- Constants ---
 const TMDB_API_URL = 'https://api.themoviedb.org/3';
@@ -1327,6 +1332,51 @@ builder.defineStreamHandler(async (args) => {
                 await saveStreamToCache('topmovies', tmdbTypeFromId, tmdbId, [], 'failed');
                 return [];
             }
+        },
+
+        // DramaDrip provider with cache integration
+        dramadrip: async () => {
+            if (!ENABLE_DRAMADRIP_PROVIDER) {
+                console.log('[DramaDrip] Skipping fetch: Disabled by environment variable.');
+                return [];
+            }
+            if (!shouldFetch('dramadrip')) {
+                console.log('[DramaDrip] Skipping fetch: Not selected by user.');
+                return [];
+            }
+            
+            // This provider only supports TV shows
+            if (tmdbTypeFromId !== 'tv') {
+                console.log('[DramaDrip] Skipping fetch: Provider only supports TV shows.');
+                return [];
+            }
+
+            // Try to get cached streams first
+            const cachedStreams = await getStreamFromCache('dramadrip', tmdbTypeFromId, tmdbId, seasonNum, episodeNum);
+            if (cachedStreams) {
+                console.log(`[DramaDrip] Using ${cachedStreams.length} streams from cache.`);
+                return cachedStreams.map(stream => ({ ...stream, provider: 'DramaDrip' }));
+            }
+            
+            // No cache or expired, fetch fresh
+            try {
+                console.log(`[DramaDrip] Fetching new streams...`);
+                const streams = await getDramaDripStreams(tmdbId, tmdbTypeFromId, seasonNum, episodeNum);
+                
+                if (streams && streams.length > 0) {
+                    console.log(`[DramaDrip] Successfully fetched ${streams.length} streams.`);
+                    await saveStreamToCache('dramadrip', tmdbTypeFromId, tmdbId, streams, 'ok', seasonNum, episodeNum);
+                    return streams.map(stream => ({ ...stream, provider: 'DramaDrip' }));
+                } else {
+                    console.log(`[DramaDrip] No streams returned.`);
+                    await saveStreamToCache('dramadrip', tmdbTypeFromId, tmdbId, [], 'failed', seasonNum, episodeNum);
+                    return [];
+                }
+            } catch (err) {
+                console.error(`[DramaDrip] Error fetching streams:`, err.message);
+                await saveStreamToCache('dramadrip', tmdbTypeFromId, tmdbId, [], 'failed', seasonNum, episodeNum);
+                return [];
+            }
         }
     };
 
@@ -1347,7 +1397,8 @@ builder.defineStreamHandler(async (args) => {
             timeProvider('MP4Hydra', providerFetchFunctions.mp4hydra()),
             timeProvider('UHDMovies', providerFetchFunctions.uhdmovies()), 
             timeProvider('MoviesMod', providerFetchFunctions.moviesmod()),
-            timeProvider('TopMovies', providerFetchFunctions.topmovies())
+            timeProvider('TopMovies', providerFetchFunctions.topmovies()),
+            timeProvider('DramaDrip', providerFetchFunctions.dramadrip())
         ]);
         
         // Process results into streamsByProvider object
@@ -1363,7 +1414,8 @@ builder.defineStreamHandler(async (args) => {
             'MP4Hydra': ENABLE_MP4HYDRA_PROVIDER && shouldFetch('mp4hydra') ? filterStreamsByQuality(providerResults[8], minQualitiesPreferences.mp4hydra, 'MP4Hydra') : [],
             'UHDMovies': ENABLE_UHDMOVIES_PROVIDER && shouldFetch('uhdmovies') ? filterStreamsByQuality(providerResults[9], minQualitiesPreferences.uhdmovies, 'UHDMovies') : [], // NEW: Add UHDMovies provider
             'MoviesMod': ENABLE_MOVIESMOD_PROVIDER && shouldFetch('moviesmod') ? filterStreamsByQuality(providerResults[10], minQualitiesPreferences.moviesmod, 'MoviesMod') : [], // NEW: Add MoviesMod provider
-            'TopMovies': ENABLE_TOPMOVIES_PROVIDER && shouldFetch('topmovies') ? filterStreamsByQuality(providerResults[11], minQualitiesPreferences.topmovies, 'TopMovies') : [] 
+            'TopMovies': ENABLE_TOPMOVIES_PROVIDER && shouldFetch('topmovies') ? filterStreamsByQuality(providerResults[11], minQualitiesPreferences.topmovies, 'TopMovies') : [], 
+            'DramaDrip': ENABLE_DRAMADRIP_PROVIDER && shouldFetch('dramadrip') ? filterStreamsByQuality(providerResults[12], minQualitiesPreferences.dramadrip, 'DramaDrip') : []
         };
 
         // Sort streams for each provider by size, then quality
@@ -1383,7 +1435,7 @@ builder.defineStreamHandler(async (args) => {
 
         // Combine streams in the preferred provider order
         combinedRawStreams = [];
-        const providerOrder = ['ShowBox', 'UHDMovies', 'MoviesMod', 'TopMovies', 'Hianime', 'Xprime.tv', 'HollyMovieHD', 'Soaper TV', 'VidZee', 'MP4Hydra', 'Cuevana', 'VidSrc'];
+        const providerOrder = ['ShowBox', 'UHDMovies', 'MoviesMod', 'TopMovies', 'DramaDrip', 'Hianime', 'Xprime.tv', 'HollyMovieHD', 'Soaper TV', 'VidZee', 'MP4Hydra', 'Cuevana', 'VidSrc'];
         providerOrder.forEach(providerKey => {
             if (streamsByProvider[providerKey] && streamsByProvider[providerKey].length > 0) {
                 combinedRawStreams.push(...streamsByProvider[providerKey]);
@@ -1501,6 +1553,8 @@ builder.defineStreamHandler(async (args) => {
             providerDisplayName = 'MoviesMod';
         } else if (stream.provider === 'TopMovies') {
             providerDisplayName = 'TopMovies';
+        } else if (stream.provider === 'DramaDrip') {
+            providerDisplayName = 'DramaDrip';
         }
 
         let nameDisplay;
@@ -1541,6 +1595,18 @@ builder.defineStreamHandler(async (args) => {
             nameDisplay = stream.title || `${providerDisplayName} - ${stream.quality || 'UNK'}`;
         } else if (stream.provider === 'TopMovies') {
             nameDisplay = stream.title || `${providerDisplayName} - ${stream.quality || 'UNK'}`;
+        } else if (stream.provider === 'DramaDrip') {
+            // For DramaDrip, we also use a pre-formatted title
+            return {
+                name: stream.name,
+                title: stream.title,
+                url: stream.url,
+                type: 'url',
+                availability: 2,
+                behaviorHints: {
+                    notWebReady: true
+                }
+            };
         } else { // For other providers (ShowBox, Xprime, etc.)
             const qualityLabel = stream.quality || 'UNK';
             if (flagEmoji) {
