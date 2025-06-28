@@ -106,7 +106,7 @@ async function extractDownloadLinks(moviePageUrl) {
 }
 
 // Resolve intermediate links (dramadrip, episodes.modpro.blog, modrefer.in)
-async function resolveIntermediateLink(initialUrl, refererUrl) {
+async function resolveIntermediateLink(initialUrl, refererUrl, quality) {
     try {
         const urlObject = new URL(initialUrl);
 
@@ -114,55 +114,41 @@ async function resolveIntermediateLink(initialUrl, refererUrl) {
             const { data: dramaData } = await axios.get(initialUrl, { headers: { 'Referer': refererUrl } });
             const $$ = cheerio.load(dramaData);
             
-            // First try the new cinematickit.org links (for quality-specific episodes)
-            const cinematicKitLinks = [];
-            $$('a[href*="cinematickit.org"]').each((i, el) => {
-                const link = $$(el).attr('href');
-                const text = $$(el).text().trim();
-                if (link && text) {
-                    cinematicKitLinks.push({ url: link, quality: text });
-                }
-            });
-            
-            if (cinematicKitLinks.length > 0) {
-                console.log(`[MoviesMod] Found ${cinematicKitLinks.length} cinematickit.org quality links`);
-                
-                // Process all quality links in parallel
-                const qualityPromises = cinematicKitLinks.map(async (qualityLink) => {
-                    try {
-                        return await resolveIntermediateLink(qualityLink.url, initialUrl);
-                    } catch (error) {
-                        console.error(`[MoviesMod] Error processing quality link ${qualityLink.quality}: ${error.message}`);
-                        return [];
+            let episodePageLink = null;
+            const seasonMatch = quality.match(/Season \d+/i);
+            // Extract the specific quality details, e.g., "1080p x264"
+            const specificQualityMatch = quality.match(/(480p|720p|1080p|2160p|4k)[ \w\d-]*/i);
+
+            if (seasonMatch && specificQualityMatch) {
+                const seasonIdentifier = seasonMatch[0].toLowerCase();
+                // Clean up the identifier to get only the essential parts
+                let specificQualityIdentifier = specificQualityMatch[0].toLowerCase().replace(/msubs.*/i, '').replace(/esubs.*/i, '').replace(/\{.*/, '').trim();
+                const qualityParts = specificQualityIdentifier.split(/\s+/); // -> ['1080p', 'x264']
+
+                $$('a[href*="episodes.modpro.blog"], a[href*="cinematickit.org"]').each((i, el) => {
+                    const link = $$(el);
+                    const linkText = link.text().trim().toLowerCase();
+                    const seasonHeader = link.closest('.wp-block-buttons').prevAll('h2.wp-block-heading').first().text().trim().toLowerCase();
+                    
+                    const seasonIsMatch = seasonHeader.includes(seasonIdentifier);
+                    // Ensure that the link text contains all parts of our specific quality
+                    const allPartsMatch = qualityParts.every(part => linkText.includes(part));
+
+                    if (seasonIsMatch && allPartsMatch) {
+                        episodePageLink = link.attr('href');
+                        console.log(`[MoviesMod] Found specific match for "${quality}" -> "${link.text().trim()}": ${episodePageLink}`);
+                        return false; // Break loop, we found our specific link
                     }
                 });
-                
-                const allQualityResults = await Promise.all(qualityPromises);
-                
-                // Flatten and add quality info to each result
-                const allLinks = [];
-                allQualityResults.forEach((results, i) => {
-                    if (Array.isArray(results)) {
-                        results.forEach(result => {
-                            allLinks.push({
-                                ...result,
-                                qualityInfo: cinematicKitLinks[i].quality // Add quality info
-                            });
-                        });
-                    }
-                });
-                
-                return allLinks;
+            }
+
+            if (!episodePageLink) {
+                console.error(`[MoviesMod] Could not find a specific quality match on dramadrip page for: ${quality}`);
+                return [];
             }
             
-            // Fallback to old episodes.modpro.blog method
-            const episodeBlogLink = $$('a[href*="episodes.modpro.blog"]').attr('href');
-            if (episodeBlogLink) {
-                return await resolveIntermediateLink(episodeBlogLink, initialUrl);
-            }
-            
-            console.error('[MoviesMod] Could not find cinematickit.org or episodes.modpro.blog links on dramadrip page.');
-            return [];
+            // Pass quality to recursive call
+            return await resolveIntermediateLink(episodePageLink, initialUrl, quality);
             
         } else if (urlObject.hostname.includes('cinematickit.org')) {
             // Handle cinematickit.org pages
@@ -556,8 +542,45 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
             return [];
         }
 
-        // Find the best match (simple heuristic - first result for now)
-        const selectedResult = searchResults[0];
+        // Find the best match
+        let selectedResult = null;
+        const cleanQuery = title.toLowerCase();
+
+        if (mediaType === 'tv' || mediaType === 'series') {
+            // For series, prefer results with "season" in the title and without common spin-off keywords
+            selectedResult = searchResults.find(r => 
+                r.title.toLowerCase().includes(cleanQuery) &&
+                r.title.toLowerCase().includes('season') &&
+                !r.title.toLowerCase().includes('challenge') &&
+                !r.title.toLowerCase().includes('conversation')
+            );
+        } else if (mediaType === 'movie' && year) {
+            // For movies, prefer results with the correct year
+            selectedResult = searchResults.find(r => 
+                r.title.toLowerCase().includes(cleanQuery) &&
+                r.title.includes(year)
+            );
+        }
+
+        // Fallback to the first result that is not a known spin-off
+        if (!selectedResult) {
+            selectedResult = searchResults.find(r => 
+                r.title.toLowerCase().includes(cleanQuery) &&
+                !r.title.toLowerCase().includes('challenge') &&
+                !r.title.toLowerCase().includes('conversation')
+            );
+        }
+
+        // If still no result, take the first one as a last resort
+        if (!selectedResult) {
+            selectedResult = searchResults[0];
+        }
+
+        if (!selectedResult) {
+            console.log(`[MoviesMod] No suitable search result found for "${title}"`);
+            return [];
+        }
+
         console.log(`[MoviesMod] Selected: ${selectedResult.title}`);
 
         // Extract download links from the page
@@ -594,7 +617,7 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
                 console.log(`[MoviesMod] Processing: ${link.quality}`);
 
                 // Resolve intermediate link (modrefer.in, dramadrip, etc.)
-                const finalLinks = await resolveIntermediateLink(link.url, selectedResult.url);
+                const finalLinks = await resolveIntermediateLink(link.url, selectedResult.url, link.quality);
                 
                 if (finalLinks.length === 0) {
                     console.log(`[MoviesMod] No final links found for ${link.quality}`);
