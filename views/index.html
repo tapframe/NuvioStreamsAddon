@@ -1758,11 +1758,6 @@
                         <span class="provider-detail">May contain 4K/DV/HDR</span>
                     </div>
                     <div class="provider-item">
-                        <div class="provider-icon hollymovie-icon">🎬</div>
-                        <div class="provider-name">HollyMovieHD</div>
-                        <span class="provider-detail">Multiple Qualities</span>
-                    </div>
-                    <div class="provider-item">
                         <div class="provider-icon soapertv-icon">🧼</div> 
                         <div class="provider-name">Soaper TV</div>
                         <span class="provider-detail">Auto Quality</span>
@@ -1826,6 +1821,10 @@
                             <div class="provider-icon xprime-icon">⚡</div>
                             <div class="provider-name" style="font-size: 0.8rem;">Xprime.tv</div>
                         </div>
+                        <div class="provider-item" style="flex-direction: column; min-width: 80px;">
+                            <div class="provider-icon hollymovie-icon">🎬</div>
+                            <div class="provider-name" style="font-size: 0.8rem;">HollyMovieHD</div>
+                        </div>
                     </div>
                 </div>
 
@@ -1865,68 +1864,70 @@
                         </div>
                         <div class="provider-checkbox-item" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
                             <div style="display: flex; align-items: center;">
-                                <input type="checkbox" id="providerHollymoviehd" name="providerSelect" value="hollymoviehd" checked style="margin-right: 0.5rem; accent-color: var(--primary);">
-                                <label for="providerHollymoviehd" style="font-size: 0.9rem;">HollyMovieHD <span style="font-size: 0.75rem; color: var(--text-light);">(~3.5s)</span></label>
-                            </div>
-                            <select id="qualityHollymoviehd" name="providerQuality" data-provider="hollymoviehd" class="provider-sort-select">
-                                <option value="all" selected>All Qualities</option>
-                                <option value="480p">480p & Up</option>
-                                <option value="720p">720p & Up</option>
-                                <option value="1080p">1080p & Up</option>
-                            </select>
-                        </div>
-                        <div class="provider-checkbox-item" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
-                            <div style="display: flex; align-items: center;">
                                 <input type="checkbox" id="providerSoapertv" name="providerSelect" value="soapertv" checked style="margin-right: 0.5rem; accent-color: var(--primary);">
                                 <label for="providerSoapertv" style="font-size: 0.9rem;">Soaper TV <span style="font-size: 0.75rem; color: var(--text-light);">(~7.6s)</span></label>
                             </div>
-                            <select id="qualitySoapertv" name="providerQuality" data-provider="soapertv" class="provider-sort-select" disabled>
-                                <option value="all" selected>All Qualities</option>
+                            <select id="qualitySoapertv" name="providerQuality" data-provider="soapertv" class="provider-sort-select" disabled="">
+                                <option value="all" selected="">All Qualities</option>
                             </select>
                         </div>
                         <div class="provider-checkbox-item" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
                             <div style="display: flex; align-items: center;">
-                                <input type="checkbox" id="providerVidzee" name="providerSelect" value="vidzee" checked style="margin-right: 0.5rem; accent-color: var(--primary);">
+                                <input type="checkbox" id="providerVidzee" name="providerSelect" value="vidzee" checked="" style="margin-right: 0.5rem; accent-color: var(--primary);">
                                 <label for="providerVidzee" style="font-size: 0.9rem;">VidZee <span style="font-size: 0.75rem; color: var(--text-light);">(~5.5s)</span></label>
                             </div>
                              <select id="qualityVidzee" name="providerQuality" data-provider="vidzee" class="provider-sort-select">
-                                <option value="all" selected>All Qualities</option>
+                                <option value="all" selected="">All Qualities</option>
+                                <option value="480p">480p &amp; Up</option>
+                                <option value="720p">720p &amp; Up</option>
+                                <option value="1080p">1080p &amp; Up</option>
                             </select>
                         </div>
                         <div class="provider-checkbox-item" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
                             <div style="display: flex; align-items: center;">
-                                <input type="checkbox" id="providerVidsrc" name="providerSelect" value="vidsrc" checked style="margin-right: 0.5rem; accent-color: var(--primary);">
+                                <input type="checkbox" id="providerVidsrc" name="providerSelect" value="vidsrc" checked="" style="margin-right: 0.5rem; accent-color: var(--primary);">
                                 <label for="providerVidsrc" style="font-size: 0.9rem;">VidSrc <span style="font-size: 0.75rem; color: var(--text-light);">(~5.4s)</span></label>
                             </div>
                              <select id="qualityVidsrc" name="providerQuality" data-provider="vidsrc" class="provider-sort-select">
-                                <option value="all" selected>All Qualities</option>
+                                <option value="all" selected="">All Qualities</option>
+                                <option value="480p">480p &amp; Up</option>
+                                <option value="720p">720p &amp; Up</option>
+                                <option value="1080p">1080p &amp; Up</option>
                             </select>
                         </div>
                         <div class="provider-checkbox-item" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
                             <div style="display: flex; align-items: center;">
-                                <input type="checkbox" id="providerMp4hydra" name="providerSelect" value="mp4hydra" checked style="margin-right: 0.5rem; accent-color: var(--primary);">
+                                <input type="checkbox" id="providerMp4hydra" name="providerSelect" value="mp4hydra" checked="" style="margin-right: 0.5rem; accent-color: var(--primary);">
                                 <label for="providerMp4hydra" style="font-size: 0.9rem;">MP4Hydra <span style="font-size: 0.75rem; color: var(--text-light);">(~8.1s)</span> <span style="font-size: 0.75rem; color: #ff8c00;">Android TV/Mobile only</span></label>
                             </div>
                              <select id="qualityMp4hydra" name="providerQuality" data-provider="mp4hydra" class="provider-sort-select">
-                                <option value="all" selected>All Qualities</option>
+                                <option value="all" selected="">All Qualities</option>
+                                <option value="480p">480p &amp; Up</option>
+                                <option value="720p">720p &amp; Up</option>
+                                <option value="1080p">1080p &amp; Up</option>
                             </select>
                         </div>
                         <div class="provider-checkbox-item" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
                             <div style="display: flex; align-items: center;">
-                                <input type="checkbox" id="providerUhdmovies" name="providerSelect" value="uhdmovies" checked style="margin-right: 0.5rem; accent-color: var(--primary);">
+                                <input type="checkbox" id="providerUhdmovies" name="providerSelect" value="uhdmovies" checked="" style="margin-right: 0.5rem; accent-color: var(--primary);">
                                 <label for="providerUhdmovies" style="font-size: 0.9rem;">UHDMovies <span style="font-size: 0.75rem; color: var(--text-light);">(~6.5s)</span> <span style="font-size: 0.75rem; color: #00c16e;">4K</span></label>
                             </div>
                              <select id="qualityUhdmovies" name="providerQuality" data-provider="uhdmovies" class="provider-sort-select">
                                 <option value="all">All</option>
+                                <option value="720p">720p+</option>
+                                <option value="1080p">1080p+</option>
+                                <option value="4k">4K+</option>
                             </select>
                         </div>
                         <div class="provider-checkbox-item" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
                             <div style="display: flex; align-items: center;">
-                                <input type="checkbox" id="providerMoviesmod" name="providerSelect" value="moviesmod" checked style="margin-right: 0.5rem; accent-color: var(--primary);">
+                                <input type="checkbox" id="providerMoviesmod" name="providerSelect" value="moviesmod" checked="" style="margin-right: 0.5rem; accent-color: var(--primary);">
                                 <label for="providerMoviesmod" style="font-size: 0.9rem;">MoviesMod <span style="font-size: 0.75rem; color: var(--text-light);">(~8.5s)</span> <span style="font-size: 0.75rem; color: var(--text-light);">Multi-Source</span></label>
                             </div>
                              <select id="qualityMoviesmod" name="providerQuality" data-provider="moviesmod" class="provider-sort-select">
                                 <option value="all">All</option>
+                                <option value="720p">720p+</option>
+                                <option value="1080p">1080p+</option>
                             </select>
                         </div>
                         
@@ -1934,7 +1935,7 @@
 
                         <div class="provider-checkbox-item" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
                             <div style="display: flex; align-items: center;">
-                                <input type="checkbox" id="providerDramadrip" name="providerSelect" value="dramadrip" checked style="margin-right: 0.5rem; accent-color: var(--primary);">
+                                <input type="checkbox" id="providerDramadrip" name="providerSelect" value="dramadrip" checked="" style="margin-right: 0.5rem; accent-color: var(--primary);">
                                 <label for="providerDramadrip" style="font-size: 0.9rem;">DramaDrip <span style="font-size: 0.75rem; color: var(--text-light);">(~10s)</span> <span style="font-size: 0.75rem; color: #f7797d;">Asian Dramas</span></label>
                             </div>
                              <select id="qualityDramadrip" name="providerQuality" data-provider="dramadrip" class="provider-sort-select">
@@ -1945,11 +1946,13 @@
                         </div>
                         <div class="provider-checkbox-item" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
                             <div style="display: flex; align-items: center;">
-                                <input type="checkbox" id="providerTopmovies" name="providerSelect" value="topmovies" checked style="margin-right: 0.5rem; accent-color: var(--primary);">
+                                <input type="checkbox" id="providerTopmovies" name="providerSelect" value="topmovies" checked="" style="margin-right: 0.5rem; accent-color: var(--primary);">
                                 <label for="providerTopmovies" style="font-size: 0.9rem;">TopMovies <span style="font-size: 0.75rem; color: var(--text-light);">(~9.8s)</span> <span style="font-size: 0.75rem; color: #ff8c00;">Bollywood/Indian</span></label>
                             </div>
                              <select id="qualityTopmovies" name="providerQuality" data-provider="topmovies" class="provider-sort-select">
                                 <option value="all">All</option>
+                                <option value="720p">720p+</option>
+                                <option value="1080p">1080p+</option>
                             </select>
                         </div>
                         <div class="provider-checkbox-item" style="display: none; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
