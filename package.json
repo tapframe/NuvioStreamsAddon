@@ -15,6 +15,7 @@
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
     "express": "^4.21.2",
+    "form-data": "^4.0.3",
     "hls-parser": "^0.13.5",
     "ioredis": "^5.6.1",
     "node-fetch": "^2.7.0",
