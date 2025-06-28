@@ -124,6 +124,10 @@ console.log(`[addon.js] UHDMovies provider fetching enabled: ${ENABLE_UHDMOVIES_
 const ENABLE_MOVIESMOD_PROVIDER = process.env.ENABLE_MOVIESMOD_PROVIDER !== 'false'; // Defaults to true if not set or not 'false'
 console.log(`[addon.js] MoviesMod provider fetching enabled: ${ENABLE_MOVIESMOD_PROVIDER}`);
 
+// NEW: Read environment variable for TopMovies
+const ENABLE_TOPMOVIES_PROVIDER = process.env.ENABLE_TOPMOVIES_PROVIDER !== 'false'; // Defaults to true if not set or not 'false'
+console.log(`[addon.js] TopMovies provider fetching enabled: ${ENABLE_TOPMOVIES_PROVIDER}`);
+
 // NEW: Stream caching config
 const STREAM_CACHE_DIR = process.env.VERCEL ? path.join('/tmp', '.streams_cache') : path.join(__dirname, '.streams_cache');
 const STREAM_CACHE_TTL_MS = 9 * 60 * 1000; // 9 minutes
@@ -141,6 +145,7 @@ const { getVidZeeStreams } = require('./providers/VidZee.js'); // NEW: Import fr
 const { getMP4HydraStreams } = require('./providers/MP4Hydra.js'); // NEW: Import from MP4Hydra.js
 const { getUHDMoviesStreams } = require('./providers/uhdmovies.js'); // NEW: Import from uhdmovies.js
 const { getMoviesModStreams } = require('./providers/moviesmod.js'); // NEW: Import from moviesmod.js
+const { getTopMoviesStreams } = require('./providers/topmovies.js'); // NEW: Import from topmovies.js
 
 // --- Constants ---
 const TMDB_API_URL = 'https://api.themoviedb.org/3';
@@ -1274,6 +1279,54 @@ builder.defineStreamHandler(async (args) => {
                 await saveStreamToCache('moviesmod', tmdbTypeFromId, tmdbId, [], 'failed', seasonNum, episodeNum);
                 return [];
             }
+        },
+
+        // TopMovies provider with cache integration
+        topmovies: async () => {
+            if (!ENABLE_TOPMOVIES_PROVIDER) {
+                console.log('[TopMovies] Skipping fetch: Disabled by environment variable.');
+                return [];
+            }
+            if (!shouldFetch('topmovies')) {
+                console.log('[TopMovies] Skipping fetch: Not selected by user.');
+                return [];
+            }
+            
+            // This provider only supports movies
+            if (tmdbTypeFromId !== 'movie') {
+                console.log('[TopMovies] Skipping fetch: Provider only supports movies.');
+                return [];
+            }
+
+            // Try to get cached streams first
+            const cachedStreams = await getStreamFromCache('topmovies', tmdbTypeFromId, tmdbId);
+            if (cachedStreams) {
+                console.log(`[TopMovies] Using ${cachedStreams.length} streams from cache.`);
+                return cachedStreams.map(stream => ({ ...stream, provider: 'TopMovies' }));
+            }
+            
+            // No cache or expired, fetch fresh
+            try {
+                console.log(`[TopMovies] Fetching new streams...`);
+                const streams = await getTopMoviesStreams(tmdbId, tmdbTypeFromId);
+                
+                if (streams && streams.length > 0) {
+                    console.log(`[TopMovies] Successfully fetched ${streams.length} streams.`);
+                    // Save to cache
+                    await saveStreamToCache('topmovies', tmdbTypeFromId, tmdbId, streams, 'ok');
+                    return streams.map(stream => ({ ...stream, provider: 'TopMovies' }));
+                } else {
+                    console.log(`[TopMovies] No streams returned.`);
+                    // Save empty result
+                    await saveStreamToCache('topmovies', tmdbTypeFromId, tmdbId, [], 'failed');
+                    return [];
+                }
+            } catch (err) {
+                console.error(`[TopMovies] Error fetching streams:`, err.message);
+                // Save error status to cache
+                await saveStreamToCache('topmovies', tmdbTypeFromId, tmdbId, [], 'failed');
+                return [];
+            }
         }
     };
 
@@ -1292,8 +1345,9 @@ builder.defineStreamHandler(async (args) => {
             timeProvider('VidSrc', providerFetchFunctions.vidsrc()),
             timeProvider('VidZee', providerFetchFunctions.vidzee()),
             timeProvider('MP4Hydra', providerFetchFunctions.mp4hydra()),
-            timeProvider('UHDMovies', providerFetchFunctions.uhdmovies()), // NEW: Add UHDMovies provider
-            timeProvider('MoviesMod', providerFetchFunctions.moviesmod()) // NEW: Add MoviesMod provider
+            timeProvider('UHDMovies', providerFetchFunctions.uhdmovies()), 
+            timeProvider('MoviesMod', providerFetchFunctions.moviesmod()),
+            timeProvider('TopMovies', providerFetchFunctions.topmovies())
         ]);
         
         // Process results into streamsByProvider object
@@ -1308,7 +1362,8 @@ builder.defineStreamHandler(async (args) => {
             'VidZee': ENABLE_VIDZEE_PROVIDER && shouldFetch('vidzee') ? filterStreamsByQuality(providerResults[7], minQualitiesPreferences.vidzee, 'VidZee') : [],
             'MP4Hydra': ENABLE_MP4HYDRA_PROVIDER && shouldFetch('mp4hydra') ? filterStreamsByQuality(providerResults[8], minQualitiesPreferences.mp4hydra, 'MP4Hydra') : [],
             'UHDMovies': ENABLE_UHDMOVIES_PROVIDER && shouldFetch('uhdmovies') ? filterStreamsByQuality(providerResults[9], minQualitiesPreferences.uhdmovies, 'UHDMovies') : [], // NEW: Add UHDMovies provider
-            'MoviesMod': ENABLE_MOVIESMOD_PROVIDER && shouldFetch('moviesmod') ? filterStreamsByQuality(providerResults[10], minQualitiesPreferences.moviesmod, 'MoviesMod') : [] // NEW: Add MoviesMod provider
+            'MoviesMod': ENABLE_MOVIESMOD_PROVIDER && shouldFetch('moviesmod') ? filterStreamsByQuality(providerResults[10], minQualitiesPreferences.moviesmod, 'MoviesMod') : [], // NEW: Add MoviesMod provider
+            'TopMovies': ENABLE_TOPMOVIES_PROVIDER && shouldFetch('topmovies') ? filterStreamsByQuality(providerResults[11], minQualitiesPreferences.topmovies, 'TopMovies') : [] 
         };
 
         // Sort streams for each provider by size, then quality
@@ -1328,7 +1383,7 @@ builder.defineStreamHandler(async (args) => {
 
         // Combine streams in the preferred provider order
         combinedRawStreams = [];
-        const providerOrder = ['ShowBox', 'UHDMovies', 'MoviesMod', 'Hianime', 'Xprime.tv', 'HollyMovieHD', 'Soaper TV', 'VidZee', 'MP4Hydra', 'Cuevana', 'VidSrc'];
+        const providerOrder = ['ShowBox', 'UHDMovies', 'MoviesMod', 'TopMovies', 'Hianime', 'Xprime.tv', 'HollyMovieHD', 'Soaper TV', 'VidZee', 'MP4Hydra', 'Cuevana', 'VidSrc'];
         providerOrder.forEach(providerKey => {
             if (streamsByProvider[providerKey] && streamsByProvider[providerKey].length > 0) {
                 combinedRawStreams.push(...streamsByProvider[providerKey]);
@@ -1356,6 +1411,20 @@ builder.defineStreamHandler(async (args) => {
             return {
                 name: stream.name,    // Use the simple name from provider
                 title: stream.title,  // Use the detailed title from provider
+                url: stream.url,
+                type: 'url',
+                availability: 2,
+                behaviorHints: {
+                    notWebReady: true
+                }
+            };
+        }
+
+        // --- NEW: Special handling for TopMovies to use its pre-formatted titles ---
+        if (stream.provider === 'TopMovies') {
+            return {
+                name: stream.name,    // Use the name from the provider, e.g., "TopMovies - 1080p"
+                title: stream.title,  // Use the title from the provider, e.g., "Filename.mkv\nSize"
                 url: stream.url,
                 type: 'url',
                 availability: 2,
@@ -1430,6 +1499,8 @@ builder.defineStreamHandler(async (args) => {
             providerDisplayName = 'UHDMovies';
         } else if (stream.provider === 'MoviesMod') {
             providerDisplayName = 'MoviesMod';
+        } else if (stream.provider === 'TopMovies') {
+            providerDisplayName = 'TopMovies';
         }
 
         let nameDisplay;
@@ -1467,6 +1538,8 @@ builder.defineStreamHandler(async (args) => {
         } else if (stream.provider === 'MoviesMod') {
             // For MoviesMod, use the enhanced stream title that comes from the provider
             // which includes detailed quality, codec, size, language and method information
+            nameDisplay = stream.title || `${providerDisplayName} - ${stream.quality || 'UNK'}`;
+        } else if (stream.provider === 'TopMovies') {
             nameDisplay = stream.title || `${providerDisplayName} - ${stream.quality || 'UNK'}`;
         } else { // For other providers (ShowBox, Xprime, etc.)
             const qualityLabel = stream.quality || 'UNK';
