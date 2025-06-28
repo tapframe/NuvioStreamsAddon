@@ -101,20 +101,40 @@ async function searchMovies(query) {
     
     const searchResults = [];
     
-    // Find all search result items
-    $('a[href*="/download-"]').each((index, element) => {
-      const link = $(element).attr('href');
-      // Avoid duplicates by checking if link already exists in results
-      if (link && !searchResults.some(item => item.link === link)) {
-        const title = $(element).text().trim();
-         if(title){
-            searchResults.push({
-                title,
-                link: link.startsWith('http') ? link : `${BASE_URL}${link}`
-            });
-         }
+    // New logic for grid-based search results
+    $('article.gridlove-post').each((index, element) => {
+      const linkElement = $(element).find('a[href*="/download-"]');
+      if (linkElement.length > 0) {
+        const link = linkElement.first().attr('href');
+        // Prefer the 'title' attribute, fallback to h1 text
+        const title = linkElement.first().attr('title') || $(element).find('h1.sanket').text().trim();
+        
+        if (link && title && !searchResults.some(item => item.link === link)) {
+          searchResults.push({
+            title,
+            link: link.startsWith('http') ? link : `${BASE_URL}${link}`
+          });
+        }
       }
     });
+
+    // Fallback for original list-based search if new logic fails
+    if (searchResults.length === 0) {
+        console.log('[UHDMovies] Grid search logic found no results, trying original list-based logic...');
+        $('a[href*="/download-"]').each((index, element) => {
+          const link = $(element).attr('href');
+          // Avoid duplicates by checking if link already exists in results
+          if (link && !searchResults.some(item => item.link === link)) {
+            const title = $(element).text().trim();
+             if(title){
+                searchResults.push({
+                    title,
+                    link: link.startsWith('http') ? link : `${BASE_URL}${link}`
+                });
+             }
+          }
+        });
+    }
     
     console.log(`[UHDMovies] Found ${searchResults.length} results`);
     return searchResults;
@@ -259,6 +279,37 @@ async function extractTvShowDownloadLinks(showPageUrl, season, episode) {
         }
     });
 
+    if (downloadLinks.length === 0) {
+        console.log('[UHDMovies] Main extraction logic failed. Trying fallback method without season scoping.');
+        $('.entry-content').find('a[href*="tech.unblockedgames.world"]').each((i, el) => {
+            const linkElement = $(el);
+            const episodeRegex = new RegExp(`^Episode\\s+0*${episode}(?!\\d)`, 'i');
+
+            if (episodeRegex.test(linkElement.text().trim())) {
+                const link = linkElement.attr('href');
+                if (link && !downloadLinks.some(item => item.link === link)) {
+                    let qualityText = 'Unknown Quality';
+                    const parentP = linkElement.closest('p, div');
+                    const prevElement = parentP.prev();
+                    if (prevElement.length > 0) {
+                        const prevText = prevElement.text().trim();
+                        if (prevText && prevText.length > 5 && !prevText.toLowerCase().includes('download')) {
+                            qualityText = prevText;
+                        }
+                    }
+
+                    const sizeMatch = qualityText.match(/\[([0-9.,]+[KMGT]B[^\]]*)\]/i);
+                    const size = sizeMatch ? sizeMatch[1] : 'Unknown';
+                    const cleanQuality = extractCleanQuality(qualityText);
+                    const rawQuality = qualityText.replace(/(\r\n|\n|\r)/gm," ").replace(/\s+/g, ' ').trim();
+                    
+                    console.log(`[UHDMovies] Found match via fallback: Quality='${qualityText}', Link='${link}'`);
+                    downloadLinks.push({ quality: cleanQuality, size: size, link: link, rawQuality: rawQuality });
+                }
+            }
+        });
+    }
+
     if (downloadLinks.length > 0) {
       console.log(`[UHDMovies] Found ${downloadLinks.length} links for S${season}E${episode}.`);
     } else {
@@ -274,7 +325,7 @@ async function extractTvShowDownloadLinks(showPageUrl, season, episode) {
 }
 
 // Function to extract download links from a movie page
-async function extractDownloadLinks(moviePageUrl) {
+async function extractDownloadLinks(moviePageUrl, targetYear = null) {
   try {
     console.log(`[UHDMovies] Extracting links from: ${moviePageUrl}`);
     const response = await axiosInstance.get(moviePageUrl);
@@ -329,6 +380,60 @@ async function extractDownloadLinks(moviePageUrl) {
                  text.includes('4K') || text.includes('HEVC') || text.includes('x264') || text.includes('x265'))) {
               quality = text;
               break;
+            }
+          }
+        }
+
+        // Year-based filtering for collections
+        if (targetYear && quality !== 'Unknown Quality') {
+          // Check for years in quality text
+          const yearMatches = quality.match(/\((\d{4})\)/g);
+          let hasMatchingYear = false;
+          
+          if (yearMatches && yearMatches.length > 0) {
+            for (const yearMatch of yearMatches) {
+              const year = parseInt(yearMatch.replace(/[()]/g, ''));
+              if (year === targetYear) {
+                hasMatchingYear = true;
+                break;
+              }
+            }
+            if (!hasMatchingYear) {
+              console.log(`[UHDMovies] Skipping link due to year mismatch. Target: ${targetYear}, Found: ${yearMatches.join(', ')} in "${quality}"`);
+              return; // Skip this link
+            }
+          } else {
+            // If no year in quality text, check filename and other indicators
+            const linkText = $(element).text().trim();
+            const parentText = $(element).parent().text().trim();
+            const combinedText = `${quality} ${linkText} ${parentText}`;
+            
+            // Look for years in combined text
+            const allYearMatches = combinedText.match(/\((\d{4})\)/g) || combinedText.match(/(\d{4})/g);
+            if (allYearMatches) {
+              let foundTargetYear = false;
+              for (const yearMatch of allYearMatches) {
+                const year = parseInt(yearMatch.replace(/[()]/g, ''));
+                if (year >= 1900 && year <= 2030) { // Valid movie year range
+                  if (year === targetYear) {
+                    foundTargetYear = true;
+                    break;
+                  }
+                }
+              }
+              if (!foundTargetYear && allYearMatches.length > 0) {
+                console.log(`[UHDMovies] Skipping link due to no matching year found. Target: ${targetYear}, Found years: ${allYearMatches.join(', ')} in combined text`);
+                return; // Skip this link
+              }
+            }
+            
+            // Additional check: if quality contains movie names that don't match target year
+            const lowerQuality = quality.toLowerCase();
+            if (targetYear === 2015) {
+              if (lowerQuality.includes('wasp') || lowerQuality.includes('quantumania')) {
+                console.log(`[UHDMovies] Skipping link for 2015 target as it contains 'wasp' or 'quantumania': "${quality}"`);
+                return; // Skip this link
+              }
             }
           }
         }
@@ -566,23 +671,98 @@ function compareMedia(mediaInfo, searchResult) {
   const normalizedMediaTitle = normalizeString(titleWithAnd);
   const normalizedResultTitle = normalizeString(searchResult.title);
   
+  console.log(`[UHDMovies] Comparing: "${mediaInfo.title}" (${mediaInfo.year}) vs "${searchResult.title}"`);
+  console.log(`[UHDMovies] Normalized: "${normalizedMediaTitle}" vs "${normalizedResultTitle}"`);
+  
   // Check if titles match or result title contains media title
-  if (!normalizedResultTitle.includes(normalizedMediaTitle)) {
+  let titleMatches = normalizedResultTitle.includes(normalizedMediaTitle);
+  
+  // If direct match fails, try checking for franchise/collection matches
+  if (!titleMatches) {
+    // Extract main franchise name (first part of title)
+    const mainTitle = normalizedMediaTitle.split('and')[0]; // "antman" from "antmanandthewasp"
+    
+    // Check if it's a collection (duology, trilogy, etc.) of the same franchise
+    const isCollection = normalizedResultTitle.includes('duology') || 
+                        normalizedResultTitle.includes('trilogy') || 
+                        normalizedResultTitle.includes('quadrilogy') || 
+                        normalizedResultTitle.includes('collection') ||
+                        normalizedResultTitle.includes('saga');
+    
+    if (isCollection && normalizedResultTitle.includes(mainTitle)) {
+      console.log(`[UHDMovies] Found collection match: "${mainTitle}" in collection "${searchResult.title}"`);
+      titleMatches = true;
+    }
+  }
+  
+  if (!titleMatches) {
+    console.log(`[UHDMovies] Title mismatch: "${normalizedResultTitle}" does not contain "${normalizedMediaTitle}"`);
     return false;
   }
   
   // Check year if both are available
   if (mediaInfo.year && searchResult.title) {
-    const yearInTitle = searchResult.title.match(/\((\d{4})\)/);
-    if (yearInTitle) {
-      const resultYear = parseInt(yearInTitle[1]);
-      if (Math.abs(resultYear - mediaInfo.year) > 1) { // Allow 1 year difference
+    // Look for individual years in parentheses
+    const yearMatches = searchResult.title.match(/\((\d{4})\)/g);
+    if (yearMatches) {
+      console.log(`[UHDMovies] Found individual years: ${yearMatches.join(', ')}`);
+      let hasMatchingYear = false;
+      for (const yearMatch of yearMatches) {
+        const resultYear = parseInt(yearMatch.replace(/[()]/g, ''));
+        if (Math.abs(resultYear - mediaInfo.year) <= 1) { // Allow 1 year difference
+          hasMatchingYear = true;
+          break;
+        }
+      }
+      if (!hasMatchingYear) {
+        console.log(`[UHDMovies] No matching individual year found for ${mediaInfo.year}`);
         return false;
+      }
+    } else {
+      // Look for year ranges like (2015-2018)
+      const yearRangeMatch = searchResult.title.match(/\((\d{4})-(\d{4})\)/);
+      if (yearRangeMatch) {
+        console.log(`[UHDMovies] Found year range: ${yearRangeMatch[0]}`);
+        const startYear = parseInt(yearRangeMatch[1]);
+        const endYear = parseInt(yearRangeMatch[2]);
+        if (mediaInfo.year < startYear - 1 || mediaInfo.year > endYear + 1) { // Allow 1 year buffer
+          console.log(`[UHDMovies] Year ${mediaInfo.year} not in range ${startYear}-${endYear}`);
+          return false;
+        }
+      } else {
+        // Look for any 4-digit year in the title
+        const anyYearMatch = searchResult.title.match(/(\d{4})/);
+        if (anyYearMatch) {
+          console.log(`[UHDMovies] Found any year: ${anyYearMatch[0]}`);
+          const resultYear = parseInt(anyYearMatch[1]);
+          if (Math.abs(resultYear - mediaInfo.year) > 1) { // Allow 1 year difference
+            console.log(`[UHDMovies] Year mismatch: ${resultYear} vs ${mediaInfo.year}`);
+            return false;
+          }
+        }
       }
     }
   }
   
+  console.log(`[UHDMovies] Match successful!`);
   return true;
+}
+
+// Function to score search results based on quality keywords
+function scoreResult(title) {
+    let score = 0;
+    const lowerTitle = title.toLowerCase();
+
+    if (lowerTitle.includes('remux')) score += 10;
+    if (lowerTitle.includes('bluray') || lowerTitle.includes('blu-ray')) score += 8;
+    if (lowerTitle.includes('imax')) score += 6;
+    if (lowerTitle.includes('4k') || lowerTitle.includes('2160p')) score += 5;
+    if (lowerTitle.includes('dovi') || lowerTitle.includes('dolby vision') || /\\bdv\\b/.test(lowerTitle)) score += 4;
+    if (lowerTitle.includes('hdr')) score += 3;
+    if (lowerTitle.includes('1080p')) score += 2;
+    if (lowerTitle.includes('hevc') || lowerTitle.includes('x265')) score += 1;
+    
+    return score;
 }
 
 // Function to parse size string into MB
@@ -760,8 +940,27 @@ async function getUHDMoviesStreams(tmdbId, mediaType = 'movie', season = null, e
         console.log(`[UHDMovies] TMDB Info: "${mediaInfo.title}" (${mediaInfo.year || 'N/A'})`);
 
         // 3. Search for the media on UHDMovies
-        const searchTitle = mediaInfo.title.replace(/\\s*&\\s*/g, ' and ');
-        const searchResults = await searchMovies(searchTitle);
+        let searchTitle = mediaInfo.title.replace(/:/g, '').replace(/\s*&\s*/g, ' and ');
+        let searchResults = await searchMovies(searchTitle);
+        
+        // If no results or only wrong year results, try fallback search with just main title
+        if (searchResults.length === 0 || !searchResults.some(result => compareMedia(mediaInfo, result))) {
+            console.log(`[UHDMovies] Primary search failed or no matches. Trying fallback search...`);
+            
+            // Extract main title (remove subtitles after colon, "and the", etc.)
+            let fallbackTitle = mediaInfo.title.split(':')[0].trim();
+            if (fallbackTitle.includes('and the')) {
+                fallbackTitle = fallbackTitle.split('and the')[0].trim();
+            }
+            if (fallbackTitle !== searchTitle) {
+                console.log(`[UHDMovies] Fallback search with: "${fallbackTitle}"`);
+                const fallbackResults = await searchMovies(fallbackTitle);
+                if (fallbackResults.length > 0) {
+                    searchResults = fallbackResults;
+                }
+            }
+        }
+        
         if (searchResults.length === 0) {
             console.log(`[UHDMovies] No search results found for "${mediaInfo.title}".`);
             await saveToCache(cacheKey, []); // Cache empty result to prevent re-scraping
@@ -769,16 +968,35 @@ async function getUHDMoviesStreams(tmdbId, mediaType = 'movie', season = null, e
         }
 
         // 4. Find the best matching result
-        const matchingResult = searchResults.find(result => compareMedia(mediaInfo, result));
-        if (!matchingResult) {
+        const matchingResults = searchResults.filter(result => compareMedia(mediaInfo, result));
+
+        if (matchingResults.length === 0) {
             console.log(`[UHDMovies] No matching content found for "${mediaInfo.title}" (${mediaInfo.year}).`);
             await saveToCache(cacheKey, []);
             return [];
         }
+
+        let matchingResult;
+
+        if (matchingResults.length === 1) {
+            matchingResult = matchingResults[0];
+        } else {
+            console.log(`[UHDMovies] Found ${matchingResults.length} matching results. Scoring to find the best...`);
+            
+            const scoredResults = matchingResults.map(result => {
+                const score = scoreResult(result.title);
+                console.log(`  - Score ${score}: ${result.title}`);
+                return { ...result, score };
+            }).sort((a, b) => b.score - a.score);
+
+            matchingResult = scoredResults[0];
+            console.log(`[UHDMovies] Best match selected with score ${matchingResult.score}: "${matchingResult.title}"`);
+        }
+        
         console.log(`[UHDMovies] Found matching content: "${matchingResult.title}"`);
 
         // 5. Extract SID links from the movie/show page
-        const downloadInfo = await (mediaType === 'tv' ? extractTvShowDownloadLinks(matchingResult.link, season, episode) : extractDownloadLinks(matchingResult.link));
+        const downloadInfo = await (mediaType === 'tv' ? extractTvShowDownloadLinks(matchingResult.link, season, episode) : extractDownloadLinks(matchingResult.link, mediaInfo.year));
         if (downloadInfo.links.length === 0) {
             console.log('[UHDMovies] No download links found on page.');
             await saveToCache(cacheKey, []);
