@@ -569,9 +569,9 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
 
         if (!resolvedQualities) {
             console.log(`[MoviesMod Cache] MISS for key: ${cacheKey}. Fetching from source.`);
-            
-            // We need to fetch title and year from TMDB API
-            const TMDB_API_KEY = process.env.TMDB_API_KEY;
+
+        // We need to fetch title and year from TMDB API
+        const TMDB_API_KEY = process.env.TMDB_API_KEY;
             if (!TMDB_API_KEY) throw new Error('TMDB_API_KEY not configured.');
 
             const { default: fetch } = await import('node-fetch');
@@ -638,34 +638,34 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
         const qualityProcessingPromises = resolvedQualities.map(async (qualityInfo) => {
             const { quality, finalLinks } = qualityInfo;
             
-            let targetLinks = finalLinks;
+                let targetLinks = finalLinks;
             if ((mediaType === 'tv' || mediaType === 'series') && episodeNum !== null) {
                 targetLinks = finalLinks.filter(fl => fl.server.toLowerCase().includes(`episode ${episodeNum}`) || fl.server.toLowerCase().includes(`ep ${episodeNum}`) || fl.server.toLowerCase().includes(`e${episodeNum}`));
                 if (targetLinks.length === 0) {
                     console.log(`[MoviesMod] No episode ${episodeNum} found for ${quality}`);
-                    return [];
+                        return [];
+                    }
                 }
-            }
-            
-            const finalStreamPromises = targetLinks.map(async (targetLink) => {
-                const { downloadOptions, size: driveseedSize, fileName } = await resolveDriveseedLink(targetLink.url);
 
-                if (fileName && processedFileNames.has(fileName)) {
-                    console.log(`[MoviesMod] Skipping duplicate file: ${fileName}`);
-                    return null;
-                }
+            const finalStreamPromises = targetLinks.map(async (targetLink) => {
+                    const { downloadOptions, size: driveseedSize, fileName } = await resolveDriveseedLink(targetLink.url);
+                    
+                    if (fileName && processedFileNames.has(fileName)) {
+                        console.log(`[MoviesMod] Skipping duplicate file: ${fileName}`);
+                        return null;
+                    }
                 if (fileName) processedFileNames.add(fileName);
 
                 if (!downloadOptions || downloadOptions.length === 0) return null;
 
-                const methodPromises = downloadOptions.map(async (option) => {
-                    let finalDownloadUrl = null;
+                    const methodPromises = downloadOptions.map(async (option) => {
+                            let finalDownloadUrl = null;
                     if (option.type === 'resume') finalDownloadUrl = await resolveResumeCloudLink(option.url);
                     else if (option.type === 'worker') finalDownloadUrl = await resolveWorkerSeedLink(option.url);
                     else if (option.type === 'instant') finalDownloadUrl = await resolveVideoSeedLink(option.url);
                     
                     if (finalDownloadUrl) return { url: finalDownloadUrl, method: option.title };
-                    return null;
+                        return null;
                 });
                 
                 const methodResults = (await Promise.all(methodPromises)).filter(Boolean);
@@ -679,15 +679,15 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
                 const cleanFileName = fileName ? fileName.replace(/\.[^/.]+$/, "").replace(/[._]/g, ' ') : `Stream from ${quality}`;
                 const techDetails = getTechDetails(quality);
                 const techDetailsString = techDetails.length > 0 ? ` • ${techDetails.join(' • ')}` : '';
-
-                return {
+                    
+                    return {
                     name: `MoviesMod\n${actualQuality}`,
                     title: `${cleanFileName}\n${sizeInfo || ''}${techDetailsString}`,
-                    url: selectedResult.url,
-                    quality: actualQuality,
-                };
-            });
-            
+                        url: selectedResult.url,
+                        quality: actualQuality,
+                    };
+                });
+
             return (await Promise.all(finalStreamPromises)).filter(Boolean);
         });
 
