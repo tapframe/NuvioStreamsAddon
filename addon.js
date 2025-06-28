@@ -156,6 +156,17 @@ const { getMoviesModStreams } = require('./providers/moviesmod.js'); // NEW: Imp
 const { getTopMoviesStreams } = require('./providers/topmovies.js'); // NEW: Import from topmovies.js
 const { getDramaDripStreams } = require('./providers/dramadrip.js'); // NEW: Import from dramadrip.js
 
+// --- Analytics Configuration ---
+const GA_MEASUREMENT_ID = process.env.GA_MEASUREMENT_ID;
+const GA_API_SECRET = process.env.GA_API_SECRET;
+const ANALYTICS_ENABLED = GA_MEASUREMENT_ID && GA_API_SECRET;
+
+if (ANALYTICS_ENABLED) {
+    console.log(`[Analytics] GA4 Measurement Protocol is enabled. Tracking to ID: ${GA_MEASUREMENT_ID}`);
+} else {
+    console.log('[Analytics] GA4 Measurement Protocol is disabled. Set GA_MEASUREMENT_ID and GA_API_SECRET to enable.');
+}
+
 // --- Constants ---
 const TMDB_API_URL = 'https://api.themoviedb.org/3';
 const TMDB_API_KEY = process.env.TMDB_API_KEY;
@@ -281,6 +292,41 @@ async function fetchWithRetry(url, options, maxRetries = MAX_RETRIES) {
     }
     console.error(`All fetch attempts failed for ${url}. Last error:`, lastError.message);
     throw lastError;
+}
+
+// --- NEW: Google Analytics Event Sending Function ---
+async function sendAnalyticsEvent(eventName, eventParams) {
+    if (!ANALYTICS_ENABLED) {
+        return;
+    }
+
+    // Use a dynamically generated client_id for each event to ensure anonymity
+    const clientId = crypto.randomBytes(16).toString("hex");
+
+    const analyticsData = {
+        client_id: clientId,
+        events: [{
+            name: eventName,
+            params: {
+                // GA4 standard parameters for better reporting
+                session_id: crypto.randomBytes(16).toString("hex"),
+                engagement_time_msec: '100',
+                ...eventParams
+            },
+        }],
+    };
+
+    try {
+        const { default: fetchFunction } = await import('node-fetch');
+        // Fire-and-forget: we don't need to wait for the response
+        fetchFunction(`https://www.google-analytics.com/mp/collect?measurement_id=${GA_MEASUREMENT_ID}&api_secret=${GA_API_SECRET}`, {
+            method: 'POST',
+            body: JSON.stringify(analyticsData),
+        });
+        // console.log(`[Analytics] Sent event: ${eventName} for ${eventParams.content_title || 'N/A'}`);
+    } catch (error) {
+        console.warn(`[Analytics] Failed to send event: ${error.message}`);
+    }
 }
 
 // Helper function for fetching with a timeout
@@ -758,6 +804,19 @@ builder.defineStreamHandler(async (args) => {
         console.warn("TMDB_API_KEY is not configured. Cannot fetch full title/year/genres. Hianime and Xprime.tv functionality might be limited or fail.");
     }
     
+    // --- Send Analytics Event ---
+    if (movieOrSeriesTitle) {
+        sendAnalyticsEvent('stream_request', {
+            content_type: tmdbTypeFromId,
+            content_id: tmdbId,
+            content_title: movieOrSeriesTitle,
+            content_year: movieOrSeriesYear || 'N/A',
+            selected_providers: selectedProvidersArray ? selectedProvidersArray.join(',') : 'all',
+            // Custom dimension for tracking if it's an animation
+            is_animation: isAnimation ? 'true' : 'false', 
+        });
+    }
+
     let combinedRawStreams = [];
 
     // --- Provider Selection Logic ---
