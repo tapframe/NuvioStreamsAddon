@@ -1623,6 +1623,10 @@
             background: linear-gradient(135deg, #ff5757, #ff8c00); /* Red-orange gradient for MoviesMod */
         }
 
+        .topmovies-icon {
+            background: linear-gradient(135deg, #00d2ff, #3a7bd5); /* Blue gradient for TopMovies */
+        }
+
         .provider-option.uhdmovies.selected {
             background-color: rgba(212, 175, 55, 0.15);
             border-color: #D4AF37;
@@ -1783,6 +1787,11 @@
                         <div class="provider-icon moviesmod-icon">🍿</div>
                         <div class="provider-name">MoviesMod</div>
                         <span class="provider-detail">Multi-Source</span>
+                    </div>
+                    <div class="provider-item">
+                        <div class="provider-icon topmovies-icon">🎬</div>
+                        <div class="provider-name">TopMovies</div>
+                        <span class="provider-detail">Bollywood/indian contents</span>
                     </div>
 
                     <h2 style="margin-top: 1.25rem; color: #ff6b6b;">Offline Providers</h2>
@@ -1953,6 +1962,17 @@
                                 <label for="providerMoviesmod" style="font-size: 0.9rem;">MoviesMod <span style="font-size: 0.75rem; color: var(--text-light);">(~8.5s)</span> <span style="font-size: 0.75rem; color: var(--text-light);">Multi-Source</span></label>
                             </div>
                              <select id="qualityMoviesmod" name="providerQuality" data-provider="moviesmod" class="provider-sort-select">
+                                <option value="all">All</option>
+                                <option value="1080p">1080p+</option>
+                                <option value="720p">720p+</option>
+                            </select>
+                        </div>
+                        <div class="provider-checkbox-item" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
+                            <div style="display: flex; align-items: center;">
+                                <input type="checkbox" id="providerTopmovies" name="providerSelect" value="topmovies" checked style="margin-right: 0.5rem; accent-color: var(--primary);">
+                                <label for="providerTopmovies" style="font-size: 0.9rem;">TopMovies <span style="font-size: 0.75rem; color: var(--text-light);">(~9.8s)</span> <span style="font-size: 0.75rem; color: #ff8c00;">Bollywood/Indian</span></label>
+                            </div>
+                             <select id="qualityTopmovies" name="providerQuality" data-provider="topmovies" class="provider-sort-select">
                                 <option value="all">All</option>
                                 <option value="1080p">1080p+</option>
                                 <option value="720p">720p+</option>
