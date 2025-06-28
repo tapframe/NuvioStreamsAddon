@@ -123,8 +123,11 @@ async function getTopMoviesStreams(tmdbId, mediaType = 'movie', season = null, e
           return [];
         }
 
+        // Filter out 480p links before resolving
+        const filteredLinks = downloadInfo.links.filter(link => !link.quality.includes('480p'));
+
         // 4. Resolve to driveleech links
-        const resolutionPromises = downloadInfo.links.map(async (qualityLink) => {
+        const resolutionPromises = filteredLinks.map(async (qualityLink) => {
             const techLink = await resolveLeechproLink(qualityLink.url);
             if (!techLink) return null;
             const driveleechUrl = await resolveSidToDriveleech(techLink);
