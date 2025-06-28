@@ -90,6 +90,22 @@ function extractQuality(text) {
     return 'Unknown';
 }
 
+function parseQualityForSort(qualityString) {
+    if (!qualityString) return 0;
+    const match = qualityString.match(/(\d{3,4})p/i);
+    return match ? parseInt(match[1], 10) : 0;
+}
+
+function getTechDetails(qualityString) {
+    if (!qualityString) return [];
+    const details = [];
+    const lowerText = qualityString.toLowerCase();
+    if (lowerText.includes('10bit')) details.push('10-bit');
+    if (lowerText.includes('hevc') || lowerText.includes('x265')) details.push('HEVC');
+    if (lowerText.includes('hdr')) details.push('HDR');
+    return details;
+}
+
 // Search for content on MoviesMod
 async function searchMoviesMod(query) {
     try {
@@ -548,7 +564,7 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
         console.log(`[MoviesMod] Fetching streams for TMDB ${mediaType}/${tmdbId}${seasonNum ? `, S${seasonNum}E${episodeNum}`: ''}`);
         
         // Define a cache key based on the media type and ID. For series, cache per season.
-        const cacheKey = `moviesmod_driveseed_${tmdbId}_${mediaType}${seasonNum ? `_s${seasonNum}` : ''}`;
+        const cacheKey = `moviesmod_driveseed_v6_${tmdbId}_${mediaType}${seasonNum ? `_s${seasonNum}` : ''}`;
         let resolvedQualities = await getFromCache(cacheKey);
 
         if (!resolvedQualities) {
@@ -588,16 +604,25 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
                 relevantLinks = downloadLinks.filter(link => link.quality.toLowerCase().includes(`season ${seasonNum}`) || link.quality.toLowerCase().includes(`s${seasonNum}`));
             }
             
-            console.log(`[MoviesMod] Found ${relevantLinks.length} relevant quality links.`);
-            const qualityPromises = relevantLinks.map(async (link) => {
-                const finalLinks = await resolveIntermediateLink(link.url, selectedResult.url, link.quality);
-                if (finalLinks && finalLinks.length > 0) {
-                    return { quality: link.quality, finalLinks: finalLinks };
-                }
-                return null;
-            });
+            // Filter out 480p links before processing
+            relevantLinks = relevantLinks.filter(link => !link.quality.toLowerCase().includes('480p'));
+            console.log(`[MoviesMod] ${relevantLinks.length} links remaining after 480p filter.`);
 
-            resolvedQualities = (await Promise.all(qualityPromises)).filter(Boolean);
+            if (relevantLinks.length > 0) {
+                console.log(`[MoviesMod] Found ${relevantLinks.length} relevant quality links.`);
+                const qualityPromises = relevantLinks.map(async (link) => {
+                    const finalLinks = await resolveIntermediateLink(link.url, selectedResult.url, link.quality);
+                    if (finalLinks && finalLinks.length > 0) {
+                        return { quality: link.quality, finalLinks: finalLinks };
+                    }
+                    return null;
+                });
+
+                resolvedQualities = (await Promise.all(qualityPromises)).filter(Boolean);
+            } else {
+                resolvedQualities = [];
+            }
+            
             await saveToCache(cacheKey, resolvedQualities);
         }
 
@@ -652,11 +677,14 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
                 let actualQuality = extractQuality(quality);
                 const sizeInfo = driveseedSize || quality.match(/\[([^\]]+)\]/)?.[1];
                 const cleanFileName = fileName ? fileName.replace(/\.[^/.]+$/, "").replace(/[._]/g, ' ') : `Stream from ${quality}`;
+                const techDetails = getTechDetails(quality);
+                const techDetailsString = techDetails.length > 0 ? ` • ${techDetails.join(' • ')}` : '';
 
                 return {
                     name: `MoviesMod\n${actualQuality}`,
-                    title: `${cleanFileName}\n[${selectedResult.method}] ${sizeInfo || ''}`,
+                    title: `${cleanFileName}\n${sizeInfo || ''}${techDetailsString}`,
                     url: selectedResult.url,
+                    quality: actualQuality,
                 };
             });
             
@@ -666,7 +694,14 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
         const allResults = await Promise.all(qualityProcessingPromises);
         allResults.flat().forEach(s => streams.push(s));
 
-        console.log(`[MoviesMod] Successfully extracted ${streams.length} streams`);
+        // Sort by quality descending
+        streams.sort((a, b) => {
+            const qualityA = parseQualityForSort(a.quality);
+            const qualityB = parseQualityForSort(b.quality);
+            return qualityB - qualityA;
+        });
+
+        console.log(`[MoviesMod] Successfully extracted and sorted ${streams.length} streams`);
         return streams;
 
     } catch (error) {
