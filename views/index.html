@@ -1771,7 +1771,7 @@
                     <div class="provider-item">
                         <div class="provider-icon mp4hydra-icon">🎥</div>
                         <div class="provider-name">MP4Hydra</div>
-                        <span class="provider-detail">Multiple Qualities - Only works on native Stremio apps (Android TV/Mobile)</span>
+                        <span class="provider-detail">Only works on native Stremio apps (Android TV/Mobile)</span>
                     </div>
                     <div class="provider-item">
                         <div class="provider-icon vidzee-icon">📺</div>
@@ -1788,34 +1788,36 @@
                         <div class="provider-name">MoviesMod</div>
                         <span class="provider-detail">Multi-Source</span>
                     </div>
+                </div>
+                
+                <div class="providers">
+                    <h2 style="font-size: 1rem; font-weight: 500; margin-bottom: 0.75rem;">Regional & Specialty</h2>
                     <div class="provider-item">
                         <div class="provider-icon topmovies-icon">🎬</div>
                         <div class="provider-name">TopMovies</div>
                         <span class="provider-detail">Bollywood/indian contents</span>
                     </div>
-
-                    <h2 style="margin-top: 1.25rem; color: #ff6b6b;">Offline Providers</h2>
-                    <div class="provider-item">
-                        <div class="provider-icon cuevana-icon">🇨</div> <!-- Placeholder icon, can be updated -->
-                        <div class="provider-name">Cuevana</div>
-                        <span class="provider-detail" style="color: #ff3a3a;">LATAM Provider - Offline</span>
-                    </div>
-                    <div class="provider-item">
-                        <div class="provider-icon hianime-icon">🍥</div>
-                        <div class="provider-name">Hianime</div>
-                        <span class="provider-detail" style="color: #ff3a3a;">Anime (Dub/Sub) - Offline</span>
-                    </div>
-                    <div class="provider-item">
-                        <div class="provider-icon xprime-icon">⚡</div>
-                        <div class="provider-name">Xprime.tv</div>
-                        <span class="provider-detail" style="color: #ff3a3a;">Offline</span>
-                    </div>
                 </div>
-                
-                <!-- Provider info note remains in place -->
-                <div class="provider-info-note">
-                    <span class="info-icon">💡</span> 
-                    <span>The flag emoji (e.g., 🇺🇸, 🇬🇧) next to ShowBox stream names indicates the server location, not the content's language.</span>
+
+                <div class="full-width disclaimer" style="margin-top: 1rem; padding-bottom: 0.5rem; text-align: center;">
+                    <div class="disclaimer-header" style="justify-content: center;">
+                        <span class="disclaimer-icon" style="color: #ff3a3a;">🔌</span>
+                        <span style="color: var(--text-light);">Offline Providers</span>
+                    </div>
+                    <div class="disclaimer-content" style="justify-content: space-around; margin-top: 0.5rem; text-align: center; gap: 0.5rem;">
+                        <div class="provider-item" style="flex-direction: column; min-width: 80px;">
+                            <div class="provider-icon cuevana-icon">🇨</div>
+                            <div class="provider-name" style="font-size: 0.8rem;">Cuevana</div>
+                        </div>
+                        <div class="provider-item" style="flex-direction: column; min-width: 80px;">
+                            <div class="provider-icon hianime-icon">🍥</div>
+                            <div class="provider-name" style="font-size: 0.8rem;">Hianime</div>
+                        </div>
+                        <div class="provider-item" style="flex-direction: column; min-width: 80px;">
+                            <div class="provider-icon xprime-icon">⚡</div>
+                            <div class="provider-name" style="font-size: 0.8rem;">Xprime.tv</div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Disclaimer moved from below to here -->
@@ -1837,36 +1839,15 @@
                         Select the providers you want to use. Unchecking providers can speed up results if you only use specific sources. Each provider adds to the total loading time, with average fetch times shown below.
                     </p>
                     <div class="provider-checkbox-list" style="background-color: rgba(15, 15, 15, 0.7); border-radius: 0.6rem; padding: 1rem; border: 1px solid var(--border);">
+                        
+                        <h2 style="margin-bottom: 0.75rem; color: var(--text-light); font-size: 0.95rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem;">Global Providers</h2>
+
                         <div class="provider-checkbox-item" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
                             <div style="display: flex; align-items: center;">
                                 <input type="checkbox" id="providerShowbox" name="providerSelect" value="showbox" checked style="margin-right: 0.5rem; accent-color: var(--primary);">
                                 <label for="providerShowbox" style="font-size: 0.9rem;">ShowBox <span style="font-size: 0.75rem; color: var(--text-light);">(~5.3s)</span></label>
                             </div>
                             <select id="qualityShowbox" name="providerQuality" data-provider="showbox" class="provider-sort-select">
-                                <option value="all" selected>All Qualities</option>
-                                <option value="480p">480p & Up</option>
-                                <option value="720p">720p & Up</option>
-                                <option value="1080p">1080p & Up</option>
-                            </select>
-                        </div>
-                        <div class="provider-checkbox-item" style="display: none; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
-                            <div style="display: flex; align-items: center;">
-                                <input type="checkbox" id="providerXprime" name="providerSelect" value="xprime" disabled style="margin-right: 0.5rem; accent-color: var(--primary); opacity: 0.5;">
-                                <label for="providerXprime" style="font-size: 0.9rem; opacity: 0.5;">Xprime.tv (Offline)</label>
-                            </div>
-                            <select id="qualityXprime" name="providerQuality" data-provider="xprime" class="provider-sort-select" disabled>
-                                <option value="all" selected>All Qualities</option>
-                                <option value="480p">480p & Up</option>
-                                <option value="720p">720p & Up</option>
-                                <option value="1080p">1080p & Up</option>
-                            </select>
-                        </div>
-                        <div class="provider-checkbox-item" style="display: none; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
-                            <div style="display: flex; align-items: center;">
-                                <input type="checkbox" id="providerCuevana" name="providerSelect" value="cuevana" disabled style="margin-right: 0.5rem; accent-color: var(--primary); opacity: 0.5;">
-                                <label for="providerCuevana" style="font-size: 0.9rem; opacity: 0.5;">Cuevana (ElfHosted Private Instance Exclusive)</label>
-                            </div>
-                            <select id="qualityCuevana" name="providerQuality" data-provider="cuevana" class="provider-sort-select" disabled>
                                 <option value="all" selected>All Qualities</option>
                                 <option value="480p">480p & Up</option>
                                 <option value="720p">720p & Up</option>
@@ -1892,9 +1873,6 @@
                             </div>
                             <select id="qualitySoapertv" name="providerQuality" data-provider="soapertv" class="provider-sort-select" disabled>
                                 <option value="all" selected>All Qualities</option>
-                                <option value="480p">480p & Up</option>
-                                <option value="720p">720p & Up</option>
-                                <option value="1080p">1080p & Up</option>
                             </select>
                         </div>
                         <div class="provider-checkbox-item" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
@@ -1904,21 +1882,6 @@
                             </div>
                              <select id="qualityVidzee" name="providerQuality" data-provider="vidzee" class="provider-sort-select">
                                 <option value="all" selected>All Qualities</option>
-                                <option value="480p">480p & Up</option>
-                                <option value="720p">720p & Up</option>
-                                <option value="1080p">1080p & Up</option>
-                            </select>
-                        </div>
-                        <div class="provider-checkbox-item" style="display: none; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
-                            <div style="display: flex; align-items: center;">
-                                <input type="checkbox" id="providerHianime" name="providerSelect" value="hianime" disabled style="margin-right: 0.5rem; accent-color: var(--primary); opacity: 0.5;">
-                                <label for="providerHianime" style="font-size: 0.9rem; opacity: 0.5;">Hianime (Offline)</label>
-                            </div>
-                            <select id="qualityHianime" name="providerQuality" data-provider="hianime" class="provider-sort-select" disabled>
-                                <option value="all" selected>All Qualities</option>
-                                <option value="480p">480p & Up</option>
-                                <option value="720p">720p & Up</option>
-                                <option value="1080p">1080p & Up</option>
                             </select>
                         </div>
                         <div class="provider-checkbox-item" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
@@ -1928,9 +1891,6 @@
                             </div>
                              <select id="qualityVidsrc" name="providerQuality" data-provider="vidsrc" class="provider-sort-select">
                                 <option value="all" selected>All Qualities</option>
-                                <option value="480p">480p & Up</option>
-                                <option value="720p">720p & Up</option>
-                                <option value="1080p">1080p & Up</option>
                             </select>
                         </div>
                         <div class="provider-checkbox-item" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
@@ -1940,9 +1900,6 @@
                             </div>
                              <select id="qualityMp4hydra" name="providerQuality" data-provider="mp4hydra" class="provider-sort-select">
                                 <option value="all" selected>All Qualities</option>
-                                <option value="480p">480p & Up</option>
-                                <option value="720p">720p & Up</option>
-                                <option value="1080p">1080p & Up</option>
                             </select>
                         </div>
                         <div class="provider-checkbox-item" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
@@ -1952,8 +1909,6 @@
                             </div>
                              <select id="qualityUhdmovies" name="providerQuality" data-provider="uhdmovies" class="provider-sort-select">
                                 <option value="all">All</option>
-                                <option value="1080p">1080p+</option>
-                                <option value="720p">720p+</option>
                             </select>
                         </div>
                         <div class="provider-checkbox-item" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
@@ -1963,10 +1918,11 @@
                             </div>
                              <select id="qualityMoviesmod" name="providerQuality" data-provider="moviesmod" class="provider-sort-select">
                                 <option value="all">All</option>
-                                <option value="1080p">1080p+</option>
-                                <option value="720p">720p+</option>
                             </select>
                         </div>
+                        
+                        <h2 style="margin-top: 1.25rem; margin-bottom: 0.75rem; color: var(--text-light); font-size: 0.95rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem;">Regional & Specialty Providers</h2>
+
                         <div class="provider-checkbox-item" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
                             <div style="display: flex; align-items: center;">
                                 <input type="checkbox" id="providerTopmovies" name="providerSelect" value="topmovies" checked style="margin-right: 0.5rem; accent-color: var(--primary);">
@@ -1974,10 +1930,36 @@
                             </div>
                              <select id="qualityTopmovies" name="providerQuality" data-provider="topmovies" class="provider-sort-select">
                                 <option value="all">All</option>
-                                <option value="1080p">1080p+</option>
-                                <option value="720p">720p+</option>
                             </select>
                         </div>
+                        <div class="provider-checkbox-item" style="display: none; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
+                            <div style="display: flex; align-items: center;">
+                                <input type="checkbox" id="providerCuevana" name="providerSelect" value="cuevana" disabled style="margin-right: 0.5rem; accent-color: var(--primary); opacity: 0.5;">
+                                <label for="providerCuevana" style="font-size: 0.9rem; opacity: 0.5;">Cuevana (ElfHosted Private Instance Exclusive)</label>
+                            </div>
+                            <select id="qualityCuevana" name="providerQuality" data-provider="cuevana" class="provider-sort-select" disabled>
+                                <option value="all" selected>All Qualities</option>
+                            </select>
+                        </div>
+                        <div class="provider-checkbox-item" style="display: none; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
+                            <div style="display: flex; align-items: center;">
+                                <input type="checkbox" id="providerHianime" name="providerSelect" value="hianime" disabled style="margin-right: 0.5rem; accent-color: var(--primary); opacity: 0.5;">
+                                <label for="providerHianime" style="font-size: 0.9rem; opacity: 0.5;">Hianime (Offline)</label>
+                            </div>
+                            <select id="qualityHianime" name="providerQuality" data-provider="hianime" class="provider-sort-select" disabled>
+                                <option value="all" selected>All Qualities</option>
+                            </select>
+                        </div>
+                        <div class="provider-checkbox-item" style="display: none; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
+                            <div style="display: flex; align-items: center;">
+                                <input type="checkbox" id="providerXprime" name="providerSelect" value="xprime" disabled style="margin-right: 0.5rem; accent-color: var(--primary); opacity: 0.5;">
+                                <label for="providerXprime" style="font-size: 0.9rem; opacity: 0.5;">Xprime.tv (Offline)</label>
+                            </div>
+                            <select id="qualityXprime" name="providerQuality" data-provider="xprime" class="provider-sort-select" disabled>
+                                <option value="all" selected>All Qualities</option>
+                            </select>
+                        </div>
+
                         <div class="provider-info-note" style="margin-top: 0.75rem; margin-bottom: 0.75rem; padding: 0.5rem; font-size: 0.8rem;">
                             <span class="info-icon">⏱️</span> 
                             <span>Average fetch times shown above include a 3-second buffer. Enabling multiple providers will increase total loading time. For faster results, select only the providers you need.</span>
