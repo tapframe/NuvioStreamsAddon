@@ -128,6 +128,10 @@ console.log(`[addon.js] MoviesMod provider fetching enabled: ${ENABLE_MOVIESMOD_
 const ENABLE_TOPMOVIES_PROVIDER = process.env.ENABLE_TOPMOVIES_PROVIDER !== 'false'; // Defaults to true if not set or not 'false'
 console.log(`[addon.js] TopMovies provider fetching enabled: ${ENABLE_TOPMOVIES_PROVIDER}`);
 
+// NEW: Read environment variable for SoaperTV
+const ENABLE_SOAPERTV_PROVIDER = process.env.ENABLE_SOAPERTV_PROVIDER !== 'false'; // Defaults to true
+console.log(`[addon.js] SoaperTV provider fetching enabled: ${ENABLE_SOAPERTV_PROVIDER}`);
+
 // NEW: Read environment variable for DramaDrip
 const ENABLE_DRAMADRIP_PROVIDER = process.env.ENABLE_DRAMADRIP_PROVIDER !== 'false'; // Defaults to true if not set or not 'false'
 console.log(`[addon.js] DramaDrip provider fetching enabled: ${ENABLE_DRAMADRIP_PROVIDER}`);
@@ -943,6 +947,10 @@ builder.defineStreamHandler(async (args) => {
 
         // SoaperTV provider with cache integration
         soapertv: async () => {
+            if (!ENABLE_SOAPERTV_PROVIDER) {
+                console.log('[SoaperTV] Skipping fetch: Disabled by environment variable.');
+                return [];
+            }
             if (!shouldFetch('soapertv')) {
                 console.log('[SoaperTV] Skipping fetch: Not selected by user.');
                 return [];
@@ -1406,7 +1414,7 @@ builder.defineStreamHandler(async (args) => {
             'ShowBox': shouldFetch('showbox') ? filterStreamsByQuality(providerResults[0], minQualitiesPreferences.showbox, 'ShowBox') : [],
             'Xprime.tv': ENABLE_XPRIME_PROVIDER && shouldFetch('xprime') ? filterStreamsByQuality(providerResults[1], minQualitiesPreferences.xprime, 'Xprime.tv') : [],
             'HollyMovieHD': ENABLE_HOLLYMOVIEHD_PROVIDER && shouldFetch('hollymoviehd') ? filterStreamsByQuality(providerResults[2], minQualitiesPreferences.hollymoviehd, 'HollyMovieHD') : [],
-            'Soaper TV': shouldFetch('soapertv') ? filterStreamsByQuality(providerResults[3], minQualitiesPreferences.soapertv, 'Soaper TV') : [],
+            'Soaper TV': ENABLE_SOAPERTV_PROVIDER && shouldFetch('soapertv') ? filterStreamsByQuality(providerResults[3], minQualitiesPreferences.soapertv, 'Soaper TV') : [],
             'Cuevana': ENABLE_CUEVANA_PROVIDER && shouldFetch('cuevana') ? filterStreamsByQuality(providerResults[4], minQualitiesPreferences.cuevana, 'Cuevana') : [],
             'Hianime': shouldFetch('hianime') ? filterStreamsByQuality(providerResults[5], minQualitiesPreferences.hianime, 'Hianime') : [],
             'VidSrc': shouldFetch('vidsrc') ? filterStreamsByQuality(providerResults[6], minQualitiesPreferences.vidsrc, 'VidSrc') : [],
