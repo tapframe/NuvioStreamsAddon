@@ -323,7 +323,7 @@ async function sendAnalyticsEvent(eventName, eventParams) {
             method: 'POST',
             body: JSON.stringify(analyticsData),
         });
-        // console.log(`[Analytics] Sent event: ${eventName} for ${eventParams.content_title || 'N/A'}`);
+        console.log(`[Analytics] Sent event: ${eventName} for "${eventParams.content_title || 'N/A'}"`);
     } catch (error) {
         console.warn(`[Analytics] Failed to send event: ${error.message}`);
     }
@@ -1557,7 +1557,10 @@ builder.defineStreamHandler(async (args) => {
         
         let displayTitle;
         
-        if (stream.provider === 'UHDMovies' && stream.fullTitle) {
+        if (stream.provider === 'UHDMovies' && stream.fileName) {
+            const cleanFileName = stream.fileName.replace(/\.[^/.]+$/, "").replace(/[._]/g, ' ');
+            displayTitle = cleanFileName; // Use the cleaned filename as the main title
+        } else if (stream.provider === 'UHDMovies' && stream.fullTitle) {
             displayTitle = stream.fullTitle;
         } else if (tmdbTypeFromId === 'tv' && seasonNum !== null && episodeNum !== null && movieOrSeriesTitle) {
             displayTitle = `${movieOrSeriesTitle} S${String(seasonNum).padStart(2, '0')}E${String(episodeNum).padStart(2, '0')}`;
