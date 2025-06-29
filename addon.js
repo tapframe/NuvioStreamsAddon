@@ -1411,12 +1411,6 @@ builder.defineStreamHandler(async (args) => {
                 console.log('[DramaDrip] Skipping fetch: Not selected by user.');
                 return [];
             }
-            
-            // This provider only supports TV shows
-            if (tmdbTypeFromId !== 'tv') {
-                console.log('[DramaDrip] Skipping fetch: Provider only supports TV shows.');
-                return [];
-            }
 
             // Try to get cached streams first
             const cachedStreams = await getStreamFromCache('dramadrip', tmdbTypeFromId, tmdbId, seasonNum, episodeNum);

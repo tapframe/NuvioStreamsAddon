@@ -112,11 +112,15 @@ async function extractDramaDripLinks(url) {
     try {
         const { data } = await axios.get(url);
         const $ = cheerio.load(data);
-        const seasons = [];
-        $('h2.wp-block-heading').each((i, el) => {
-            const header = $(el);
-            const headerText = header.text().trim();
-            if (headerText.toLowerCase().startsWith('season')) {
+        
+        // Check for TV show season headers first
+        const seasonHeaders = $('h2.wp-block-heading:contains("Season")');
+        if (seasonHeaders.length > 0) {
+            console.log('[DramaDrip] TV show detected. Extracting seasons...');
+            const seasons = [];
+            seasonHeaders.each((i, el) => {
+                const header = $(el);
+                const headerText = header.text().trim();
                 const seasonInfo = { seasonTitle: headerText, qualities: [] };
                 const buttonContainer = header.next('.wp-block-buttons');
                 if (buttonContainer.length > 0) {
@@ -130,12 +134,32 @@ async function extractDramaDripLinks(url) {
                     });
                 }
                 seasons.push(seasonInfo);
+            });
+            return { type: 'tv', data: seasons };
+        }
+
+        // If no season headers, assume it's a movie
+        console.log('[DramaDrip] Movie detected. Extracting download qualities...');
+        const qualities = [];
+        $('.su-spoiler-content .wp-block-button a').each((i, el) => {
+            const link = $(el);
+            const qualityText = link.text().trim();
+            const linkUrl = link.attr('href');
+            if (linkUrl) {
+                qualities.push({ quality: qualityText, url: linkUrl });
             }
         });
-        return seasons;
+
+        if (qualities.length > 0) {
+            return { type: 'movie', data: qualities };
+        }
+        
+        console.log('[DramaDrip] Could not find any TV seasons or movie download links.');
+        return null;
+
     } catch (error) {
         console.error(`[DramaDrip] Error extracting links: ${error.message}`);
-        return [];
+        return null;
     }
 }
 
@@ -145,26 +169,53 @@ async function resolveCinemaKitOrModproLink(initialUrl, refererUrl) {
         const { data } = await axios.get(initialUrl, { headers: { 'Referer': refererUrl } });
         const $ = cheerio.load(data);
         const finalLinks = [];
-        let linkSelector = '.entry-content h3:contains("Episode") a';
-        let episodeLinks = $(linkSelector);
-
-        if (episodeLinks.length === 0) {
-            linkSelector = '.timed-content-client_show_0_7_0 .series_btn a';
-            episodeLinks = $(linkSelector);
+        
+        // Try TV show selectors first
+        let episodeLinks = $('.entry-content h3:contains("Episode") a');
+        if (episodeLinks.length > 0) {
+            episodeLinks.each((i, el) => {
+                const link = $(el).attr('href');
+                const text = $(el).text().trim();
+                const isSupported = link && (link.includes('driveseed.org') || link.includes('tech.unblockedgames.world') || link.includes('tech.creativeexpressionsblog.com'));
+                if (isSupported && text && !text.toLowerCase().includes('batch') && !text.toLowerCase().includes('zip')) {
+                    finalLinks.push({ type: 'episode', name: text.replace(/\s+/g, ' '), url: link });
+                }
+            });
+            return { type: 'episodes', links: finalLinks };
         }
 
-        episodeLinks.each((i, el) => {
-            const link = $(el).attr('href');
-            const text = $(el).text().trim();
-            const isSupported = link && (link.includes('driveseed.org') || link.includes('tech.unblockedgames.world') || link.includes('tech.creativeexpressionsblog.com'));
-            if (isSupported && text && !text.toLowerCase().includes('batch') && !text.toLowerCase().includes('zip')) {
-                finalLinks.push({ episode: text.replace(/\s+/g, ' '), url: link });
-            }
+        let seriesBtnLinks = $('.wp-block-button.series_btn a');
+        if (seriesBtnLinks.length > 0) {
+            seriesBtnLinks.each((i, el) => {
+                const link = $(el).attr('href');
+                const text = $(el).text().trim();
+                const isSupported = link && (link.includes('driveseed.org') || link.includes('tech.unblockedgames.world') || link.includes('tech.creativeexpressionsblog.com'));
+                if (isSupported && text && !text.toLowerCase().includes('batch') && !text.toLowerCase().includes('zip')) {
+                     finalLinks.push({ type: 'episode', name: text.replace(/\s+/g, ' '), url: link });
+                }
+            });
+            return { type: 'episodes', links: finalLinks };
+        }
+
+        // Fallback to movie selector
+        $('.wp-block-button.movie_btn a').each((i, el) => {
+             const link = $(el).attr('href');
+             const text = $(el).text().trim();
+             const isSupported = link && (link.includes('driveseed.org') || link.includes('tech.unblockedgames.world') || link.includes('tech.creativeexpressionsblog.com'));
+             if(isSupported && text) {
+                finalLinks.push({ type: 'server', name: text, url: link });
+             }
         });
-        return finalLinks;
+
+        if(finalLinks.length > 0) {
+            return { type: 'servers', links: finalLinks };
+        }
+
+        return null; // No links found
+
     } catch (error) {
         console.error(`[DramaDrip] Error resolving intermediate link: ${error.message}`);
-        return [];
+        return null;
     }
 }
 
@@ -375,44 +426,48 @@ async function resolveFinalLink(downloadOption) {
 
 // Main function for the provider
 async function getDramaDripStreams(tmdbId, mediaType, seasonNum, episodeNum) {
-    if (mediaType !== 'tv' || !seasonNum || !episodeNum) {
-        console.log('[DramaDrip] Provider only supports TV shows with specified season and episode.');
-        return [];
-    }
 
     try {
-        const cacheKey = `dramadrip_${tmdbId}_s${seasonNum}e${episodeNum}`;
+        const cacheKey = `dramadrip_v2_${tmdbId}_${mediaType}${seasonNum ? `_s${seasonNum}e${episodeNum}` : ''}`;
         
-        // 1. Check cache for driveseed links
+        // 1. Check cache for resolved intermediate links
         let cachedLinks = await getFromCache(cacheKey);
         if (cachedLinks) {
-            console.log(`[DramaDrip Cache] Using ${cachedLinks.length} cached driveseed links.`);
+            console.log(`[DramaDrip Cache] Using ${cachedLinks.length} cached intermediate links.`);
         } else {
             console.log(`[DramaDrip Cache] MISS for key: ${cacheKey}. Fetching from source.`);
             // 2. If cache miss, fetch from source
-            const tmdbUrl = `https://api.themoviedb.org/3/tv/${tmdbId}?api_key=${TMDB_API_KEY}`;
-            const { data: tmdbData } = await axios.get(tmdbUrl);
-            const title = tmdbData.name;
-            
-            console.log(`[DramaDrip] Searching for: "${title}" S${seasonNum}E${episodeNum}`);
+            const { data: tmdbData } = await axios.get(`https://api.themoviedb.org/3/${mediaType}/${tmdbId}?api_key=${TMDB_API_KEY}`);
+            const title = mediaType === 'tv' ? tmdbData.name : tmdbData.title;
+            const year = mediaType === 'tv' ? (tmdbData.first_air_date || '').substring(0, 4) : (tmdbData.release_date || '').substring(0, 4);
+
+            console.log(`[DramaDrip] Searching for: "${title}" (${year})`);
             const searchResults = await searchDramaDrip(title);
             if (searchResults.length === 0) return [];
     
             const matchingResult = searchResults.find(r => r.title.toLowerCase().includes(title.toLowerCase()));
             if (!matchingResult) return [];
     
-            const seasons = await extractDramaDripLinks(matchingResult.url);
-            const targetSeason = seasons.find(s => s.seasonTitle.includes(`Season ${seasonNum}`) && !s.seasonTitle.toLowerCase().includes('zip'));
-            if (!targetSeason) return [];
-    
-            const filteredQualities = targetSeason.qualities.filter(q => !q.quality.includes('480p'));
+            const extractedContent = await extractDramaDripLinks(matchingResult.url);
+            if(!extractedContent) return [];
 
-            // 3. Resolve to driveseed links
-            const resolutionPromises = filteredQualities.map(async (quality) => {
-                const episodeLinks = await resolveCinemaKitOrModproLink(quality.url, matchingResult.url);
-                const targetEpisode = episodeLinks.find(e => e.episode.includes(`Episode ${episodeNum}`));
-                if (targetEpisode) {
-                    return { ...quality, driveseedUrl: targetEpisode.url };
+            let qualitiesToResolve = [];
+            if(mediaType === 'tv' && extractedContent.type === 'tv') {
+                const targetSeason = extractedContent.data.find(s => s.seasonTitle.includes(`Season ${seasonNum}`) && !s.seasonTitle.toLowerCase().includes('zip'));
+                if (targetSeason) {
+                    qualitiesToResolve = targetSeason.qualities.filter(q => !q.quality.includes('480p'));
+                }
+            } else if (mediaType === 'movie' && extractedContent.type === 'movie') {
+                qualitiesToResolve = extractedContent.data.filter(q => !q.quality.includes('480p'));
+            }
+
+            if (qualitiesToResolve.length === 0) return [];
+
+            // 3. Resolve to intermediate links (episodes or servers)
+            const resolutionPromises = qualitiesToResolve.map(async (quality) => {
+                const intermediateResult = await resolveCinemaKitOrModproLink(quality.url, matchingResult.url);
+                if (intermediateResult) {
+                    return { ...quality, intermediateResult };
                 }
                 return null;
             });
@@ -426,32 +481,36 @@ async function getDramaDripStreams(tmdbId, mediaType, seasonNum, episodeNum) {
         }
 
         if (!cachedLinks || cachedLinks.length === 0) {
-            console.log('[DramaDrip] No driveseed links found after scraping/cache check.');
+            console.log('[DramaDrip] No intermediate links found after scraping/cache check.');
             return [];
         }
 
-        // 5. Always fresh-fetch the final links from driveseed URLs
+        // 5. Always fresh-fetch the final links from intermediate URLs
         const streamPromises = cachedLinks.map(async (linkInfo) => {
             try {
-                let currentUrl = linkInfo.driveseedUrl;
+                const { intermediateResult } = linkInfo;
+                let targetUrl = null;
 
-                if (currentUrl.includes('tech.unblockedgames.world') || currentUrl.includes('tech.creativeexpressionsblog.com')) {
-                    console.log(`[DramaDrip] Bypassing SID link: ${currentUrl}`);
-                    const resolvedUrl = await resolveTechUnblockedLink(currentUrl);
-                    if (!resolvedUrl) {
-                        console.warn(`[DramaDrip] Failed to bypass SID link: ${currentUrl}`);
-                        return null;
-                    }
-                    console.log(`[DramaDrip] Bypassed. Continuing with resolved URL: ${resolvedUrl}`);
-                    currentUrl = resolvedUrl;
+                if (mediaType === 'tv' && intermediateResult.type === 'episodes') {
+                    const targetEpisode = intermediateResult.links.find(e => e.name.includes(`Episode ${episodeNum}`));
+                    if(targetEpisode) targetUrl = targetEpisode.url;
+                } else if (mediaType === 'movie' && intermediateResult.type === 'servers') {
+                    const fastServer = intermediateResult.links.find(s => s.name.includes('Server 1')) || intermediateResult.links[0];
+                    if(fastServer) targetUrl = fastServer.url;
                 }
 
-                if (!currentUrl || !currentUrl.includes('driveseed.org')) {
-                     console.warn(`[DramaDrip] Unsupported URL for final processing: ${currentUrl}`);
-                     return null;
+                if (!targetUrl) return null;
+
+                // Handle SID links first
+                if (targetUrl.includes('tech.unblockedgames.world') || targetUrl.includes('tech.creativeexpressionsblog.com')) {
+                    const resolvedUrl = await resolveTechUnblockedLink(targetUrl);
+                    if (!resolvedUrl) return null;
+                    targetUrl = resolvedUrl;
                 }
 
-                const downloadInfo = await resolveDriveseedLink(currentUrl);
+                if (!targetUrl || !targetUrl.includes('driveseed.org')) return null;
+
+                const downloadInfo = await resolveDriveseedLink(targetUrl);
                 if (!downloadInfo || !downloadInfo.downloadOptions) return null;
 
                 const { downloadOptions, title: fileTitle, size: fileSize } = downloadInfo;
