@@ -3,6 +3,7 @@ const cheerio = require('cheerio');
 const FormData = require('form-data');
 const { CookieJar } = require('tough-cookie');
 const { wrapper } = require('axios-cookiejar-support');
+const { URLSearchParams, URL } = require('url');
 const fs = require('fs').promises;
 const path = require('path');
 
@@ -144,18 +145,19 @@ async function resolveCinemaKitOrModproLink(initialUrl, refererUrl) {
         const { data } = await axios.get(initialUrl, { headers: { 'Referer': refererUrl } });
         const $ = cheerio.load(data);
         const finalLinks = [];
-        let linkSelector = '.entry-content h3:contains("Episode") a[href*="driveseed.org"]';
+        let linkSelector = '.entry-content h3:contains("Episode") a';
         let episodeLinks = $(linkSelector);
 
         if (episodeLinks.length === 0) {
-            linkSelector = '.timed-content-client_show_0_7_0 .series_btn a[href*="driveseed.org"]';
+            linkSelector = '.timed-content-client_show_0_7_0 .series_btn a';
             episodeLinks = $(linkSelector);
         }
 
         episodeLinks.each((i, el) => {
             const link = $(el).attr('href');
             const text = $(el).text().trim();
-            if (link && text && !text.toLowerCase().includes('batch') && !text.toLowerCase().includes('zip')) {
+            const isSupported = link && (link.includes('driveseed.org') || link.includes('tech.unblockedgames.world') || link.includes('tech.creativeexpressionsblog.com'));
+            if (isSupported && text && !text.toLowerCase().includes('batch') && !text.toLowerCase().includes('zip')) {
                 finalLinks.push({ episode: text.replace(/\s+/g, ' '), url: link });
             }
         });
@@ -164,6 +166,123 @@ async function resolveCinemaKitOrModproLink(initialUrl, refererUrl) {
         console.error(`[DramaDrip] Error resolving intermediate link: ${error.message}`);
         return [];
     }
+}
+
+// Function to resolve tech.unblockedgames.world links to driveleech URLs (adapted from moviesmod.js)
+async function resolveTechUnblockedLink(sidUrl) {
+  console.log(`[DramaDrip] Resolving SID link: ${sidUrl}`);
+  const { origin } = new URL(sidUrl);
+  const jar = new CookieJar();
+  const session = wrapper(axios.create({
+    jar,
+    headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1'
+    }
+  }));
+
+  try {
+    // Step 0: Get the _wp_http value
+    console.log("  [SID] Step 0: Fetching initial page...");
+    const responseStep0 = await session.get(sidUrl);
+    let $ = cheerio.load(responseStep0.data);
+    const initialForm = $('#landing');
+    const wp_http_step1 = initialForm.find('input[name="_wp_http"]').val();
+    const action_url_step1 = initialForm.attr('action');
+
+    if (!wp_http_step1 || !action_url_step1) {
+      console.error("  [SID] Error: Could not find _wp_http in initial form.");
+      return null;
+    }
+
+    // Step 1: POST to the first form's action URL
+    console.log("  [SID] Step 1: Submitting initial form...");
+    const step1Data = new URLSearchParams({ '_wp_http': wp_http_step1 });
+    const responseStep1 = await session.post(action_url_step1, step1Data, {
+      headers: { 'Referer': sidUrl, 'Content-Type': 'application/x-www-form-urlencoded' }
+    });
+
+    // Step 2: Parse verification page for second form
+    console.log("  [SID] Step 2: Parsing verification page...");
+    $ = cheerio.load(responseStep1.data);
+    const verificationForm = $('#landing');
+    const action_url_step2 = verificationForm.attr('action');
+    const wp_http2 = verificationForm.find('input[name="_wp_http2"]').val();
+    const token = verificationForm.find('input[name="token"]').val();
+
+    if (!action_url_step2) {
+      console.error("  [SID] Error: Could not find verification form.");
+      return null;
+    }
+
+    // Step 3: POST to the verification URL
+    console.log("  [SID] Step 3: Submitting verification...");
+    const step2Data = new URLSearchParams({ '_wp_http2': wp_http2, 'token': token });
+    const responseStep2 = await session.post(action_url_step2, step2Data, {
+      headers: { 'Referer': responseStep1.request.res.responseUrl, 'Content-Type': 'application/x-www-form-urlencoded' }
+    });
+
+    // Step 4: Find dynamic cookie and link from JavaScript
+    console.log("  [SID] Step 4: Parsing final page for JS data...");
+    let finalLinkPath = null;
+    let cookieName = null;
+    let cookieValue = null;
+
+    const scriptContent = responseStep2.data;
+    const cookieMatch = scriptContent.match(/s_343\('([^']+)',\s*'([^']+)'/);
+    const linkMatch = scriptContent.match(/c\.setAttribute\("href",\s*"([^"]+)"\)/);
+    
+    if (cookieMatch) {
+      cookieName = cookieMatch[1].trim();
+      cookieValue = cookieMatch[2].trim();
+    }
+    if (linkMatch) {
+      finalLinkPath = linkMatch[1].trim();
+    }
+
+    if (!finalLinkPath || !cookieName || !cookieValue) {
+      console.error("  [SID] Error: Could not extract dynamic cookie/link from JS.");
+      return null;
+    }
+    
+    const finalUrl = new URL(finalLinkPath, origin).href;
+    console.log(`  [SID] Dynamic link found: ${finalUrl}`);
+    console.log(`  [SID] Dynamic cookie found: ${cookieName}`);
+
+    // Step 5: Set cookie and make final request
+    console.log("  [SID] Step 5: Setting cookie and making final request...");
+    await jar.setCookie(`${cookieName}=${cookieValue}`, origin);
+    
+    const finalResponse = await session.get(finalUrl, {
+      headers: { 'Referer': responseStep2.request.res.responseUrl }
+    });
+
+    // Step 6: Extract driveleech URL from meta refresh tag
+    $ = cheerio.load(finalResponse.data);
+    const metaRefresh = $('meta[http-equiv="refresh"]');
+    if (metaRefresh.length > 0) {
+        const content = metaRefresh.attr('content');
+        const urlMatch = content.match(/url=(.*)/i);
+        if (urlMatch && urlMatch[1]) {
+            const driveleechUrl = urlMatch[1].replace(/"/g, "").replace(/'/g, "");
+            console.log(`  [SID] SUCCESS! Resolved Driveleech URL: ${driveleechUrl}`);
+            return driveleechUrl;
+        }
+    }
+
+    console.error("  [SID] Error: Could not find meta refresh tag with Driveleech URL.");
+    return null;
+
+  } catch (error) {
+    console.error(`  [SID] Error during SID resolution: ${error.message}`);
+    if (error.response) {
+      console.error(`  [SID] Status: ${error.response.status}`);
+    }
+    return null;
+  }
 }
 
 // Resolves driveseed.org links to find download options
@@ -314,7 +433,25 @@ async function getDramaDripStreams(tmdbId, mediaType, seasonNum, episodeNum) {
         // 5. Always fresh-fetch the final links from driveseed URLs
         const streamPromises = cachedLinks.map(async (linkInfo) => {
             try {
-                const downloadInfo = await resolveDriveseedLink(linkInfo.driveseedUrl);
+                let currentUrl = linkInfo.driveseedUrl;
+
+                if (currentUrl.includes('tech.unblockedgames.world') || currentUrl.includes('tech.creativeexpressionsblog.com')) {
+                    console.log(`[DramaDrip] Bypassing SID link: ${currentUrl}`);
+                    const resolvedUrl = await resolveTechUnblockedLink(currentUrl);
+                    if (!resolvedUrl) {
+                        console.warn(`[DramaDrip] Failed to bypass SID link: ${currentUrl}`);
+                        return null;
+                    }
+                    console.log(`[DramaDrip] Bypassed. Continuing with resolved URL: ${resolvedUrl}`);
+                    currentUrl = resolvedUrl;
+                }
+
+                if (!currentUrl || !currentUrl.includes('driveseed.org')) {
+                     console.warn(`[DramaDrip] Unsupported URL for final processing: ${currentUrl}`);
+                     return null;
+                }
+
+                const downloadInfo = await resolveDriveseedLink(currentUrl);
                 if (!downloadInfo || !downloadInfo.downloadOptions) return null;
 
                 const { downloadOptions, title: fileTitle, size: fileSize } = downloadInfo;
@@ -337,6 +474,7 @@ async function getDramaDripStreams(tmdbId, mediaType, seasonNum, episodeNum) {
                 }
                 return null;
             } catch (e) {
+                console.error(`[DramaDrip] Error in stream promise: ${e.message}`);
                 return null;
             }
         });
