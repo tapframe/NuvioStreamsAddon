@@ -1662,6 +1662,12 @@
         <button id="closeOfficialBanner" class="instance-banner-close">×</button>
     </div>
 
+    <!-- Banner for Private ElfHosted Instances -->
+    <div id="privateInstanceBanner" class="instance-banner" style="display: none; background: linear-gradient(135deg, #8c52ff, #00a3ff);">
+        ✨ You are on a private ElfHosted instance. Enjoy premium features! ❤️
+        <button id="closePrivateBanner" class="instance-banner-close">×</button>
+    </div>
+
     <!-- Banner for Unofficial Instances -->
     <div id="unofficialInstanceBanner" class="instance-banner" style="display: none; background: linear-gradient(135deg, #ff3a3a, #ff6432);">
         ⚠️ This is a community instance. For the official, supported instance, please visit <a href="https://nuviostreams.hayd.uk/" style="color: white; text-decoration: underline; font-weight: bold;">nuviostreams.hayd.uk</a>.
@@ -3320,15 +3326,17 @@
         // Handles display of banners and ElfHosted info based on hostname
         (function() {
             const currentHostname = window.location.hostname;
-            const officialHostnames = ['nuviostreams.hayd.uk', 'localhost', '127.0.0.1'];
+            const officialHostnames = ['nuviostreams.hayd.uk', 'nuviostreams.elfhosted.com'];
 
             const elfhostedInfoSection = document.getElementById('elfhostedInfoSection');
             
             const officialInstanceBanner = document.getElementById('officialInstanceBanner');
             const unofficialInstanceBanner = document.getElementById('unofficialInstanceBanner');
+            const privateInstanceBanner = document.getElementById('privateInstanceBanner');
             
             const closeOfficialBanner = document.getElementById('closeOfficialBanner');
             const closeUnofficialBanner = document.getElementById('closeUnofficialBanner');
+            const closePrivateBanner = document.getElementById('closePrivateBanner');
 
             if (officialHostnames.includes(currentHostname)) {
                 // This is an official instance
@@ -3337,6 +3345,15 @@
                 }
                 if (officialInstanceBanner && !localStorage.getItem('officialBannerDismissed')) {
                     officialInstanceBanner.style.display = 'block';
+                    document.body.classList.add('has-instance-banner');
+                }
+            } else if (currentHostname.endsWith('.elfhosted.com') || currentHostname === 'localhost' || currentHostname === '127.0.0.1') {
+                // This is a private ElfHosted instance or local testing environment
+                if (elfhostedInfoSection) {
+                    elfhostedInfoSection.style.display = 'none';
+                }
+                if (privateInstanceBanner && !localStorage.getItem('privateBannerDismissed')) {
+                    privateInstanceBanner.style.display = 'block';
                     document.body.classList.add('has-instance-banner');
                 }
             } else {
@@ -3358,6 +3375,17 @@
                     localStorage.setItem('officialBannerDismissed', 'true');
                      setTimeout(() => {
                         localStorage.removeItem('officialBannerDismissed');
+                    }, 24 * 60 * 60 * 1000); // Expires in 24 hours
+                });
+            }
+
+            if (closePrivateBanner) {
+                closePrivateBanner.addEventListener('click', () => {
+                    if (privateInstanceBanner) privateInstanceBanner.style.display = 'none';
+                    document.body.classList.remove('has-instance-banner');
+                    localStorage.setItem('privateBannerDismissed', 'true');
+                     setTimeout(() => {
+                        localStorage.removeItem('privateBannerDismissed');
                     }, 24 * 60 * 60 * 1000); // Expires in 24 hours
                 });
             }
