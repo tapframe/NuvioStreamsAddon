@@ -8,6 +8,7 @@ const cheerio = require('cheerio');
 const FormData = require('form-data');
 const { CookieJar } = require('tough-cookie');
 const { wrapper } = require('axios-cookiejar-support');
+const { URLSearchParams, URL } = require('url');
 const fs = require('fs').promises;
 const path = require('path');
 
@@ -266,7 +267,7 @@ async function resolveIntermediateLink(initialUrl, refererUrl, quality) {
             const $ = cheerio.load(data);
             const finalLinks = [];
             
-            $('.entry-content a[href*="driveseed.org"]').each((i, el) => {
+            $('.entry-content a[href*="driveseed.org"], .entry-content a[href*="tech.unblockedgames.world"], .entry-content a[href*="tech.creativeexpressionsblog.com"]').each((i, el) => {
                 const link = $(el).attr('href');
                 const text = $(el).text().trim();
                 if (link && text && !text.toLowerCase().includes('batch')) {
@@ -315,6 +316,123 @@ async function resolveIntermediateLink(initialUrl, refererUrl, quality) {
         console.error(`[MoviesMod] Error resolving intermediate link: ${error.message}`);
         return [];
     }
+}
+
+// Function to resolve tech.unblockedgames.world links to driveleech URLs (adapted from UHDMovies)
+async function resolveTechUnblockedLink(sidUrl) {
+  console.log(`[MoviesMod] Resolving SID link: ${sidUrl}`);
+  const { origin } = new URL(sidUrl);
+  const jar = new CookieJar();
+  const session = wrapper(axios.create({
+    jar,
+    headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1'
+    }
+  }));
+
+  try {
+    // Step 0: Get the _wp_http value
+    console.log("  [SID] Step 0: Fetching initial page...");
+    const responseStep0 = await session.get(sidUrl);
+    let $ = cheerio.load(responseStep0.data);
+    const initialForm = $('#landing');
+    const wp_http_step1 = initialForm.find('input[name="_wp_http"]').val();
+    const action_url_step1 = initialForm.attr('action');
+
+    if (!wp_http_step1 || !action_url_step1) {
+      console.error("  [SID] Error: Could not find _wp_http in initial form.");
+      return null;
+    }
+
+    // Step 1: POST to the first form's action URL
+    console.log("  [SID] Step 1: Submitting initial form...");
+    const step1Data = new URLSearchParams({ '_wp_http': wp_http_step1 });
+    const responseStep1 = await session.post(action_url_step1, step1Data, {
+      headers: { 'Referer': sidUrl, 'Content-Type': 'application/x-www-form-urlencoded' }
+    });
+
+    // Step 2: Parse verification page for second form
+    console.log("  [SID] Step 2: Parsing verification page...");
+    $ = cheerio.load(responseStep1.data);
+    const verificationForm = $('#landing');
+    const action_url_step2 = verificationForm.attr('action');
+    const wp_http2 = verificationForm.find('input[name="_wp_http2"]').val();
+    const token = verificationForm.find('input[name="token"]').val();
+
+    if (!action_url_step2) {
+      console.error("  [SID] Error: Could not find verification form.");
+      return null;
+    }
+
+    // Step 3: POST to the verification URL
+    console.log("  [SID] Step 3: Submitting verification...");
+    const step2Data = new URLSearchParams({ '_wp_http2': wp_http2, 'token': token });
+    const responseStep2 = await session.post(action_url_step2, step2Data, {
+      headers: { 'Referer': responseStep1.request.res.responseUrl, 'Content-Type': 'application/x-www-form-urlencoded' }
+    });
+
+    // Step 4: Find dynamic cookie and link from JavaScript
+    console.log("  [SID] Step 4: Parsing final page for JS data...");
+    let finalLinkPath = null;
+    let cookieName = null;
+    let cookieValue = null;
+
+    const scriptContent = responseStep2.data;
+    const cookieMatch = scriptContent.match(/s_343\('([^']+)',\s*'([^']+)'/);
+    const linkMatch = scriptContent.match(/c\.setAttribute\("href",\s*"([^"]+)"\)/);
+    
+    if (cookieMatch) {
+      cookieName = cookieMatch[1].trim();
+      cookieValue = cookieMatch[2].trim();
+    }
+    if (linkMatch) {
+      finalLinkPath = linkMatch[1].trim();
+    }
+
+    if (!finalLinkPath || !cookieName || !cookieValue) {
+      console.error("  [SID] Error: Could not extract dynamic cookie/link from JS.");
+      return null;
+    }
+    
+    const finalUrl = new URL(finalLinkPath, origin).href;
+    console.log(`  [SID] Dynamic link found: ${finalUrl}`);
+    console.log(`  [SID] Dynamic cookie found: ${cookieName}`);
+
+    // Step 5: Set cookie and make final request
+    console.log("  [SID] Step 5: Setting cookie and making final request...");
+    await jar.setCookie(`${cookieName}=${cookieValue}`, origin);
+    
+    const finalResponse = await session.get(finalUrl, {
+      headers: { 'Referer': responseStep2.request.res.responseUrl }
+    });
+
+    // Step 6: Extract driveleech URL from meta refresh tag
+    $ = cheerio.load(finalResponse.data);
+    const metaRefresh = $('meta[http-equiv="refresh"]');
+    if (metaRefresh.length > 0) {
+        const content = metaRefresh.attr('content');
+        const urlMatch = content.match(/url=(.*)/i);
+        if (urlMatch && urlMatch[1]) {
+            const driveleechUrl = urlMatch[1].replace(/"/g, "").replace(/'/g, "");
+            console.log(`  [SID] SUCCESS! Resolved Driveleech URL: ${driveleechUrl}`);
+            return driveleechUrl;
+        }
+    }
+
+    console.error("  [SID] Error: Could not find meta refresh tag with Driveleech URL.");
+    return null;
+
+  } catch (error) {
+    console.error(`  [SID] Error during SID resolution: ${error.message}`);
+    if (error.response) {
+      console.error(`  [SID] Status: ${error.response.status}`);
+    }
+    return null;
+  }
 }
 
 // Resolve driveseed.org links to get download options
@@ -648,45 +766,70 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
                 }
 
             const finalStreamPromises = targetLinks.map(async (targetLink) => {
-                    const { downloadOptions, size: driveseedSize, fileName } = await resolveDriveseedLink(targetLink.url);
+                try {
+                    let currentUrl = targetLink.url;
+
+                    // Step 1: Handle SID links if they appear
+                    if (currentUrl.includes('tech.unblockedgames.world') || currentUrl.includes('tech.creativeexpressionsblog.com')) {
+                        console.log(`[MoviesMod] Bypassing SID link: ${currentUrl}`);
+                        const resolvedUrl = await resolveTechUnblockedLink(currentUrl);
+                        if (!resolvedUrl) {
+                            console.warn(`[MoviesMod] Failed to bypass tech.unblockedgames.world for: ${currentUrl}`);
+                            return null;
+                        }
+                        console.log(`[MoviesMod] Bypassed. Continuing with resolved URL: ${resolvedUrl}`);
+                        currentUrl = resolvedUrl; // The resolved URL should be a driveseed link
+                    }
                     
-                    if (fileName && processedFileNames.has(fileName)) {
-                        console.log(`[MoviesMod] Skipping duplicate file: ${fileName}`);
+                    // Step 2: Now process the (potentially resolved) driveseed link
+                    if (currentUrl.includes('driveseed.org')) {
+                        const { downloadOptions, size: driveseedSize, fileName } = await resolveDriveseedLink(currentUrl);
+                        
+                        if (fileName && processedFileNames.has(fileName)) {
+                            console.log(`[MoviesMod] Skipping duplicate file: ${fileName}`);
+                            return null;
+                        }
+                        if (fileName) processedFileNames.add(fileName);
+
+                        if (!downloadOptions || downloadOptions.length === 0) return null;
+
+                        const methodPromises = downloadOptions.map(async (option) => {
+                                let finalDownloadUrl = null;
+                        if (option.type === 'resume') finalDownloadUrl = await resolveResumeCloudLink(option.url);
+                        else if (option.type === 'worker') finalDownloadUrl = await resolveWorkerSeedLink(option.url);
+                        else if (option.type === 'instant') finalDownloadUrl = await resolveVideoSeedLink(option.url);
+                        
+                        if (finalDownloadUrl) return { url: finalDownloadUrl, method: option.title };
+                            return null;
+                        });
+                        
+                        const methodResults = (await Promise.all(methodPromises)).filter(Boolean);
+                        if (methodResults.length === 0) return null;
+
+                        const selectedResult = methodResults[0]; // Already sorted by priority
+                        console.log(`[MoviesMod] Successfully resolved ${quality} using ${selectedResult.method}`);
+                        
+                        let actualQuality = extractQuality(quality);
+                        const sizeInfo = driveseedSize || quality.match(/\[([^\]]+)\]/)?.[1];
+                        const cleanFileName = fileName ? fileName.replace(/\.[^/.]+$/, "").replace(/[._]/g, ' ') : `Stream from ${quality}`;
+                        const techDetails = getTechDetails(quality);
+                        const techDetailsString = techDetails.length > 0 ? ` • ${techDetails.join(' • ')}` : '';
+                            
+                        return {
+                            name: `MoviesMod\n${actualQuality}`,
+                            title: `${cleanFileName}\n${sizeInfo || ''}${techDetailsString}`,
+                            url: selectedResult.url,
+                            quality: actualQuality,
+                        };
+                    } else {
+                        console.warn(`[MoviesMod] Unsupported URL type for final processing: ${currentUrl}`);
                         return null;
                     }
-                if (fileName) processedFileNames.add(fileName);
-
-                if (!downloadOptions || downloadOptions.length === 0) return null;
-
-                    const methodPromises = downloadOptions.map(async (option) => {
-                            let finalDownloadUrl = null;
-                    if (option.type === 'resume') finalDownloadUrl = await resolveResumeCloudLink(option.url);
-                    else if (option.type === 'worker') finalDownloadUrl = await resolveWorkerSeedLink(option.url);
-                    else if (option.type === 'instant') finalDownloadUrl = await resolveVideoSeedLink(option.url);
-                    
-                    if (finalDownloadUrl) return { url: finalDownloadUrl, method: option.title };
-                        return null;
-                });
-                
-                const methodResults = (await Promise.all(methodPromises)).filter(Boolean);
-                if (methodResults.length === 0) return null;
-
-                const selectedResult = methodResults[0]; // Already sorted by priority
-                console.log(`[MoviesMod] Successfully resolved ${quality} using ${selectedResult.method}`);
-                
-                let actualQuality = extractQuality(quality);
-                const sizeInfo = driveseedSize || quality.match(/\[([^\]]+)\]/)?.[1];
-                const cleanFileName = fileName ? fileName.replace(/\.[^/.]+$/, "").replace(/[._]/g, ' ') : `Stream from ${quality}`;
-                const techDetails = getTechDetails(quality);
-                const techDetailsString = techDetails.length > 0 ? ` • ${techDetails.join(' • ')}` : '';
-                    
-                    return {
-                    name: `MoviesMod\n${actualQuality}`,
-                    title: `${cleanFileName}\n${sizeInfo || ''}${techDetailsString}`,
-                        url: selectedResult.url,
-                        quality: actualQuality,
-                    };
-                });
+                } catch (e) {
+                    console.error(`[MoviesMod] Error processing target link ${targetLink.url}: ${e.message}`);
+                    return null;
+                }
+            });
 
             return (await Promise.all(finalStreamPromises)).filter(Boolean);
         });
