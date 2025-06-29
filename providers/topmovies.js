@@ -113,31 +113,30 @@ async function resolveLeechproLink(leechproUrl) {
         const { data } = await axiosInstance.get(leechproUrl);
         const $ = cheerio.load(data);
 
-        // Look for the "Fast Server (G-Drive)" link in the timed content
-        let techLink = null;
+        // Look for any of our supported link types in the timed content section first
+        let resolvedLink = null;
         
-        // Check in the hidden timed content section
         const timedContent = $('.timed-content-client_show_0_5_0');
         if (timedContent.length > 0) {
-            const fastServerLink = timedContent.find('a[href*="tech.unblockedgames.world"]').first();
-            if (fastServerLink.length > 0) {
-                techLink = fastServerLink.attr('href');
+            const supportedLink = timedContent.find('a[href*="tech.unblockedgames.world"], a[href*="tech.creativeexpressionsblog.com"], a[href*="driveseed.org"], a[href*="driveleech.net"]').first();
+            if (supportedLink.length > 0) {
+                resolvedLink = supportedLink.attr('href');
             }
         }
 
-        // Fallback: look anywhere on the page for tech.unblockedgames.world links
-        if (!techLink) {
-            const allTechLinks = $('a[href*="tech.unblockedgames.world"]');
-            if (allTechLinks.length > 0) {
-                techLink = allTechLinks.first().attr('href');
+        // Fallback: look anywhere on the page for the links
+        if (!resolvedLink) {
+            const allSupportedLinks = $('a[href*="tech.unblockedgames.world"], a[href*="tech.creativeexpressionsblog.com"], a[href*="driveseed.org"], a[href*="driveleech.net"]');
+            if (allSupportedLinks.length > 0) {
+                resolvedLink = allSupportedLinks.first().attr('href');
             }
         }
 
-        if (techLink) {
-            console.log(`  Found tech.unblockedgames.world link: ${techLink}`);
-            return techLink;
+        if (resolvedLink) {
+            console.log(`  Found intermediate link: ${resolvedLink}`);
+            return resolvedLink;
         } else {
-            console.log('  Could not find tech.unblockedgames.world link on leechpro page');
+            console.log('  Could not find a supported intermediate link (driveseed, driveleech, or tech.*) on leechpro page');
             return null;
         }
     } catch (error) {
@@ -149,6 +148,7 @@ async function resolveLeechproLink(leechproUrl) {
 // Copy of the tech.unblockedgames.world bypass from uhdmovies scraper
 async function resolveSidToDriveleech(sidUrl) {
     console.log(`Resolving SID link: ${sidUrl}`);
+    const { origin } = new URL(sidUrl);
     const jar = new CookieJar();
     const session = wrapper(axios.create({
         jar,
@@ -225,13 +225,13 @@ async function resolveSidToDriveleech(sidUrl) {
             return null;
         }
         
-        const finalUrl = new URL(finalLinkPath, 'https://tech.unblockedgames.world').href;
+        const finalUrl = new URL(finalLinkPath, origin).href;
         console.log(`  [SID] Dynamic link found: ${finalUrl}`);
         console.log(`  [SID] Dynamic cookie found: ${cookieName}`);
 
         // Step 5: Set cookie and make final request
         console.log("  [SID] Step 5: Setting cookie and making final request...");
-        await jar.setCookie(`${cookieName}=${cookieValue}`, 'https://tech.unblockedgames.world');
+        await jar.setCookie(`${cookieName}=${cookieValue}`, origin);
         
         const finalResponse = await session.get(finalUrl, {
             headers: { 'Referer': responseStep2.request.res.responseUrl }
@@ -556,11 +556,17 @@ async function getTopMoviesStreams(tmdbId, mediaType = 'movie', season = null, e
 
         // 4. Resolve to driveleech links
         const resolutionPromises = filteredLinks.map(async (qualityLink) => {
-            const techLink = await resolveLeechproLink(qualityLink.url);
-            if (!techLink) return null;
-            const driveleechUrl = await resolveSidToDriveleech(techLink);
-            if(driveleechUrl) {
-                return { ...qualityLink, driveleechUrl };
+            const intermediateUrl = await resolveLeechproLink(qualityLink.url);
+            if (!intermediateUrl) return null;
+
+            let finalUrl = intermediateUrl;
+            // If it's a SID link, resolve it first
+            if (intermediateUrl.includes('tech.unblockedgames.world') || intermediateUrl.includes('tech.creativeexpressionsblog.com')) {
+                finalUrl = await resolveSidToDriveleech(intermediateUrl);
+            }
+            
+            if(finalUrl) {
+                return { ...qualityLink, driveleechUrl: finalUrl };
             }
             return null;
         });
