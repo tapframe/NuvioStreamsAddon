@@ -1726,7 +1726,7 @@
                                 </li>
                                 <li style="display: flex; align-items: flex-start; margin-bottom: 0.6rem;">
                                     <span style="color: #00c16e; margin-right: 0.5rem;">•</span>
-                                    <span style="font-size: 0.85rem; color: #fff;">Includes <strong>Cuevana</strong> provider with LATAM content</span>
+                                    <span style="font-size: 0.85rem; color: #fff;">Faster link fetching</span>
                                 </li>
                                 <li style="display: flex; align-items: flex-start; margin-bottom: 0.6rem;">
                                     <span style="color: #00c16e; margin-right: 0.5rem;">•</span>
@@ -3326,7 +3326,7 @@
         // Handles display of banners and ElfHosted info based on hostname
         (function() {
             const currentHostname = window.location.hostname;
-            const officialHostnames = ['nuviostreams.hayd.uk', 'nuviostreams.elfhosted.com'];
+            const officialHostnames = ['nuviostreams.hayd.uk', 'nuviostreams.elfhosted.com', 'localhost', '127.0.0.1'];
 
             const elfhostedInfoSection = document.getElementById('elfhostedInfoSection');
             
@@ -3347,8 +3347,8 @@
                     officialInstanceBanner.style.display = 'block';
                     document.body.classList.add('has-instance-banner');
                 }
-            } else if (currentHostname.endsWith('.elfhosted.com') || currentHostname === 'localhost' || currentHostname === '127.0.0.1') {
-                // This is a private ElfHosted instance or local testing environment
+            } else if (currentHostname.endsWith('.elfhosted.com')) {
+                // This is a private ElfHosted instance
                 if (elfhostedInfoSection) {
                     elfhostedInfoSection.style.display = 'none';
                 }
