@@ -14,7 +14,7 @@ const TMDB_API_KEY_UHDMOVIES = "439c478a771f35c05022f9feabcca01c"; // Public TMD
 // --- Caching Configuration ---
 const CACHE_ENABLED = process.env.DISABLE_CACHE !== 'true'; // Set to true to disable caching for this provider
 console.log(`[UHDMovies] Internal cache is ${CACHE_ENABLED ? 'enabled' : 'disabled'}.`);
-const CACHE_DIR = path.join(__dirname, '.cache', 'uhdmovies'); // Cache directory inside providers/uhdmovies
+const CACHE_DIR = process.env.VERCEL ? path.join('/tmp', '.uhd_cache') : path.join(__dirname, '.cache', 'uhdmovies'); // Cache directory inside providers/uhdmovies
 const CACHE_TTL = 4 * 60 * 60 * 1000; // 4 hours in milliseconds
 
 // --- Caching Helper Functions ---

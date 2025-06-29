@@ -11,7 +11,7 @@ const TMDB_API_KEY = process.env.TMDB_API_KEY || "439c478a771f35c05022f9feabcca0
 
 // --- Caching Configuration ---
 const CACHE_ENABLED = process.env.DISABLE_CACHE !== 'true';
-const CACHE_DIR = path.join(__dirname, '.cache', 'dramadrip');
+const CACHE_DIR = process.env.VERCEL ? path.join('/tmp', '.dramadrip_cache') : path.join(__dirname, '.cache', 'dramadrip');
 const CACHE_TTL = 4 * 60 * 60 * 1000; // 4 hours
 
 // --- Caching Helper Functions ---

@@ -17,7 +17,7 @@ const BASE_URL = 'https://moviesmod.chat';
 // --- Caching Configuration ---
 const CACHE_ENABLED = process.env.DISABLE_CACHE !== 'true';
 console.log(`[MoviesMod Cache] Internal cache is ${CACHE_ENABLED ? 'enabled' : 'disabled'}.`);
-const CACHE_DIR = path.join(__dirname, '.cache', 'moviesmod');
+const CACHE_DIR = process.env.VERCEL ? path.join('/tmp', '.moviesmod_cache') : path.join(__dirname, '.cache', 'moviesmod');
 const CACHE_TTL = 4 * 60 * 60 * 1000; // 4 hours in milliseconds
 
 // --- Caching Helper Functions ---

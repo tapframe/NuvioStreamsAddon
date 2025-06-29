@@ -435,7 +435,7 @@ async function resolveDriveleechLink(driveleechUrl) {
 
 // --- Caching Configuration ---
 const CACHE_ENABLED = process.env.DISABLE_CACHE !== 'true';
-const CACHE_DIR = path.join(__dirname, '.cache', 'topmovies');
+const CACHE_DIR = process.env.VERCEL ? path.join('/tmp', '.topmovies_cache') : path.join(__dirname, '.cache', 'topmovies');
 const CACHE_TTL = 4 * 60 * 60 * 1000; // 4 hours
 
 // --- Caching Helper Functions ---
