@@ -800,6 +800,7 @@ function parseSize(sizeString) {
 // New function to resolve the tech.unblockedgames.world links
 async function resolveSidToDriveleech(sidUrl) {
   console.log(`[UHDMovies] Resolving SID link: ${sidUrl}`);
+  const { origin } = new URL(sidUrl);
   const jar = new CookieJar();
   const session = wrapper(axios.create({
     jar,
@@ -876,13 +877,13 @@ async function resolveSidToDriveleech(sidUrl) {
       return null;
     }
     
-    const finalUrl = new URL(finalLinkPath, 'https://tech.unblockedgames.world').href;
+    const finalUrl = new URL(finalLinkPath, origin).href;
     console.log(`  [SID] Dynamic link found: ${finalUrl}`);
     console.log(`  [SID] Dynamic cookie found: ${cookieName}`);
 
     // Step 5: Set cookie and make final request
     console.log("  [SID] Step 5: Setting cookie and making final request...");
-    await jar.setCookie(`${cookieName}=${cookieValue}`, 'https://tech.unblockedgames.world');
+    await jar.setCookie(`${cookieName}=${cookieValue}`, origin);
     
     const finalResponse = await session.get(finalUrl, {
       headers: { 'Referer': responseStep2.request.res.responseUrl }
@@ -1005,12 +1006,15 @@ async function getUHDMoviesStreams(tmdbId, mediaType = 'movie', season = null, e
         // 6. Resolve all SID links to Driveleech links in parallel
         console.log(`[UHDMovies] Resolving ${downloadInfo.links.length} SID link(s)...`);
         const resolutionPromises = downloadInfo.links.map(async (linkInfo) => {
-            if (linkInfo.link && linkInfo.link.includes('tech.unblockedgames.world')) {
+            if (linkInfo.link && (linkInfo.link.includes('tech.unblockedgames.world') || linkInfo.link.includes('tech.creativeexpressionsblog.com'))) {
                 const driveleechUrl = await resolveSidToDriveleech(linkInfo.link);
                 if (driveleechUrl) {
                     // Return all necessary info for the final step and for caching
                     return { ...linkInfo, driveleechUrl };
                 }
+            } else if (linkInfo.link && (linkInfo.link.includes('driveseed.org') || linkInfo.link.includes('driveleech.net'))) {
+                // If it's already a direct driveseed/driveleech link, pass it through
+                return { ...linkInfo, driveleechUrl: linkInfo.link };
             }
             return null;
         });
