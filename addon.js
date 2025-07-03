@@ -138,7 +138,7 @@ console.log(`[addon.js] DramaDrip provider fetching enabled: ${ENABLE_DRAMADRIP_
 
 // NEW: Stream caching config
 const STREAM_CACHE_DIR = process.env.VERCEL ? path.join('/tmp', '.streams_cache') : path.join(__dirname, '.streams_cache');
-const STREAM_CACHE_TTL_MS = 9 * 60 * 1000; // 9 minutes
+const STREAM_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
 const ENABLE_STREAM_CACHE = process.env.DISABLE_STREAM_CACHE !== 'true'; // Enabled by default
 console.log(`[addon.js] Stream links caching ${ENABLE_STREAM_CACHE ? 'enabled' : 'disabled'}`);
 console.log(`[addon.js] Redis caching ${redis ? 'available' : 'not available'}`);

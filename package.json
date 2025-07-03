@@ -22,6 +22,7 @@
     "puppeteer": "^24.11.0",
     "redis": "^5.5.5",
     "stremio-addon-sdk": "^1.6.10",
+    "string-similarity": "^4.0.4",
     "tough-cookie": "^5.1.2",
     "ttl-cache": "^1.0.2",
     "yargs": "^17.7.2"

@@ -11,6 +11,11 @@ const { wrapper } = require('axios-cookiejar-support');
 const { URLSearchParams, URL } = require('url');
 const fs = require('fs').promises;
 const path = require('path');
+const { findBestMatch } = require('string-similarity');
+
+function escapeRegExp(string) {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // $& means the whole matched string
+}
 
 // --- Domain Fetching ---
 let moviesModDomain = 'https://moviesmod.chat'; // Fallback domain
@@ -756,14 +761,48 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
             const searchResults = await searchMoviesMod(title);
             if (searchResults.length === 0) throw new Error(`No search results found for "${title}"`);
 
+            // --- NEW: Use string similarity to find the best match ---
+            const titles = searchResults.map(r => r.title);
+            const bestMatch = findBestMatch(title, titles);
+            
+            console.log(`[MoviesMod] Best match for "${title}" is "${bestMatch.bestMatch.target}" with a rating of ${bestMatch.bestMatch.rating.toFixed(2)}`);
+
             let selectedResult = null;
-            if (mediaType === 'tv' || mediaType === 'series') {
-                selectedResult = searchResults.find(r => r.title.toLowerCase().includes(title.toLowerCase()) && r.title.toLowerCase().includes('season') && !r.title.toLowerCase().includes('challenge') && !r.title.toLowerCase().includes('conversation'));
-            } else if (mediaType === 'movie' && year) {
-                selectedResult = searchResults.find(r => r.title.toLowerCase().includes(title.toLowerCase()) && r.title.includes(year));
+            // Set a minimum similarity threshold (e.g., 0.3) to avoid obviously wrong matches
+            if (bestMatch.bestMatch.rating > 0.3) {
+                selectedResult = searchResults[bestMatch.bestMatchIndex];
+
+                // Additional check for year if it's a movie
+                if (mediaType === 'movie' && year) {
+                    if (!selectedResult.title.includes(year)) {
+                        console.warn(`[MoviesMod] Title match found, but year mismatch. Matched: "${selectedResult.title}", Expected year: ${year}. Discarding match.`);
+                        selectedResult = null; // Discard if year doesn't match
+                    }
+                }
             }
-            if (!selectedResult) selectedResult = searchResults.find(r => r.title.toLowerCase().includes(title.toLowerCase()) && !r.title.toLowerCase().includes('challenge') && !r.title.toLowerCase().includes('conversation')) || searchResults[0];
-            if (!selectedResult) throw new Error(`No suitable search result found for "${title}"`);
+            
+            if (!selectedResult) {
+                // If no good match is found, try a stricter direct search using regex with word boundaries
+                console.log('[MoviesMod] Similarity match failed or was below threshold. Trying stricter name/year search with word boundaries...');
+                const titleRegex = new RegExp(`\\b${escapeRegExp(title.toLowerCase())}\\b`);
+
+                if (mediaType === 'movie') {
+                    selectedResult = searchResults.find(r => 
+                        titleRegex.test(r.title.toLowerCase()) &&
+                        (!year || r.title.includes(year))
+                    );
+                } else { // for 'tv'
+                    // For TV, be more lenient on year, but check for title and 'season' keyword.
+                    selectedResult = searchResults.find(r => 
+                        titleRegex.test(r.title.toLowerCase()) &&
+                        r.title.toLowerCase().includes('season')
+                    );
+                }
+            }
+
+            if (!selectedResult) {
+                throw new Error(`No suitable search result found for "${title} (${year})". Best similarity match was too low or failed year check.`);
+            }
             
             console.log(`[MoviesMod] Selected: ${selectedResult.title}`);
             const downloadLinks = await extractDownloadLinks(selectedResult.url);

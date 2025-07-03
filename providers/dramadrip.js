@@ -6,8 +6,13 @@ const { wrapper } = require('axios-cookiejar-support');
 const { URLSearchParams, URL } = require('url');
 const fs = require('fs').promises;
 const path = require('path');
+const { findBestMatch } = require('string-similarity');
 
 const TMDB_API_KEY = process.env.TMDB_API_KEY || "439c478a771f35c05022f9feabcca01c";
+
+function escapeRegExp(string) {
+  return string.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&'); // $& means the whole matched string
+}
 
 // --- Domain Fetching ---
 let dramaDripDomain = 'https://dramadrip.com'; // Fallback domain
@@ -497,12 +502,54 @@ async function getDramaDripStreams(tmdbId, mediaType, seasonNum, episodeNum) {
 
             console.log(`[DramaDrip] Searching for: "${title}" (${year})`);
             const searchResults = await searchDramaDrip(title);
-            if (searchResults.length === 0) return [];
+            if (searchResults.length === 0) throw new Error(`No search results found for "${title}"`);
+
+            // --- NEW: Use string similarity to find the best match ---
+            const titles = searchResults.map(r => r.title);
+            const bestMatch = findBestMatch(title, titles);
+            
+            console.log(`[DramaDrip] Best match for "${title}" is "${bestMatch.bestMatch.target}" with a rating of ${bestMatch.bestMatch.rating.toFixed(2)}`);
+
+            let selectedResult = null;
+            // Set a minimum confidence threshold
+            if (bestMatch.bestMatch.rating > 0.3) {
+                const bestResult = searchResults[bestMatch.bestMatchIndex];
+                // For movies, double-check the year if available
+                if (mediaType === 'movie' && year && bestResult.year && bestResult.year !== year) {
+                     console.log(`[DramaDrip] Similarity match found, but year (${bestResult.year}) does not match expected year (${year}). Rejecting.`);
+                } else {
+                    selectedResult = bestResult;
+                }
+            }
+
+            // --- FALLBACK: If similarity check fails, use a stricter regex search ---
+            if (!selectedResult) {
+                console.log(`[DramaDrip] Similarity match failed or was rejected. Falling back to stricter regex search.`);
+                const cleanedTitle = escapeRegExp(title.toLowerCase());
+                const titleRegex = new RegExp(`\\b${cleanedTitle}\\b`, 'i');
+
+                selectedResult = searchResults.find(r => {
+                    const lowerCaseResultTitle = r.title.toLowerCase();
+                    if (!titleRegex.test(lowerCaseResultTitle)) return false;
+                    
+                    if (mediaType === 'movie' && year && r.year) {
+                        return r.year === year;
+                    } else if (mediaType === 'tv') {
+                        // For TV shows, just matching the title is usually enough,
+                        // as they often appear as "Show Title Season 1-3" etc.
+                        return lowerCaseResultTitle.includes('season');
+                    }
+                    return true; // For movies without a year to check
+                });
+            }
+
+            if (!selectedResult) {
+                console.log(`[DramaDrip] All matching attempts failed for "${title}" (${year})`);
+                return [];
+            }
     
-            const matchingResult = searchResults.find(r => r.title.toLowerCase().includes(title.toLowerCase()));
-            if (!matchingResult) return [];
-    
-            const extractedContent = await extractDramaDripLinks(matchingResult.url);
+            console.log(`[DramaDrip] Selected result: "${selectedResult.title}" (${selectedResult.url})`);
+            const extractedContent = await extractDramaDripLinks(selectedResult.url);
             if(!extractedContent) return [];
 
             let qualitiesToResolve = [];
@@ -519,7 +566,7 @@ async function getDramaDripStreams(tmdbId, mediaType, seasonNum, episodeNum) {
 
             // 3. Resolve to intermediate links (episodes or servers)
             const resolutionPromises = qualitiesToResolve.map(async (quality) => {
-                const intermediateResult = await resolveCinemaKitOrModproLink(quality.url, matchingResult.url);
+                const intermediateResult = await resolveCinemaKitOrModproLink(quality.url, selectedResult.url);
                 if (intermediateResult) {
                     return { ...quality, intermediateResult };
                 }
