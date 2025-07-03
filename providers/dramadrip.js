@@ -9,6 +9,33 @@ const path = require('path');
 
 const TMDB_API_KEY = process.env.TMDB_API_KEY || "439c478a771f35c05022f9feabcca01c";
 
+// --- Domain Fetching ---
+let dramaDripDomain = 'https://dramadrip.com'; // Fallback domain
+let domainCacheTimestamp = 0;
+const DOMAIN_CACHE_TTL = 4 * 60 * 60 * 1000; // 4 hours
+
+async function getDramaDripDomain() {
+    const now = Date.now();
+    if (now - domainCacheTimestamp < DOMAIN_CACHE_TTL) {
+        return dramaDripDomain;
+    }
+
+    try {
+        console.log('[DramaDrip] Fetching latest domain...');
+        const response = await axios.get('https://raw.githubusercontent.com/phisher98/TVVVV/refs/heads/main/domains.json', { timeout: 10000 });
+        if (response.data && response.data.dramadrip) {
+            dramaDripDomain = response.data.dramadrip;
+            domainCacheTimestamp = now;
+            console.log(`[DramaDrip] Updated domain to: ${dramaDripDomain}`);
+        } else {
+            console.warn('[DramaDrip] Domain JSON fetched, but "dramadrip" key was not found. Using fallback.');
+        }
+    } catch (error) {
+        console.error(`[DramaDrip] Failed to fetch latest domain, using fallback. Error: ${error.message}`);
+    }
+    return dramaDripDomain;
+}
+
 // --- Caching Configuration ---
 const CACHE_ENABLED = process.env.DISABLE_CACHE !== 'true';
 const CACHE_DIR = process.env.VERCEL ? path.join('/tmp', '.dramadrip_cache') : path.join(__dirname, '.cache', 'dramadrip');
@@ -86,7 +113,8 @@ function parseSize(sizeString) {
 // Search function for dramadrip.com
 async function searchDramaDrip(query) {
     try {
-        const searchUrl = `https://dramadrip.com/?s=${encodeURIComponent(query)}`;
+        const baseUrl = await getDramaDripDomain();
+        const searchUrl = `${baseUrl}/?s=${encodeURIComponent(query)}`;
         console.log(`[DramaDrip] Searching for: "${query}"`);
         const { data } = await axios.get(searchUrl);
         const $ = cheerio.load(data);
@@ -381,6 +409,32 @@ async function resolveDriveseedLink(driveseedUrl) {
     }
 }
 
+// Validate if a video URL is working (not 404 or broken)
+async function validateVideoUrl(url, timeout = 10000) {
+    try {
+        console.log(`[DramaDrip] Validating URL: ${url.substring(0, 100)}...`);
+        const response = await axios.head(url, {
+            timeout,
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Range': 'bytes=0-1' // Just request first byte to test
+            }
+        });
+        
+        // Check if status is OK (200-299) or partial content (206)
+        if (response.status >= 200 && response.status < 400) {
+            console.log(`[DramaDrip] ✓ URL validation successful (${response.status})`);
+            return true;
+        } else {
+            console.log(`[DramaDrip] ✗ URL validation failed with status: ${response.status}`);
+            return false;
+        }
+    } catch (error) {
+        console.log(`[DramaDrip] ✗ URL validation failed: ${error.message}`);
+        return false;
+    }
+}
+
 // Resolves the final download link from the selected method
 async function resolveFinalLink(downloadOption) {
     try {
@@ -515,22 +569,40 @@ async function getDramaDripStreams(tmdbId, mediaType, seasonNum, episodeNum) {
 
                 const { downloadOptions, title: fileTitle, size: fileSize } = downloadInfo;
 
+                // Try each download method in order until we find a working one
                 const preferredOrder = ['resume', 'worker', 'instant'];
                 for (const type of preferredOrder) {
-                    const method = downloadOptions.find(opt => opt.type === type);
-                    if (method) {
-                        const finalLink = await resolveFinalLink(method);
-                        if (finalLink) {
-                            return {
-                                name: `DramaDrip - ${linkInfo.quality.split('(')[0].trim()}`,
-                                title: `${fileTitle || "Unknown Title"}\n${fileSize || 'Unknown Size'}`,
-                                url: finalLink,
-                                quality: linkInfo.quality,
-                                size: fileSize || '0'
-                            };
+                    try {
+                        const method = downloadOptions.find(opt => opt.type === type);
+                        if (method) {
+                            console.log(`[DramaDrip] Trying ${method.title} for ${linkInfo.quality}...`);
+                            const finalLink = await resolveFinalLink(method);
+                            
+                            if (finalLink) {
+                                // Validate the URL before using it
+                                const isValid = await validateVideoUrl(finalLink);
+                                if (isValid) {
+                                    console.log(`[DramaDrip] ✓ Successfully resolved ${linkInfo.quality} using ${method.title}`);
+                                    return {
+                                        name: `DramaDrip - ${linkInfo.quality.split('(')[0].trim()}`,
+                                        title: `${fileTitle || "Unknown Title"}\n${fileSize || 'Unknown Size'}`,
+                                        url: finalLink,
+                                        quality: linkInfo.quality,
+                                        size: fileSize || '0'
+                                    };
+                                } else {
+                                    console.log(`[DramaDrip] ✗ ${method.title} returned invalid/broken URL, trying next method...`);
+                                }
+                            } else {
+                                console.log(`[DramaDrip] ✗ ${method.title} failed to resolve URL, trying next method...`);
+                            }
                         }
+                    } catch (error) {
+                        console.log(`[DramaDrip] ✗ ${type} method threw error: ${error.message}, trying next method...`);
                     }
                 }
+                
+                console.log(`[DramaDrip] ✗ All download methods failed for ${linkInfo.quality}`);
                 return null;
             } catch (e) {
                 console.error(`[DramaDrip] Error in stream promise: ${e.message}`);

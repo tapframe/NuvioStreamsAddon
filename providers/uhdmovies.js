@@ -7,8 +7,34 @@ const { wrapper } = require('axios-cookiejar-support');
 const fs = require('fs').promises;
 const path = require('path');
 
+// --- Domain Fetching ---
+let uhdMoviesDomain = 'https://uhdmovies.email'; // Fallback domain
+let domainCacheTimestamp = 0;
+const DOMAIN_CACHE_TTL = 4 * 60 * 60 * 1000; // 4 hours
+
+async function getUHDMoviesDomain() {
+    const now = Date.now();
+    if (now - domainCacheTimestamp < DOMAIN_CACHE_TTL) {
+        return uhdMoviesDomain;
+    }
+
+    try {
+        console.log('[UHDMovies] Fetching latest domain...');
+        const response = await axios.get('https://raw.githubusercontent.com/phisher98/TVVVV/refs/heads/main/domains.json', { timeout: 10000 });
+        if (response.data && response.data.UHDMovies) {
+            uhdMoviesDomain = response.data.UHDMovies;
+            domainCacheTimestamp = now;
+            console.log(`[UHDMovies] Updated domain to: ${uhdMoviesDomain}`);
+        } else {
+            console.warn('[UHDMovies] Domain JSON fetched, but "UHDMovies" key was not found. Using fallback.');
+        }
+    } catch (error) {
+        console.error(`[UHDMovies] Failed to fetch latest domain, using fallback. Error: ${error.message}`);
+    }
+    return uhdMoviesDomain;
+}
+
 // Constants
-const BASE_URL = 'https://uhdmovies.email';
 const TMDB_API_KEY_UHDMOVIES = "439c478a771f35c05022f9feabcca01c"; // Public TMDB API key
 
 // --- Caching Configuration ---
@@ -93,8 +119,9 @@ const uhdMoviesCache = {
 // Function to search for movies
 async function searchMovies(query) {
   try {
+    const baseUrl = await getUHDMoviesDomain();
     console.log(`[UHDMovies] Searching for: ${query}`);
-    const searchUrl = `${BASE_URL}/search/${encodeURIComponent(query)}`;
+    const searchUrl = `${baseUrl}/search/${encodeURIComponent(query)}`;
     
     const response = await axiosInstance.get(searchUrl);
     const $ = cheerio.load(response.data);
@@ -112,7 +139,7 @@ async function searchMovies(query) {
         if (link && title && !searchResults.some(item => item.link === link)) {
           searchResults.push({
             title,
-            link: link.startsWith('http') ? link : `${BASE_URL}${link}`
+            link: link.startsWith('http') ? link : `${baseUrl}${link}`
           });
         }
       }
@@ -129,7 +156,7 @@ async function searchMovies(query) {
              if(title){
                 searchResults.push({
                     title,
-                    link: link.startsWith('http') ? link : `${BASE_URL}${link}`
+                    link: link.startsWith('http') ? link : `${baseUrl}${link}`
                 });
              }
           }
@@ -614,6 +641,31 @@ async function tryResumeCloud($) {
   }
 }
 
+// Validate if a video URL is working (not 404 or broken)
+async function validateVideoUrl(url, timeout = 10000) {
+    try {
+        console.log(`[UHDMovies] Validating URL: ${url.substring(0, 100)}...`);
+        const response = await axiosInstance.head(url, {
+            timeout,
+            headers: {
+                'Range': 'bytes=0-1' // Just request first byte to test
+            }
+        });
+        
+        // Check if status is OK (200-299) or partial content (206)
+        if (response.status >= 200 && response.status < 400) {
+            console.log(`[UHDMovies] ✓ URL validation successful (${response.status})`);
+            return true;
+        } else {
+            console.log(`[UHDMovies] ✗ URL validation failed with status: ${response.status}`);
+            return false;
+        }
+    } catch (error) {
+        console.log(`[UHDMovies] ✗ URL validation failed: ${error.message}`);
+        return false;
+    }
+}
+
 // Function to follow redirect links and get the final download URL with size info
 async function getFinalLink(redirectUrl) {
   try {
@@ -650,16 +702,35 @@ async function getFinalLink(redirectUrl) {
         fileName = nameElement.replace('Name :', '').trim();
     }
 
-    // Try Resume Cloud first
-    let finalUrl = await tryResumeCloud($);
-    if (finalUrl) return { url: finalUrl, size: sizeInfo, fileName: fileName };
-    
-    // Fallback to Instant Download
-    console.log('[UHDMovies] "Resume Cloud" failed, trying "Instant Download" fallback.');
-    finalUrl = await tryInstantDownload($);
-    if (finalUrl) return { url: finalUrl, size: sizeInfo, fileName: fileName };
+    // Try each download method in order until we find a working one
+    const downloadMethods = [
+        { name: 'Resume Cloud', func: tryResumeCloud },
+        { name: 'Instant Download', func: tryInstantDownload }
+    ];
 
-    console.log('[UHDMovies] Both "Resume Cloud" and "Instant Download" methods failed.');
+    for (const method of downloadMethods) {
+        try {
+            console.log(`[UHDMovies] Trying ${method.name}...`);
+            const finalUrl = await method.func($);
+            
+            if (finalUrl) {
+                // Validate the URL before using it
+                const isValid = await validateVideoUrl(finalUrl);
+                if (isValid) {
+                    console.log(`[UHDMovies] ✓ Successfully resolved using ${method.name}`);
+                    return { url: finalUrl, size: sizeInfo, fileName: fileName };
+                } else {
+                    console.log(`[UHDMovies] ✗ ${method.name} returned invalid/broken URL, trying next method...`);
+                }
+            } else {
+                console.log(`[UHDMovies] ✗ ${method.name} failed to resolve URL, trying next method...`);
+            }
+        } catch (error) {
+            console.log(`[UHDMovies] ✗ ${method.name} threw error: ${error.message}, trying next method...`);
+        }
+    }
+
+    console.log('[UHDMovies] ✗ All download methods failed.');
     return null;
 
   } catch (error) {

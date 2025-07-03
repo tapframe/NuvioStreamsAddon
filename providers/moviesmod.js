@@ -12,7 +12,32 @@ const { URLSearchParams, URL } = require('url');
 const fs = require('fs').promises;
 const path = require('path');
 
-const BASE_URL = 'https://moviesmod.chat';
+// --- Domain Fetching ---
+let moviesModDomain = 'https://moviesmod.chat'; // Fallback domain
+let domainCacheTimestamp = 0;
+const DOMAIN_CACHE_TTL = 4 * 60 * 60 * 1000; // 4 hours
+
+async function getMoviesModDomain() {
+    const now = Date.now();
+    if (now - domainCacheTimestamp < DOMAIN_CACHE_TTL) {
+        return moviesModDomain;
+    }
+
+    try {
+        console.log('[MoviesMod] Fetching latest domain...');
+        const response = await axios.get('https://raw.githubusercontent.com/phisher98/TVVVV/refs/heads/main/domains.json', { timeout: 10000 });
+        if (response.data && response.data.moviesmod) {
+            moviesModDomain = response.data.moviesmod;
+            domainCacheTimestamp = now;
+            console.log(`[MoviesMod] Updated domain to: ${moviesModDomain}`);
+        } else {
+            console.warn('[MoviesMod] Domain JSON fetched, but "moviesmod" key was not found. Using fallback.');
+        }
+    } catch (error) {
+        console.error(`[MoviesMod] Failed to fetch latest domain, using fallback. Error: ${error.message}`);
+    }
+    return moviesModDomain;
+}
 
 // --- Caching Configuration ---
 const CACHE_ENABLED = process.env.DISABLE_CACHE !== 'true';
@@ -110,7 +135,8 @@ function getTechDetails(qualityString) {
 // Search for content on MoviesMod
 async function searchMoviesMod(query) {
     try {
-        const searchUrl = `${BASE_URL}/?s=${encodeURIComponent(query)}`;
+        const baseUrl = await getMoviesModDomain();
+        const searchUrl = `${baseUrl}/?s=${encodeURIComponent(query)}`;
         const { data } = await axios.get(searchUrl);
         const $ = cheerio.load(data);
 
@@ -676,6 +702,32 @@ async function resolveVideoSeedLink(videoSeedUrl) {
     }
 }
 
+// Validate if a video URL is working (not 404 or broken)
+async function validateVideoUrl(url, timeout = 10000) {
+    try {
+        console.log(`[MoviesMod] Validating URL: ${url.substring(0, 100)}...`);
+        const response = await axios.head(url, {
+            timeout,
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Range': 'bytes=0-1' // Just request first byte to test
+            }
+        });
+        
+        // Check if status is OK (200-299) or partial content (206)
+        if (response.status >= 200 && response.status < 400) {
+            console.log(`[MoviesMod] ✓ URL validation successful (${response.status})`);
+            return true;
+        } else {
+            console.log(`[MoviesMod] ✗ URL validation failed with status: ${response.status}`);
+            return false;
+        }
+    } catch (error) {
+        console.log(`[MoviesMod] ✗ URL validation failed: ${error.message}`);
+        return false;
+    }
+}
+
 // Main function to get streams for TMDB content
 async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeNum = null) {
     try {
@@ -793,21 +845,43 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
 
                         if (!downloadOptions || downloadOptions.length === 0) return null;
 
-                        const methodPromises = downloadOptions.map(async (option) => {
+                        // Try each download method in order of priority until we find a working one
+                        let selectedResult = null;
+                        for (const option of downloadOptions) {
+                            try {
+                                console.log(`[MoviesMod] Trying ${option.title} for ${quality}...`);
                                 let finalDownloadUrl = null;
-                        if (option.type === 'resume') finalDownloadUrl = await resolveResumeCloudLink(option.url);
-                        else if (option.type === 'worker') finalDownloadUrl = await resolveWorkerSeedLink(option.url);
-                        else if (option.type === 'instant') finalDownloadUrl = await resolveVideoSeedLink(option.url);
+                                
+                                if (option.type === 'resume') {
+                                    finalDownloadUrl = await resolveResumeCloudLink(option.url);
+                                } else if (option.type === 'worker') {
+                                    finalDownloadUrl = await resolveWorkerSeedLink(option.url);
+                                } else if (option.type === 'instant') {
+                                    finalDownloadUrl = await resolveVideoSeedLink(option.url);
+                                }
+                                
+                                if (finalDownloadUrl) {
+                                    // Validate the URL before using it
+                                    const isValid = await validateVideoUrl(finalDownloadUrl);
+                                    if (isValid) {
+                                        selectedResult = { url: finalDownloadUrl, method: option.title };
+                                        console.log(`[MoviesMod] ✓ Successfully resolved ${quality} using ${option.title}`);
+                                        break; // Found working URL, stop trying other methods
+                                    } else {
+                                        console.log(`[MoviesMod] ✗ ${option.title} returned invalid/broken URL, trying next method...`);
+                                    }
+                                } else {
+                                    console.log(`[MoviesMod] ✗ ${option.title} failed to resolve URL, trying next method...`);
+                                }
+                            } catch (error) {
+                                console.log(`[MoviesMod] ✗ ${option.title} threw error: ${error.message}, trying next method...`);
+                            }
+                        }
                         
-                        if (finalDownloadUrl) return { url: finalDownloadUrl, method: option.title };
+                        if (!selectedResult) {
+                            console.log(`[MoviesMod] ✗ All download methods failed for ${quality}`);
                             return null;
-                        });
-                        
-                        const methodResults = (await Promise.all(methodPromises)).filter(Boolean);
-                        if (methodResults.length === 0) return null;
-
-                        const selectedResult = methodResults[0]; // Already sorted by priority
-                        console.log(`[MoviesMod] Successfully resolved ${quality} using ${selectedResult.method}`);
+                        }
                         
                         let actualQuality = extractQuality(quality);
                         const sizeInfo = driveseedSize || quality.match(/\[([^\]]+)\]/)?.[1];
