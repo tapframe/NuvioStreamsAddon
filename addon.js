@@ -120,6 +120,10 @@ console.log(`[addon.js] HiAnime provider fetching enabled: ${ENABLE_HIANIME_PROV
 const ENABLE_UHDMOVIES_PROVIDER = process.env.ENABLE_UHDMOVIES_PROVIDER !== 'false'; // Defaults to true if not set or not 'false'
 console.log(`[addon.js] UHDMovies provider fetching enabled: ${ENABLE_UHDMOVIES_PROVIDER}`);
 
+// NEW: Read environment variable for AnimePahe
+const ENABLE_ANIMEPAHE_PROVIDER = process.env.ENABLE_ANIMEPAHE_PROVIDER !== 'false'; // Defaults to true if not set or not 'false'
+console.log(`[addon.js] AnimePahe provider fetching enabled: ${ENABLE_ANIMEPAHE_PROVIDER}`);
+
 // NEW: Read environment variable for MoviesMod
 const ENABLE_MOVIESMOD_PROVIDER = process.env.ENABLE_MOVIESMOD_PROVIDER !== 'false'; // Defaults to true if not set or not 'false'
 console.log(`[addon.js] MoviesMod provider fetching enabled: ${ENABLE_MOVIESMOD_PROVIDER}`);
@@ -155,6 +159,7 @@ const { getUHDMoviesStreams } = require('./providers/uhdmovies.js'); // NEW: Imp
 const { getMoviesModStreams } = require('./providers/moviesmod.js'); // NEW: Import from moviesmod.js
 const { getTopMoviesStreams } = require('./providers/topmovies.js'); // NEW: Import from topmovies.js
 const { getDramaDripStreams } = require('./providers/dramadrip.js'); // NEW: Import from dramadrip.js
+const { getAnimePaheStreams } = require('./providers/animepahe.js'); // NEW: Import from animepahe.js
 
 // --- Analytics Configuration ---
 const GA_MEASUREMENT_ID = process.env.GA_MEASUREMENT_ID;
@@ -765,6 +770,7 @@ builder.defineStreamHandler(async (args) => {
 
     let movieOrSeriesTitle = initialTitleFromConversion;
     let movieOrSeriesYear = null;
+    let seasonTitle = null;
 
     if (tmdbId && TMDB_API_KEY) {
         try {
@@ -788,6 +794,22 @@ builder.defineStreamHandler(async (args) => {
                 movieOrSeriesYear = tmdbDetails.first_air_date ? tmdbDetails.first_air_date.substring(0, 4) : null;
             }
             console.log(`  Fetched/Confirmed TMDB details: Title='${movieOrSeriesTitle}', Year='${movieOrSeriesYear}'`);
+
+            // NEW: Fetch season-specific title for TV shows
+            if (tmdbTypeFromId === 'tv' && seasonNum) {
+                const seasonDetailsUrl = `${TMDB_API_URL}/tv/${tmdbId}/season/${seasonNum}?api_key=${TMDB_API_KEY}&language=en-US`;
+                console.log(`Fetching season details from TMDB: ${seasonDetailsUrl}`);
+                try {
+                    const seasonDetailsResponse = await fetchWithRetry(seasonDetailsUrl, {});
+                    if (seasonDetailsResponse.ok) {
+                        const seasonDetails = await seasonDetailsResponse.json();
+                        seasonTitle = seasonDetails.name;
+                        console.log(`  Fetched season title: "${seasonTitle}"`);
+                    }
+                } catch (e) {
+                    console.warn(`Could not fetch season-specific title: ${e.message}`);
+                }
+            }
 
             // Check for Animation genre
             if (tmdbDetails.genres && Array.isArray(tmdbDetails.genres)) {
@@ -1438,6 +1460,55 @@ builder.defineStreamHandler(async (args) => {
                 await saveStreamToCache('dramadrip', tmdbTypeFromId, tmdbId, [], 'failed', seasonNum, episodeNum);
                 return [];
             }
+        },
+
+        // AnimePahe provider with cache integration
+        animepahe: async () => {
+            if (!ENABLE_ANIMEPAHE_PROVIDER) {
+                console.log('[AnimePahe] Skipping fetch: Disabled by environment variable.');
+                return [];
+            }
+            if (!shouldFetch('animepahe') || !movieOrSeriesTitle || !movieOrSeriesYear) {
+                if (!shouldFetch('animepahe')) console.log('[AnimePahe] Skipping fetch: Not selected by user.');
+                else console.log('[AnimePahe] Skipping fetch: Missing title or year data.');
+                return [];
+            }
+
+            const ANIMEPAHE_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+
+            // Try to get cached streams first
+            const cachedStreams = await getStreamFromCache('animepahe', tmdbTypeFromId, tmdbId, seasonNum, episodeNum);
+            if (cachedStreams) {
+                console.log(`[AnimePahe] Using ${cachedStreams.length} streams from cache.`);
+                return cachedStreams.map(stream => ({ ...stream, provider: 'AnimePahe' }));
+            }
+
+            // No cache or expired, fetch fresh
+            try {
+                console.log(`[AnimePahe] Fetching new streams...`);
+        // Read the ANIMEPAHE_USE_PROXY environment variable
+                const useAnimePaheProxy = process.env.ANIMEPAHE_USE_PROXY !== 'false';
+                console.log(`[AnimePahe] Proxy usage: ${useAnimePaheProxy}`);
+
+                const streams = await getAnimePaheStreams(tmdbId, movieOrSeriesTitle, tmdbTypeFromId, seasonNum, episodeNum, seasonTitle);
+
+                if (streams && streams.length > 0) {
+                    console.log(`[AnimePahe] Successfully fetched ${streams.length} streams.`);
+                    // Save to cache with custom 10-day TTL
+                    await saveStreamToCache('animepahe', tmdbTypeFromId, tmdbId, streams, 'ok', seasonNum, episodeNum, null, null, ANIMEPAHE_CACHE_TTL_MS);
+                    return streams.map(stream => ({ ...stream, provider: 'AnimePahe' }));
+                } else {
+                    console.log(`[AnimePahe] No streams returned.`);
+                    // Save empty result with default (shorter) TTL for quick retry
+                    await saveStreamToCache('animepahe', tmdbTypeFromId, tmdbId, [], 'failed', seasonNum, episodeNum);
+                    return [];
+                }
+            } catch (err) {
+                console.error(`[AnimePahe] Error fetching streams:`, err.message);
+                // Save error status to cache with default (shorter) TTL for quick retry
+                await saveStreamToCache('animepahe', tmdbTypeFromId, tmdbId, [], 'failed', seasonNum, episodeNum);
+                return [];
+            }
         }
     };
 
@@ -1459,7 +1530,8 @@ builder.defineStreamHandler(async (args) => {
             timeProvider('UHDMovies', providerFetchFunctions.uhdmovies()), 
             timeProvider('MoviesMod', providerFetchFunctions.moviesmod()),
             timeProvider('TopMovies', providerFetchFunctions.topmovies()),
-            timeProvider('DramaDrip', providerFetchFunctions.dramadrip())
+            timeProvider('DramaDrip', providerFetchFunctions.dramadrip()),
+            timeProvider('AnimePahe', providerFetchFunctions.animepahe())
         ]);
         
         // Process results into streamsByProvider object
@@ -1476,7 +1548,8 @@ builder.defineStreamHandler(async (args) => {
             'UHDMovies': ENABLE_UHDMOVIES_PROVIDER && shouldFetch('uhdmovies') ? filterStreamsByQuality(providerResults[9], minQualitiesPreferences.uhdmovies, 'UHDMovies') : [], // NEW: Add UHDMovies provider
             'MoviesMod': ENABLE_MOVIESMOD_PROVIDER && shouldFetch('moviesmod') ? filterStreamsByQuality(providerResults[10], minQualitiesPreferences.moviesmod, 'MoviesMod') : [], // NEW: Add MoviesMod provider
             'TopMovies': ENABLE_TOPMOVIES_PROVIDER && shouldFetch('topmovies') ? filterStreamsByQuality(providerResults[11], minQualitiesPreferences.topmovies, 'TopMovies') : [], 
-            'DramaDrip': ENABLE_DRAMADRIP_PROVIDER && shouldFetch('dramadrip') ? filterStreamsByQuality(providerResults[12], minQualitiesPreferences.dramadrip, 'DramaDrip') : []
+            'DramaDrip': ENABLE_DRAMADRIP_PROVIDER && shouldFetch('dramadrip') ? filterStreamsByQuality(providerResults[12], minQualitiesPreferences.dramadrip, 'DramaDrip') : [],
+            'AnimePahe': ENABLE_ANIMEPAHE_PROVIDER && shouldFetch('animepahe') ? filterStreamsByQuality(providerResults[13], minQualitiesPreferences.animepahe, 'AnimePahe') : []
         };
 
         // Sort streams for each provider by size, then quality
@@ -1496,7 +1569,7 @@ builder.defineStreamHandler(async (args) => {
 
         // Combine streams in the preferred provider order
         combinedRawStreams = [];
-        const providerOrder = ['ShowBox', 'UHDMovies', 'MoviesMod', 'TopMovies', 'DramaDrip', 'Hianime', 'Xprime.tv', 'HollyMovieHD', 'Soaper TV', 'VidZee', 'MP4Hydra', 'Cuevana', 'VidSrc'];
+        const providerOrder = ['ShowBox', 'UHDMovies', 'MoviesMod', 'TopMovies', 'DramaDrip', 'Hianime', 'Xprime.tv', 'HollyMovieHD', 'Soaper TV', 'VidZee', 'MP4Hydra', 'Cuevana', 'VidSrc', 'AnimePahe'];
         providerOrder.forEach(providerKey => {
             if (streamsByProvider[providerKey] && streamsByProvider[providerKey].length > 0) {
                 combinedRawStreams.push(...streamsByProvider[providerKey]);
@@ -1619,6 +1692,8 @@ builder.defineStreamHandler(async (args) => {
             providerDisplayName = 'TopMovies';
         } else if (stream.provider === 'DramaDrip') {
             providerDisplayName = 'DramaDrip';
+        } else if (stream.provider === 'AnimePahe') {
+            providerDisplayName = 'AnimePahe';
         }
 
         let nameDisplay;
@@ -1671,6 +1746,13 @@ builder.defineStreamHandler(async (args) => {
                     notWebReady: true
                 }
             };
+        } else if (stream.provider === 'AnimePahe') {
+            // AnimePahe specific display (Quality is included in title from animepahe.js)
+            // So, we might just use the stream.title directly or format similarly to Cuevana if preferred
+            // For now, let's assume stream.title is already formatted as `AnimePahe CATEGORY - Quality`
+            nameDisplay = stream.title || `${providerDisplayName} - ${stream.quality || 'Auto'}`;
+            // If stream.title already includes providerDisplayName, we can simplify:
+            // nameDisplay = stream.title; 
         } else { // For other providers (ShowBox, Xprime, etc.)
             const qualityLabel = stream.quality || 'UNK';
             if (flagEmoji) {

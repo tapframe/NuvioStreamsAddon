@@ -1807,6 +1807,11 @@
                         <div class="provider-name">TopMovies</div>
                         <span class="provider-detail">Bollywood/indian contents</span>
                     </div>
+                    <div class="provider-item">
+                        <div class="provider-icon animepahe-icon" style="background: linear-gradient(135deg, #ff6b6b, #ff8e8e);">🍥</div>
+                        <div class="provider-name">AnimePahe</div>
+                        <span class="provider-detail">High-quality anime (SUB/DUB)</span>
+                    </div>
                 </div>
 
                 <div class="full-width disclaimer" style="margin-top: 1rem; padding-bottom: 0.5rem; text-align: center;">
@@ -1953,6 +1958,17 @@
                                 <label for="providerTopmovies" style="font-size: 0.9rem;">TopMovies <span style="font-size: 0.75rem; color: var(--text-light);">(~9.8s)</span> <span style="font-size: 0.75rem; color: #ff8c00;">Bollywood/Indian</span></label>
                             </div>
                              <select id="qualityTopmovies" name="providerQuality" data-provider="topmovies" class="provider-sort-select">
+                                <option value="all">All</option>
+                                <option value="720p">720p+</option>
+                                <option value="1080p">1080p+</option>
+                            </select>
+                        </div>
+                        <div class="provider-checkbox-item" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
+                            <div style="display: flex; align-items: center;">
+                                <input type="checkbox" id="providerAnimepahe" name="providerSelect" value="animepahe" checked="" style="margin-right: 0.5rem; accent-color: var(--primary);">
+                                <label for="providerAnimepahe" style="font-size: 0.9rem;">AnimePahe <span style="font-size: 0.75rem; color: var(--text-light);">(~7.5s)</span> <span style="font-size: 0.75rem; color: #ff6b6b;">Anime SUB/DUB</span></label>
+                            </div>
+                             <select id="qualityAnimepahe" name="providerQuality" data-provider="animepahe" class="provider-sort-select">
                                 <option value="all">All</option>
                                 <option value="720p">720p+</option>
                                 <option value="1080p">1080p+</option>
