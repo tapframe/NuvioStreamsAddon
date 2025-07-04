@@ -2698,8 +2698,31 @@
                     body: JSON.stringify({ cookie: cookieValue }),
                 });
 
+                if (response.status === 429) {
+                    // Handle 429 Too Many Requests specifically
+                    console.warn('Server returned 429 Too Many Requests during cookie validation');
+                    cookieStatusIndicator.className = 'cookie-status-indicator pending'; // Keep as pending to indicate special state
+                    if (setCookieBtn) {
+                         setCookieBtn.disabled = false; // Enable the button despite the error
+                         setCookieBtn.style.opacity = '1';
+                         setCookieBtn.style.cursor = 'pointer';
+                    }
+                    if (checkCookieBtn) checkCookieBtn.disabled = false; // Re-enable check button
+                    
+                    // Show special message for rate limiting
+                    toast.innerHTML = "Too many validation requests (429). <br><span style='color: #ffcc00;'>You can still apply this cookie without validation by clicking 'Set Cookie'.</span>";
+                    toast.classList.add('show');
+                    setTimeout(() => { toast.classList.remove('show'); }, 6000); // Longer timeout for this important message
+                    
+                    // Add a visual indicator that validation was skipped but can proceed
+                    cookieStatusIndicator.style.backgroundColor = '#ffcc00'; // Yellow warning color
+                    
+                    // We return a special value to indicate rate limiting
+                    return 'rate_limited';
+                }
+                
                 if (!response.ok) {
-                    // Handle HTTP errors (e.g., 500, 404)
+                    // Handle other HTTP errors (e.g., 500, 404)
                     const errorData = await response.json().catch(() => ({ message: 'Server error or invalid response' }));
                     console.error('Server error validating cookie:', response.status, errorData.message);
                     cookieStatusIndicator.className = 'cookie-status-indicator invalid';
@@ -2894,18 +2917,62 @@
 
                 // Perform server-side cookie validation before generating manifest
                 if (cookieValue) {
-                    const isValid = await checkCookieOnServer(cookieValue);
-                    if (!isValid) {
-                        toast.textContent = "Cookie is invalid. Please check and try again.";
-                        if (!toast.classList.contains('show')) {
-                           toast.classList.add('show');
-                           setTimeout(() => { toast.classList.remove('show'); }, 4000);
+                    // Check if we already have a rate-limited status (yellow indicator)
+                    const isRateLimited = cookieStatusIndicator.style.backgroundColor === 'rgb(255, 204, 0)'; // #ffcc00
+                    
+                    if (!isRateLimited) {
+                        // Only validate if not already rate-limited
+                        const validationResult = await checkCookieOnServer(cookieValue);
+                        
+                        if (validationResult === false) {
+                            toast.innerHTML = "Cookie is invalid. Please check and try again.<br>" + 
+                                "<button id='bypassValidationBtn' style='background: rgba(255,204,0,0.2); border: 1px solid #ffcc00; color: #ffcc00; padding: 5px 10px; border-radius: 4px; margin-top: 5px; cursor: pointer;'>" +
+                                "Apply Anyway (Override Validation)</button>";
+                            
+                            if (!toast.classList.contains('show')) {
+                               toast.classList.add('show');
+                               
+                               // Add event listener to the bypass button
+                               setTimeout(() => {
+                                   const bypassBtn = document.getElementById('bypassValidationBtn');
+                                   if (bypassBtn) {
+                                       bypassBtn.addEventListener('click', async () => {
+                                           toast.classList.remove('show');
+                                           // Force the cookie to be treated as valid
+                                           cookieStatusIndicator.className = 'cookie-status-indicator pending';
+                                           cookieStatusIndicator.style.backgroundColor = '#ffcc00';
+                                           await regeneratePersonalizedManifest();
+                                           toast.innerHTML = "Cookie applied without validation. <span style='color: #ffcc00;'>Use at your own risk!</span>";
+                                           toast.classList.add('show');
+                                           setTimeout(() => { toast.classList.remove('show'); }, 4000);
+                                       });
+                                   }
+                               }, 10);
+                               
+                               setTimeout(() => { 
+                                   if (toast.innerHTML.includes('Cookie is invalid')) {
+                                       toast.classList.remove('show'); 
+                                   }
+                               }, 8000);
+                            }
+                            
+                            // Explicitly call regeneratePersonalizedManifest to ensure UI updates if cookie becomes invalid
+                            await regeneratePersonalizedManifest(); 
+                            return; 
                         }
-                        // Explicitly call regeneratePersonalizedManifest to ensure UI updates if cookie becomes invalid
-                        await regeneratePersonalizedManifest(); 
-                        return; 
+                        
+                        // If validation returned rate_limited, we can proceed
+                        if (validationResult !== true && validationResult !== 'rate_limited') {
+                            // Some other validation issue occurred
+                            await regeneratePersonalizedManifest();
+                            return;
+                        }
+                    } else {
+                        // If already rate-limited, show a message that we're proceeding without validation
+                        toast.innerHTML = "Applying cookie without validation due to rate limiting. <span style='color: #ffcc00;'>Proceed with caution.</span>";
+                        toast.classList.add('show');
+                        setTimeout(() => { toast.classList.remove('show'); }, 4000);
                     }
-                    // If valid, proceed to regenerate manifest which includes the cookie
                 } else {
                      cookieStatusIndicator.className = 'cookie-status-indicator';
                      toast.textContent = "Please enter your FebBox cookie.";
