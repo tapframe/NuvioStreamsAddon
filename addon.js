@@ -1468,9 +1468,14 @@ builder.defineStreamHandler(async (args) => {
                 console.log('[AnimePahe] Skipping fetch: Disabled by environment variable.');
                 return [];
             }
-            if (!shouldFetch('animepahe') || !movieOrSeriesTitle || !movieOrSeriesYear) {
-                if (!shouldFetch('animepahe')) console.log('[AnimePahe] Skipping fetch: Not selected by user.');
-                else console.log('[AnimePahe] Skipping fetch: Missing title or year data.');
+            if (!shouldFetch('animepahe') || !isAnimation || !movieOrSeriesTitle || !movieOrSeriesYear) {
+                if (!shouldFetch('animepahe')) {
+                    console.log('[AnimePahe] Skipping fetch: Not selected by user.');
+                } else if (!isAnimation) {
+                    console.log('[AnimePahe] Skipping fetch: Content is not identified as Animation.');
+                } else {
+                    console.log('[AnimePahe] Skipping fetch: Missing title or year data.');
+                }
                 return [];
             }
 
