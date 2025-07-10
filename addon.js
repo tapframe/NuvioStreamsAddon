@@ -38,14 +38,16 @@ if (USE_REDIS_CACHE) {
             maxRetriesPerRequest: 5,
             retryStrategy(times) {
                 const delay = Math.min(times * 500, 5000);
+                // Added verbose logging for each retry attempt
+                console.warn(`[Redis Cache] Retry strategy activated. Attempt #${times}, will retry in ${delay}ms`);
                 return delay;
             },
             reconnectOnError: function(err) {
                 const targetError = 'READONLY';
-                if (err.message.includes(targetError)) {
-                    return true;
-                }
-                return false;
+                const shouldReconnect = err.message.includes(targetError);
+                // Added detailed logging for reconnectOnError decisions
+                console.warn(`[Redis Cache] reconnectOnError invoked due to error: "${err.message}". Decided to reconnect: ${shouldReconnect}`);
+                return shouldReconnect;
             },
             tls: {},
             enableOfflineQueue: true,
@@ -84,6 +86,21 @@ if (USE_REDIS_CACHE) {
             }, 4 * 60 * 1000); // 4 minutes
             // --- END: Redis Keep-Alive ---
         });
+        
+        // --- BEGIN: Additional Redis connection lifecycle logging ---
+        redis.on('reconnecting', (delay) => {
+            console.warn(`[Redis Cache] Reconnecting... next attempt in ${delay}ms (current status: ${redis.status})`);
+        });
+        redis.on('close', () => {
+            console.warn('[Redis Cache] Connection closed.');
+        });
+        redis.on('end', () => {
+            console.error('[Redis Cache] Connection ended. No further reconnection attempts will be made.');
+        });
+        redis.on('ready', () => {
+            console.log('[Redis Cache] Connection is ready and commands can now be processed.');
+        });
+        // --- END: Additional Redis connection lifecycle logging ---
         
         console.log('[Redis Cache] Upstash Redis client initialized');
     } catch (err) {

@@ -269,13 +269,17 @@ async function getEpisodesList(session) {
 }
 
 async function getVideoLinks(animeSession, episodeSession) {
+    console.log(`[AnimePahe] getVideoLinks → animeSession: ${animeSession}, episodeSession: ${episodeSession}`);
+    const startTime = Date.now();
     const cacheKey = `links_${animeSession}_${episodeSession}`;
     const cachedLinks = await getFromCache(cacheKey);
     if (cachedLinks) return cachedLinks;
     
     try {
         const episodeUrl = `${PROXY_URL}${MAIN_URL}/play/${animeSession}/${episodeSession}`;
+        console.log(`[AnimePahe] Fetching episode page: ${episodeUrl}`);
         const response = await axios.get(episodeUrl, { headers: HEADERS });
+        console.log(`[AnimePahe] Episode page status: ${response.status}`);
         const $ = cheerio.load(response.data);
         
         const links = [];
@@ -302,17 +306,24 @@ async function getVideoLinks(animeSession, episodeSession) {
                 });
             }
         });
+        console.log(`[AnimePahe] Parsed ${links.length} download link(s) from episode page in ${(Date.now() - startTime)}ms`);
+        if (links.length === 0) {
+            const htmlSnippet = $.html().substring(0, 400).replace(/\s+/g, ' ');
+            console.warn(`[AnimePahe] No links found. HTML snippet: ${htmlSnippet}`);
+        }
         
         await saveToCache(cacheKey, links);
         return links;
     } catch (error) {
         console.error(`[AnimePahe] Error loading video links: ${error.message}`);
+        console.error(error.stack);
         return [];
     }
 }
 
 // --- Pahe extractor - complex extraction with decryption ---
 async function extractPahe(url) {
+    console.log(`[AnimePahe] extractPahe → Starting extraction for: ${url}`);
     try {
         // Step 1: Get redirect location from /i endpoint
         const redirectResponse = await axios.get(`${url}/i`, {
@@ -326,8 +337,10 @@ async function extractPahe(url) {
             console.error('[AnimePahe] No redirect location found');
             return null;
         }
+        console.log(`[AnimePahe] Redirect location: ${location}`);
         
         const kwikUrl = 'https://' + location.split('https://').pop();
+        console.log(`[AnimePahe] Kwik URL: ${kwikUrl}`);
         
         // Step 2: Get the Kwik page content
         const kwikResponse = await axios.get(kwikUrl, {
@@ -336,6 +349,7 @@ async function extractPahe(url) {
                 'Referer': 'https://kwik.cx/'
             }
         });
+        console.log(`[AnimePahe] Kwik page status: ${kwikResponse.status}`);
         
         const kwikContent = kwikResponse.data;
         
@@ -343,13 +357,16 @@ async function extractPahe(url) {
         const paramsMatch = kwikContent.match(/\("(\w+)",\d+,"(\w+)",(\d+),(\d+),\d+\)/);
         if (!paramsMatch) {
             console.error('[AnimePahe] Could not find decryption parameters');
+            console.warn(`[AnimePahe] Kwik content snippet: ${kwikContent.substring(0, 200).replace(/\s+/g, ' ')}`);
             return null;
         }
         
         const [, fullString, key, v1, v2] = paramsMatch;
+        console.log(`[AnimePahe] Decryption params extracted (v1=${v1}, v2=${v2}).`);
         
         // Step 4: Decrypt using the custom algorithm
         const decrypted = decryptPahe(fullString, key, parseInt(v1), parseInt(v2));
+        console.log(`[AnimePahe] Decrypted content length: ${decrypted.length}`);
         
         // Step 5: Extract URL and token from decrypted content
         const urlMatch = decrypted.match(/action="([^"]+)"/);
@@ -357,11 +374,13 @@ async function extractPahe(url) {
         
         if (!urlMatch || !tokenMatch) {
             console.error('[AnimePahe] Could not extract URL or token from decrypted content');
+            console.warn(`[AnimePahe] Decrypted snippet: ${decrypted.substring(0, 200).replace(/\s+/g, ' ')}`);
             return null;
         }
         
         const postUrl = urlMatch[1];
         const token = tokenMatch[1];
+        console.log(`[AnimePahe] Post URL: ${postUrl}`);
         
         // Step 6: Make POST request with form data to get final URL
         const formData = new FormData();
@@ -376,6 +395,7 @@ async function extractPahe(url) {
             maxRedirects: 0,
             validateStatus: (status) => status >= 200 && status < 400
         });
+        console.log(`[AnimePahe] Final response status: ${finalResponse.status}`);
         
         if (finalResponse.status !== 302) {
             console.error('[AnimePahe] Failed to get redirect');
@@ -383,6 +403,7 @@ async function extractPahe(url) {
         }
         
         const finalUrl = finalResponse.headers.location;
+        console.log(`[AnimePahe] Final video URL: ${finalUrl}`);
         
         return {
             url: finalUrl,
@@ -394,6 +415,7 @@ async function extractPahe(url) {
         
     } catch (error) {
         console.error(`[AnimePahe] Error extracting from Pahe: ${error.message}`);
+        console.error(error.stack);
         return null;
     }
 }
