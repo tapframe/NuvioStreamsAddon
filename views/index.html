@@ -1866,12 +1866,25 @@
                                 <input type="checkbox" id="providerShowbox" name="providerSelect" value="showbox" checked style="margin-right: 0.5rem; accent-color: var(--primary);">
                                 <label for="providerShowbox" style="font-size: 0.9rem;">ShowBox <span style="font-size: 0.75rem; color: var(--text-light);">(~5.3s)</span></label>
                             </div>
-                            <select id="qualityShowbox" name="providerQuality" data-provider="showbox" class="provider-sort-select">
-                                <option value="all" selected>All Qualities</option>
-                                <option value="480p">480p & Up</option>
-                                <option value="720p">720p & Up</option>
-                                <option value="1080p">1080p & Up</option>
-                            </select>
+                            <div style="display: flex; align-items: center; gap: 0.8rem;">
+                                <select id="qualityShowbox" name="providerQuality" data-provider="showbox" class="provider-sort-select">
+                                    <option value="all" selected>All Qualities</option>
+                                    <option value="480p">480p & Up</option>
+                                    <option value="720p">720p & Up</option>
+                                    <option value="1080p">1080p & Up</option>
+                                    <option value="2160p">4K Only</option>
+                                </select>
+                                <div class="codec-filters" style="display: flex; align-items: center; gap: 0.6rem; padding: 0.2rem 0.6rem; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 6px;">
+                                    <div style="display: flex; align-items: center; gap: 0.3rem;">
+                                        <input type="checkbox" id="excludeDvShowbox" name="excludeDv" data-provider="showbox" style="width: 14px; height: 14px; accent-color: #ff4444;">
+                                        <label for="excludeDvShowbox" style="font-size: 0.75rem; color: var(--text-light); user-select: none; cursor: pointer;">No DV</label>
+                                    </div>
+                                    <div style="display: flex; align-items: center; gap: 0.3rem;">
+                                        <input type="checkbox" id="excludeHdrShowbox" name="excludeHdr" data-provider="showbox" style="width: 14px; height: 14px; accent-color: #ff4444;">
+                                        <label for="excludeHdrShowbox" style="font-size: 0.75rem; color: var(--text-light); user-select: none; cursor: pointer;">No HDR</label>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                         <div class="provider-checkbox-item" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
                             <div style="display: flex; align-items: center;">
@@ -1920,12 +1933,24 @@
                                 <input type="checkbox" id="providerUhdmovies" name="providerSelect" value="uhdmovies" checked="" style="margin-right: 0.5rem; accent-color: var(--primary);">
                                 <label for="providerUhdmovies" style="font-size: 0.9rem;">UHDMovies <span style="font-size: 0.75rem; color: var(--text-light);">(~6.5s)</span> <span style="font-size: 0.75rem; color: #00c16e;">4K</span></label>
                             </div>
-                             <select id="qualityUhdmovies" name="providerQuality" data-provider="uhdmovies" class="provider-sort-select">
-                                <option value="all">All</option>
-                                <option value="720p">720p+</option>
-                                <option value="1080p">1080p+</option>
-                                <option value="4k">4K+</option>
-                            </select>
+                            <div style="display: flex; align-items: center; gap: 0.8rem;">
+                                <select id="qualityUhdmovies" name="providerQuality" data-provider="uhdmovies" class="provider-sort-select">
+                                    <option value="all">All</option>
+                                    <option value="720p">720p+</option>
+                                    <option value="1080p">1080p+</option>
+                                    <option value="4k">4K+</option>
+                                </select>
+                                <div class="codec-filters" style="display: flex; align-items: center; gap: 0.6rem; padding: 0.2rem 0.6rem; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 6px;">
+                                    <div style="display: flex; align-items: center; gap: 0.3rem;">
+                                        <input type="checkbox" id="excludeDvUhdmovies" name="excludeDv" data-provider="uhdmovies" style="width: 14px; height: 14px; accent-color: #ff4444;">
+                                        <label for="excludeDvUhdmovies" style="font-size: 0.75rem; color: var(--text-light); user-select: none; cursor: pointer;">No DV</label>
+                                    </div>
+                                    <div style="display: flex; align-items: center; gap: 0.3rem;">
+                                        <input type="checkbox" id="excludeHdrUhdmovies" name="excludeHdr" data-provider="uhdmovies" style="width: 14px; height: 14px; accent-color: #ff4444;">
+                                        <label for="excludeHdrUhdmovies" style="font-size: 0.75rem; color: var(--text-light); user-select: none; cursor: pointer;">No HDR</label>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                         <div class="provider-checkbox-item" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
                             <div style="display: flex; align-items: center;">
@@ -1997,9 +2022,21 @@
                                 <input type="checkbox" id="providerXprime" name="providerSelect" value="xprime" disabled style="margin-right: 0.5rem; accent-color: var(--primary); opacity: 0.5;">
                                 <label for="providerXprime" style="font-size: 0.9rem; opacity: 0.5;">Xprime.tv (Offline)</label>
                             </div>
-                            <select id="qualityXprime" name="providerQuality" data-provider="xprime" class="provider-sort-select" disabled>
-                                <option value="all" selected>All Qualities</option>
-                            </select>
+                            <div style="display: flex; align-items: center; gap: 0.8rem;">
+                                <select id="qualityXprime" name="providerQuality" data-provider="xprime" class="provider-sort-select" disabled>
+                                    <option value="all" selected>All Qualities</option>
+                                </select>
+                                <div class="codec-filters" style="display: flex; align-items: center; gap: 0.6rem; padding: 0.2rem 0.6rem; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 6px; opacity: 0.5;">
+                                    <div style="display: flex; align-items: center; gap: 0.3rem;">
+                                        <input type="checkbox" id="excludeDvXprime" name="excludeDv" data-provider="xprime" style="width: 14px; height: 14px; accent-color: #ff4444;" disabled>
+                                        <label for="excludeDvXprime" style="font-size: 0.75rem; color: var(--text-light); user-select: none; cursor: pointer;">No DV</label>
+                                    </div>
+                                    <div style="display: flex; align-items: center; gap: 0.3rem;">
+                                        <input type="checkbox" id="excludeHdrXprime" name="excludeHdr" data-provider="xprime" style="width: 14px; height: 14px; accent-color: #ff4444;" disabled>
+                                        <label for="excludeHdrXprime" style="font-size: 0.75rem; color: var(--text-light); user-select: none; cursor: pointer;">No HDR</label>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         <div class="provider-info-note" style="margin-top: 0.75rem; margin-bottom: 0.75rem; padding: 0.5rem; font-size: 0.8rem;">
@@ -2469,6 +2506,33 @@
                 }
             });
 
+            // NEW: Collect HDR/DV exclude preferences
+            const codecExcludePreferences = {};
+            let hasCodecExcludePreferences = false;
+            providerCheckboxes.forEach(checkbox => {
+                if (checkbox.checked) {
+                    const providerValue = checkbox.value;
+                    const providerCapitalized = providerValue.charAt(0).toUpperCase() + providerValue.slice(1);
+                    const excludeDVCheckbox = document.getElementById(`excludeDv${providerCapitalized}`);
+                    const excludeHDRCheckbox = document.getElementById(`excludeHdr${providerCapitalized}`);
+                    
+                    if (excludeDVCheckbox || excludeHDRCheckbox) {
+                        const excludePrefs = {};
+                        if (excludeDVCheckbox && excludeDVCheckbox.checked) {
+                            excludePrefs.excludeDV = true;
+                        }
+                        if (excludeHDRCheckbox && excludeHDRCheckbox.checked) {
+                            excludePrefs.excludeHDR = true;
+                        }
+                        
+                        if (Object.keys(excludePrefs).length > 0) {
+                            codecExcludePreferences[providerValue] = excludePrefs;
+                            hasCodecExcludePreferences = true;
+                        }
+                    }
+                }
+            });
+
             // Build the path components for the new URL format
             let pathParams = [];
             let queryParams = [];
@@ -2500,6 +2564,14 @@
                 const encodedQualities = encodeURIComponent(JSON.stringify(qualityPreferences));
                 pathParams.push(`min_qualities=${encodedQualities}`);
                 queryParams.push(`min_qualities=${encodedQualities}`);
+                manifestPersonalized = true;
+            }
+
+            // NEW: Codec exclude preferences handling
+            if (hasCodecExcludePreferences) {
+                const encodedCodecExcludes = encodeURIComponent(JSON.stringify(codecExcludePreferences));
+                pathParams.push(`exclude_codecs=${encodedCodecExcludes}`);
+                queryParams.push(`exclude_codecs=${encodedCodecExcludes}`);
                 manifestPersonalized = true;
             }
 

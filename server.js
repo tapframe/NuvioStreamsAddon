@@ -44,6 +44,7 @@ app.use(async (req, res, next) => {
     const userProvidersQuery = req.query.providers;
     const userMinQualitiesQuery = req.query.min_qualities;
     const userScraperApiKey = req.query.scraper_api_key;
+    const userExcludeCodecsQuery = req.query.exclude_codecs;
 
     // Extract from URL path (new format for Android compatibility)
     const pathParams = {};
@@ -83,6 +84,7 @@ app.use(async (req, res, next) => {
     const providers = pathParams.providers || userProvidersQuery;
     const minQualities = pathParams.min_qualities || userMinQualitiesQuery;
     const scraperApiKey = pathParams.scraper_api_key || userScraperApiKey;
+    const excludeCodecs = pathParams.exclude_codecs || userExcludeCodecsQuery;
 
     if (cookie) {
         try {
@@ -110,6 +112,14 @@ app.use(async (req, res, next) => {
             global.currentRequestConfig.scraper_api_key = decodeURIComponent(scraperApiKey);
         } catch (e) {
             console.error(`[server.js] Error decoding scraper_api_key from request: ${scraperApiKey}`, e.message);
+        }
+    }
+    if (excludeCodecs) {
+        try {
+            const decodedExcludeCodecs = decodeURIComponent(excludeCodecs);
+            global.currentRequestConfig.excludeCodecs = JSON.parse(decodedExcludeCodecs);
+        } catch (e) {
+            console.error(`[server.js] Error parsing exclude_codecs from request: ${excludeCodecs}`, e.message);
         }
     }
 

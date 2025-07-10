@@ -241,6 +241,7 @@ function parseQuality(qualityString) {
     if (q.includes('dvdscr')) return 350;
     if (q.includes('r5') || q.includes('r6')) return 400;
 
+    if (q.includes('org')) return 4320; // Treat original uploads as higher than 4K
 
     return 0; // Default for anything else not recognized
 }
@@ -287,6 +288,56 @@ function filterStreamsByQuality(streams, minQualitySetting, providerName) {
     });
 
     console.log(`[${providerName}] Filtered count: ${filteredStreams.length}`);
+    return filteredStreams;
+}
+
+// NEW: Helper function to filter streams by excluding specific codecs
+function filterStreamsByCodecs(streams, excludeCodecSettings, providerName) {
+    if (!excludeCodecSettings || Object.keys(excludeCodecSettings).length === 0) {
+        console.log(`[${providerName}] No codec exclusions applied.`);
+        return streams; // No filtering needed
+    }
+
+    const excludeDV = excludeCodecSettings.excludeDV === true;
+    const excludeHDR = excludeCodecSettings.excludeHDR === true;
+
+    if (!excludeDV && !excludeHDR) {
+        console.log(`[${providerName}] No codec exclusions enabled.`);
+        return streams;
+    }
+
+    console.log(`[${providerName}] Filtering streams. Exclude DV: ${excludeDV}, Exclude HDR: ${excludeHDR}. Original count: ${streams.length}`);
+
+    const filteredStreams = streams.filter(stream => {
+        if (!stream.codecs || !Array.isArray(stream.codecs)) {
+            return true; // Keep streams without codec information
+        }
+
+        // Check for DV exclusion
+        if (excludeDV && stream.codecs.includes('DV')) {
+            console.log(`[${providerName}] Excluding stream with DV codec: ${stream.title || stream.url}`);
+            return false;
+        }
+
+        // Check for HDR exclusion (including HDR, HDR10, HDR10+)
+        if (excludeHDR && (stream.codecs.includes('HDR') || stream.codecs.includes('HDR10') || stream.codecs.includes('HDR10+'))) {
+            console.log(`[${providerName}] Excluding stream with HDR codec: ${stream.title || stream.url}`);
+            return false;
+        }
+
+        return true; // Keep the stream
+    });
+
+    console.log(`[${providerName}] After codec filtering count: ${filteredStreams.length}`);
+    return filteredStreams;
+}
+
+// NEW: Helper function that combines both quality and codec filtering
+function applyAllStreamFilters(streams, providerName, minQualitySetting, excludeCodecSettings) {
+    // Apply quality filtering first
+    let filteredStreams = filterStreamsByQuality(streams, minQualitySetting, providerName);
+    // Then apply codec filtering
+    filteredStreams = filterStreamsByCodecs(filteredStreams, excludeCodecSettings, providerName);
     return filteredStreams;
 }
 
@@ -652,6 +703,14 @@ builder.defineStreamHandler(async (args) => {
         console.log(`[addon.js] Minimum quality preferences: ${JSON.stringify(minQualitiesPreferences)}`);
     } else {
         console.log(`[addon.js] No minimum quality preferences set by user.`);
+    }
+
+    // NEW: Get codec exclude preferences
+    const excludeCodecsPreferences = requestSpecificConfig.excludeCodecs || {};
+    if (Object.keys(excludeCodecsPreferences).length > 0) {
+        console.log(`[addon.js] Codec exclude preferences: ${JSON.stringify(excludeCodecsPreferences)}`);
+    } else {
+        console.log(`[addon.js] No codec exclude preferences set by user.`);
     }
 
     console.log("--- FULL ARGS OBJECT (from SDK) ---");
@@ -1558,34 +1617,34 @@ builder.defineStreamHandler(async (args) => {
         
         // Process results into streamsByProvider object
         const streamsByProvider = {
-            'ShowBox': shouldFetch('showbox') ? filterStreamsByQuality(providerResults[0], minQualitiesPreferences.showbox, 'ShowBox') : [],
-            'Xprime.tv': ENABLE_XPRIME_PROVIDER && shouldFetch('xprime') ? filterStreamsByQuality(providerResults[1], minQualitiesPreferences.xprime, 'Xprime.tv') : [],
-            'HollyMovieHD': ENABLE_HOLLYMOVIEHD_PROVIDER && shouldFetch('hollymoviehd') ? filterStreamsByQuality(providerResults[2], minQualitiesPreferences.hollymoviehd, 'HollyMovieHD') : [],
-            'Soaper TV': ENABLE_SOAPERTV_PROVIDER && shouldFetch('soapertv') ? filterStreamsByQuality(providerResults[3], minQualitiesPreferences.soapertv, 'Soaper TV') : [],
-            'Cuevana': ENABLE_CUEVANA_PROVIDER && shouldFetch('cuevana') ? filterStreamsByQuality(providerResults[4], minQualitiesPreferences.cuevana, 'Cuevana') : [],
-            'Hianime': shouldFetch('hianime') ? filterStreamsByQuality(providerResults[5], minQualitiesPreferences.hianime, 'Hianime') : [],
-            'VidSrc': shouldFetch('vidsrc') ? filterStreamsByQuality(providerResults[6], minQualitiesPreferences.vidsrc, 'VidSrc') : [],
-            'VidZee': ENABLE_VIDZEE_PROVIDER && shouldFetch('vidzee') ? filterStreamsByQuality(providerResults[7], minQualitiesPreferences.vidzee, 'VidZee') : [],
-            'MP4Hydra': ENABLE_MP4HYDRA_PROVIDER && shouldFetch('mp4hydra') ? filterStreamsByQuality(providerResults[8], minQualitiesPreferences.mp4hydra, 'MP4Hydra') : [],
-            'UHDMovies': ENABLE_UHDMOVIES_PROVIDER && shouldFetch('uhdmovies') ? filterStreamsByQuality(providerResults[9], minQualitiesPreferences.uhdmovies, 'UHDMovies') : [], // NEW: Add UHDMovies provider
-            'MoviesMod': ENABLE_MOVIESMOD_PROVIDER && shouldFetch('moviesmod') ? filterStreamsByQuality(providerResults[10], minQualitiesPreferences.moviesmod, 'MoviesMod') : [], // NEW: Add MoviesMod provider
-            'TopMovies': ENABLE_TOPMOVIES_PROVIDER && shouldFetch('topmovies') ? filterStreamsByQuality(providerResults[11], minQualitiesPreferences.topmovies, 'TopMovies') : [], 
-            'DramaDrip': ENABLE_DRAMADRIP_PROVIDER && shouldFetch('dramadrip') ? filterStreamsByQuality(providerResults[12], minQualitiesPreferences.dramadrip, 'DramaDrip') : [],
-            'AnimePahe': ENABLE_ANIMEPAHE_PROVIDER && shouldFetch('animepahe') ? filterStreamsByQuality(providerResults[13], minQualitiesPreferences.animepahe, 'AnimePahe') : []
+            'ShowBox': shouldFetch('showbox') ? applyAllStreamFilters(providerResults[0], 'ShowBox', minQualitiesPreferences.showbox, excludeCodecsPreferences.showbox) : [],
+            'Xprime.tv': ENABLE_XPRIME_PROVIDER && shouldFetch('xprime') ? applyAllStreamFilters(providerResults[1], 'Xprime.tv', minQualitiesPreferences.xprime, excludeCodecsPreferences.xprime) : [],
+            'HollyMovieHD': ENABLE_HOLLYMOVIEHD_PROVIDER && shouldFetch('hollymoviehd') ? applyAllStreamFilters(providerResults[2], 'HollyMovieHD', minQualitiesPreferences.hollymoviehd, excludeCodecsPreferences.hollymoviehd) : [],
+            'Soaper TV': ENABLE_SOAPERTV_PROVIDER && shouldFetch('soapertv') ? applyAllStreamFilters(providerResults[3], 'Soaper TV', minQualitiesPreferences.soapertv, excludeCodecsPreferences.soapertv) : [],
+            'Cuevana': ENABLE_CUEVANA_PROVIDER && shouldFetch('cuevana') ? applyAllStreamFilters(providerResults[4], 'Cuevana', minQualitiesPreferences.cuevana, excludeCodecsPreferences.cuevana) : [],
+            'Hianime': shouldFetch('hianime') ? applyAllStreamFilters(providerResults[5], 'Hianime', minQualitiesPreferences.hianime, excludeCodecsPreferences.hianime) : [],
+            'VidSrc': shouldFetch('vidsrc') ? applyAllStreamFilters(providerResults[6], 'VidSrc', minQualitiesPreferences.vidsrc, excludeCodecsPreferences.vidsrc) : [],
+            'VidZee': ENABLE_VIDZEE_PROVIDER && shouldFetch('vidzee') ? applyAllStreamFilters(providerResults[7], 'VidZee', minQualitiesPreferences.vidzee, excludeCodecsPreferences.vidzee) : [],
+            'MP4Hydra': ENABLE_MP4HYDRA_PROVIDER && shouldFetch('mp4hydra') ? applyAllStreamFilters(providerResults[8], 'MP4Hydra', minQualitiesPreferences.mp4hydra, excludeCodecsPreferences.mp4hydra) : [],
+            'UHDMovies': ENABLE_UHDMOVIES_PROVIDER && shouldFetch('uhdmovies') ? applyAllStreamFilters(providerResults[9], 'UHDMovies', minQualitiesPreferences.uhdmovies, excludeCodecsPreferences.uhdmovies) : [], // NEW: Add UHDMovies provider
+            'MoviesMod': ENABLE_MOVIESMOD_PROVIDER && shouldFetch('moviesmod') ? applyAllStreamFilters(providerResults[10], 'MoviesMod', minQualitiesPreferences.moviesmod, excludeCodecsPreferences.moviesmod) : [], // NEW: Add MoviesMod provider
+            'TopMovies': ENABLE_TOPMOVIES_PROVIDER && shouldFetch('topmovies') ? applyAllStreamFilters(providerResults[11], 'TopMovies', minQualitiesPreferences.topmovies, excludeCodecsPreferences.topmovies) : [], 
+            'DramaDrip': ENABLE_DRAMADRIP_PROVIDER && shouldFetch('dramadrip') ? applyAllStreamFilters(providerResults[12], 'DramaDrip', minQualitiesPreferences.dramadrip, excludeCodecsPreferences.dramadrip) : [],
+            'AnimePahe': ENABLE_ANIMEPAHE_PROVIDER && shouldFetch('animepahe') ? applyAllStreamFilters(providerResults[13], 'AnimePahe', minQualitiesPreferences.animepahe, excludeCodecsPreferences.animepahe) : []
         };
 
-        // Sort streams for each provider by size, then quality
-        console.log('Sorting streams for each provider by size, then quality...');
+        // Sort streams for each provider by quality, then size
+        console.log('Sorting streams for each provider by quality, then size...');
         for (const provider in streamsByProvider) {
             streamsByProvider[provider].sort((a, b) => {
-                const sizeA = parseSize(a.size);
-                const sizeB = parseSize(b.size);
-                if (sizeB !== sizeA) {
-                    return sizeB - sizeA;
-                }
                 const qualityA = parseQuality(a.quality);
                 const qualityB = parseQuality(b.quality);
-                return qualityB - qualityA;
+                if (qualityB !== qualityA) {
+                    return qualityB - qualityA; // Higher quality first
+                }
+                const sizeA = parseSize(a.size);
+                const sizeB = parseSize(b.size);
+                return sizeB - sizeA; // Larger file first if same quality
             });
         }
 
