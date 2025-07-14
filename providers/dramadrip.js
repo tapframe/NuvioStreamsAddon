@@ -52,8 +52,6 @@ async function getDramaDripDomain() {
 // --- Caching Configuration ---
 const CACHE_ENABLED = process.env.DISABLE_CACHE !== 'true';
 const CACHE_DIR = process.env.VERCEL ? path.join('/tmp', '.dramadrip_cache') : path.join(__dirname, '.cache', 'dramadrip');
-const CACHE_TTL = 4 * 60 * 60 * 1000; // 4 hours
-
 // --- Caching Helper Functions ---
 const ensureCacheDir = async () => {
     if (!CACHE_ENABLED) return;
@@ -70,13 +68,8 @@ const getFromCache = async (key) => {
     try {
         const data = await fs.readFile(cacheFile, 'utf-8');
         const cached = JSON.parse(data);
-        if (Date.now() > cached.expiry) {
-            console.log(`[DramaDrip Cache] EXPIRED for key: ${key}`);
-            await fs.unlink(cacheFile).catch(() => {});
-            return null;
-        }
         console.log(`[DramaDrip Cache] HIT for key: ${key}`);
-        return cached.data;
+        return cached.data || cached; // Support both new format (data field) and legacy format
     } catch (error) {
         return null;
     }
@@ -86,7 +79,6 @@ const saveToCache = async (key, data) => {
     if (!CACHE_ENABLED) return;
     const cacheFile = path.join(CACHE_DIR, `${key}.json`);
     const cacheData = {
-        expiry: Date.now() + CACHE_TTL,
         data: data
     };
     try {

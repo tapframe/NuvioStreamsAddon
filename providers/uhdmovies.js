@@ -49,8 +49,6 @@ const TMDB_API_KEY_UHDMOVIES = "439c478a771f35c05022f9feabcca01c"; // Public TMD
 const CACHE_ENABLED = process.env.DISABLE_CACHE !== 'true'; // Set to true to disable caching for this provider
 console.log(`[UHDMovies] Internal cache is ${CACHE_ENABLED ? 'enabled' : 'disabled'}.`);
 const CACHE_DIR = process.env.VERCEL ? path.join('/tmp', '.uhd_cache') : path.join(__dirname, '.cache', 'uhdmovies'); // Cache directory inside providers/uhdmovies
-const CACHE_TTL = 4 * 60 * 60 * 1000; // 4 hours in milliseconds
-
 // --- Caching Helper Functions ---
 const ensureCacheDir = async () => {
     if (!CACHE_ENABLED) return;
@@ -70,17 +68,11 @@ const getFromCache = async (key) => {
         const data = await fs.readFile(cacheFile, 'utf-8');
         const cached = JSON.parse(data);
 
-        if (Date.now() > cached.expiry) {
-            console.log(`[UHDMovies Cache] EXPIRED for key: ${key}`);
-            await fs.unlink(cacheFile).catch(() => {});
-            return null;
-        }
-
         console.log(`[UHDMovies Cache] HIT for key: ${key}`);
-        return cached.data;
+        return cached.data || cached; // Support both new format (data field) and legacy format
     } catch (error) {
         if (error.code !== 'ENOENT') {
-            console.error(`[UHDMovies Cache] READ ERROR for key ${key}: ${error.message}`);
+            console.error(`[UHDMovies Cache] read ERROR for key ${key}: ${error.message}`);
         }
         return null;
     }
@@ -90,7 +82,6 @@ const saveToCache = async (key, data) => {
     if (!CACHE_ENABLED) return;
     const cacheFile = path.join(CACHE_DIR, `${key}.json`);
     const cacheData = {
-        expiry: Date.now() + CACHE_TTL,
         data: data
     };
     try {
