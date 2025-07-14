@@ -501,7 +501,7 @@ async function resolveFinalLink(downloadOption) {
 async function getDramaDripStreams(tmdbId, mediaType, seasonNum, episodeNum) {
 
     try {
-        const cacheKey = `dramadrip_v3_${tmdbId}_${mediaType}${seasonNum ? `_s${seasonNum}e${episodeNum}` : ''}`;
+        const cacheKey = `dramadrip_final_v1_${tmdbId}_${mediaType}${seasonNum ? `_s${seasonNum}e${episodeNum}` : ''}`;
         
         // 1. Check cache for resolved intermediate links
         let cachedLinks = await getFromCache(cacheKey);
@@ -578,7 +578,7 @@ async function getDramaDripStreams(tmdbId, mediaType, seasonNum, episodeNum) {
 
             if (qualitiesToResolve.length === 0) return [];
 
-            // 3. Resolve all the way to driveseed URLs for caching
+            // 3. Resolve all the way to final driveseed file page URLs (window.replace URLs) for caching
             const resolutionPromises = qualitiesToResolve.map(async (quality) => {
                 try {
                     const intermediateResult = await resolveCinemaKitOrModproLink(quality.url, selectedResult.url);
@@ -604,8 +604,27 @@ async function getDramaDripStreams(tmdbId, mediaType, seasonNum, episodeNum) {
 
                     if (!targetUrl || !targetUrl.includes('driveseed.org')) return null;
 
-                    // Cache the driveseed URL instead of intermediate result
-                    return { ...quality, driveseedUrl: targetUrl };
+                    // Now resolve the driveseed redirect URL to get the final file page URL
+                    const response = await axios.get(targetUrl, {
+                        headers: {
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                            'Referer': 'https://links.modpro.blog/',
+                        }
+                    });
+
+                    // Check for JavaScript redirect (window.location.replace)
+                    const redirectMatch = response.data.match(/window\.location\.replace\("([^"]+)"\)/);
+
+                    if (redirectMatch && redirectMatch[1]) {
+                        const finalPath = redirectMatch[1];
+                        const finalFilePageUrl = `https://driveseed.org${finalPath}`;
+                        console.log(`[DramaDrip] Caching final file page URL for ${quality.quality}: ${finalFilePageUrl}`);
+                        return { ...quality, finalFilePageUrl: finalFilePageUrl };
+                    } else {
+                        // If no redirect, the current URL might already be the file page
+                        console.log(`[DramaDrip] No redirect found for ${quality.quality}, using current URL: ${targetUrl}`);
+                        return { ...quality, finalFilePageUrl: targetUrl };
+                    }
                 } catch (error) {
                     console.error(`[DramaDrip] Error resolving quality ${quality.quality}: ${error.message}`);
                     return null;
@@ -616,24 +635,24 @@ async function getDramaDripStreams(tmdbId, mediaType, seasonNum, episodeNum) {
 
             // 4. Save to cache
             if (cachedLinks.length > 0) {
-                console.log(`[DramaDrip] Caching ${cachedLinks.length} resolved driveseed URLs for key: ${cacheKey}`);
+                console.log(`[DramaDrip] Caching ${cachedLinks.length} resolved final file page URLs for key: ${cacheKey}`);
                 await saveToCache(cacheKey, cachedLinks);
             }
         }
 
         if (!cachedLinks || cachedLinks.length === 0) {
-            console.log('[DramaDrip] No driveseed links found after scraping/cache check.');
+            console.log('[DramaDrip] No final file page URLs found after scraping/cache check.');
             return [];
         }
 
-        // 5. Process cached driveseed URLs to get final streams
-        console.log(`[DramaDrip] Processing ${cachedLinks.length} cached driveseed URLs to get final streams.`);
+        // 5. Process cached final file page URLs to get final streams
+        console.log(`[DramaDrip] Processing ${cachedLinks.length} cached final file page URLs to get final streams.`);
         const streamPromises = cachedLinks.map(async (linkInfo) => {
             try {
-                const { driveseedUrl } = linkInfo;
-                if (!driveseedUrl) return null;
+                const { finalFilePageUrl } = linkInfo;
+                if (!finalFilePageUrl) return null;
 
-                const downloadInfo = await resolveDriveseedLink(driveseedUrl);
+                const downloadInfo = await resolveDriveseedLink(finalFilePageUrl);
                 if (!downloadInfo || !downloadInfo.downloadOptions) return null;
 
                 const { downloadOptions, title: fileTitle, size: fileSize } = downloadInfo;
