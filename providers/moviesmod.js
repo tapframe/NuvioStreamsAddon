@@ -760,8 +760,7 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
             console.log(`[MoviesMod Cache] MISS for key: ${cacheKey}. Fetching from source.`);
 
         // We need to fetch title and year from TMDB API
-        const TMDB_API_KEY = process.env.TMDB_API_KEY;
-            if (!TMDB_API_KEY) throw new Error('TMDB_API_KEY not configured.');
+        const TMDB_API_KEY = "439c478a771f35c05022f9feabcca01c";
 
             const { default: fetch } = await import('node-fetch');
             const tmdbUrl = `https://api.themoviedb.org/3/${mediaType === 'tv' ? 'tv' : 'movie'}/${tmdbId}?api_key=${TMDB_API_KEY}&language=en-US`;
