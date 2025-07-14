@@ -226,8 +226,9 @@ const getCookieForRequest = async (regionPreference = null, userCookie = null) =
 // Helper function to fetch stream size using a HEAD request
 const fetchStreamSize = async (url) => {
     const cacheSubDir = 'stream_sizes';
-    // Create a cache key from the URL, ensuring it's filename-safe
-    const urlCacheKey = url.replace(/^https?:\/\//, '').replace(/[^a-zA-Z0-9_.-]/g, '_') + '.txt';
+    // Create a cache key from the URL using hash to avoid long filenames
+    const urlHash = crypto.createHash('md5').update(url).digest('hex');
+    const urlCacheKey = `${urlHash}.txt`;
 
     const cachedSize = await getFromCache(urlCacheKey, cacheSubDir);
     if (cachedSize !== null) { // Check for null specifically, as 'Unknown size' is a valid cached string
@@ -1552,9 +1553,9 @@ class ShowBoxScraper {
 
     async _makeRequest(url, isJsonExpected = false) {
         const cacheSubDir = 'showbox_generic';
-        const simpleUrlKey = url.replace(/^https?:\/\//, '').replace(/[^a-zA-Z0-9_.-]/g, '_');
-        const cacheKey = `${simpleUrlKey}${isJsonExpected ? '.json' : '.html'}`;
-        const timerLabel = `ShowBoxScraper_makeRequest_${simpleUrlKey}`;
+        const urlHash = crypto.createHash('md5').update(url).digest('hex');
+        const cacheKey = `${urlHash}${isJsonExpected ? '.json' : '.html'}`;
+        const timerLabel = `ShowBoxScraper_makeRequest_${urlHash}`;
 
         const cachedData = await getFromCache(cacheKey, cacheSubDir);
         if (cachedData) {
@@ -1841,9 +1842,9 @@ const extractFidsFromFebboxPage = async (febboxUrl, regionPreference = null, use
     let directSources = []; // Initialize directSources
     const cacheSubDirHtml = 'febbox_page_html';
     const cacheSubDirParsed = 'febbox_parsed_page'; // New subdir for parsed data
-    const simpleUrlKey = febboxUrl.replace(/^https?:\/\//, '').replace(/[^a-zA-Z0-9_.-]/g, '_');
-    const cacheKeyHtml = `${simpleUrlKey}.html`;
-    const cacheKeyParsed = `${simpleUrlKey}.json`; // Parsed data will be JSON
+    const urlHash = crypto.createHash('md5').update(febboxUrl).digest('hex');
+    const cacheKeyHtml = `${urlHash}.html`;
+    const cacheKeyParsed = `${urlHash}.json`; // Parsed data will be JSON
 
     // Check for cached parsed data first
     const cachedParsedData = await getFromCache(cacheKeyParsed, cacheSubDirParsed);
@@ -2203,8 +2204,8 @@ const processShowWithSeasonsEpisodes = async (febboxUrl, showboxTitle, seasonNum
 
     // Cache for the main FebBox page
     const cacheSubDirMain = 'febbox_page_html';
-    const simpleUrlKey = febboxUrl.replace(/^https?:\/\//, '').replace(/[^a-zA-Z0-9_.-]/g, '_');
-    const cacheKeyMain = `${simpleUrlKey}.html`;
+    const urlHash = crypto.createHash('md5').update(febboxUrl).digest('hex');
+    const cacheKeyMain = `${urlHash}.html`;
     
     // Try to get the main page from cache first
     let contentHtml = await getFromCache(cacheKeyMain, cacheSubDirMain);
@@ -2834,4 +2835,4 @@ module.exports = {
     extractFidsFromFebboxPage,
     processShowWithSeasonsEpisodes,
     sortStreamsByQuality
-}; 
+};
