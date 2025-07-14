@@ -501,7 +501,7 @@ async function resolveFinalLink(downloadOption) {
 async function getDramaDripStreams(tmdbId, mediaType, seasonNum, episodeNum) {
 
     try {
-        const cacheKey = `dramadrip_v2_${tmdbId}_${mediaType}${seasonNum ? `_s${seasonNum}e${episodeNum}` : ''}`;
+        const cacheKey = `dramadrip_v3_${tmdbId}_${mediaType}${seasonNum ? `_s${seasonNum}e${episodeNum}` : ''}`;
         
         // 1. Check cache for resolved intermediate links
         let cachedLinks = await getFromCache(cacheKey);
@@ -578,54 +578,62 @@ async function getDramaDripStreams(tmdbId, mediaType, seasonNum, episodeNum) {
 
             if (qualitiesToResolve.length === 0) return [];
 
-            // 3. Resolve to intermediate links (episodes or servers)
+            // 3. Resolve all the way to driveseed URLs for caching
             const resolutionPromises = qualitiesToResolve.map(async (quality) => {
-                const intermediateResult = await resolveCinemaKitOrModproLink(quality.url, selectedResult.url);
-                if (intermediateResult) {
-                    return { ...quality, intermediateResult };
+                try {
+                    const intermediateResult = await resolveCinemaKitOrModproLink(quality.url, selectedResult.url);
+                    if (!intermediateResult) return null;
+
+                    let targetUrl = null;
+                    if (mediaType === 'tv' && intermediateResult.type === 'episodes') {
+                        const targetEpisode = intermediateResult.links.find(e => e.name.includes(`Episode ${episodeNum}`));
+                        if (targetEpisode) targetUrl = targetEpisode.url;
+                    } else if (mediaType === 'movie' && intermediateResult.type === 'servers') {
+                        const fastServer = intermediateResult.links.find(s => s.name.includes('Server 1')) || intermediateResult.links[0];
+                        if (fastServer) targetUrl = fastServer.url;
+                    }
+
+                    if (!targetUrl) return null;
+
+                    // Handle SID links first
+                    if (targetUrl.includes('tech.unblockedgames.world') || targetUrl.includes('tech.creativeexpressionsblog.com')) {
+                        const resolvedUrl = await resolveTechUnblockedLink(targetUrl);
+                        if (!resolvedUrl) return null;
+                        targetUrl = resolvedUrl;
+                    }
+
+                    if (!targetUrl || !targetUrl.includes('driveseed.org')) return null;
+
+                    // Cache the driveseed URL instead of intermediate result
+                    return { ...quality, driveseedUrl: targetUrl };
+                } catch (error) {
+                    console.error(`[DramaDrip] Error resolving quality ${quality.quality}: ${error.message}`);
+                    return null;
                 }
-                return null;
             });
             
             cachedLinks = (await Promise.all(resolutionPromises)).filter(Boolean);
 
             // 4. Save to cache
             if (cachedLinks.length > 0) {
+                console.log(`[DramaDrip] Caching ${cachedLinks.length} resolved driveseed URLs for key: ${cacheKey}`);
                 await saveToCache(cacheKey, cachedLinks);
             }
         }
 
         if (!cachedLinks || cachedLinks.length === 0) {
-            console.log('[DramaDrip] No intermediate links found after scraping/cache check.');
+            console.log('[DramaDrip] No driveseed links found after scraping/cache check.');
             return [];
         }
 
-        // 5. Always fresh-fetch the final links from intermediate URLs
+        // 5. Process cached driveseed URLs to get final streams
+        console.log(`[DramaDrip] Processing ${cachedLinks.length} cached driveseed URLs to get final streams.`);
         const streamPromises = cachedLinks.map(async (linkInfo) => {
             try {
-                const { intermediateResult } = linkInfo;
-                let targetUrl = null;
+                const { driveseedUrl } = linkInfo;
+                if (!driveseedUrl) return null;
 
-                if (mediaType === 'tv' && intermediateResult.type === 'episodes') {
-                    const targetEpisode = intermediateResult.links.find(e => e.name.includes(`Episode ${episodeNum}`));
-                    if(targetEpisode) targetUrl = targetEpisode.url;
-                } else if (mediaType === 'movie' && intermediateResult.type === 'servers') {
-                    const fastServer = intermediateResult.links.find(s => s.name.includes('Server 1')) || intermediateResult.links[0];
-                    if(fastServer) targetUrl = fastServer.url;
-                }
-
-                if (!targetUrl) return null;
-
-                // Handle SID links first
-                if (targetUrl.includes('tech.unblockedgames.world') || targetUrl.includes('tech.creativeexpressionsblog.com')) {
-                    const resolvedUrl = await resolveTechUnblockedLink(targetUrl);
-                    if (!resolvedUrl) return null;
-                    targetUrl = resolvedUrl;
-                }
-
-                if (!targetUrl || !targetUrl.includes('driveseed.org')) return null;
-
-                const downloadInfo = await resolveDriveseedLink(targetUrl);
+                const downloadInfo = await resolveDriveseedLink(driveseedUrl);
                 if (!downloadInfo || !downloadInfo.downloadOptions) return null;
 
                 const { downloadOptions, title: fileTitle, size: fileSize } = downloadInfo;

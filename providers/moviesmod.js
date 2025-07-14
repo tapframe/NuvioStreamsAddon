@@ -753,7 +753,7 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
         console.log(`[MoviesMod] Fetching streams for TMDB ${mediaType}/${tmdbId}${seasonNum ? `, S${seasonNum}E${episodeNum}`: ''}`);
         
         // Define a cache key based on the media type and ID. For series, cache per season.
-        const cacheKey = `moviesmod_driveseed_v6_${tmdbId}_${mediaType}${seasonNum ? `_s${seasonNum}` : ''}`;
+        const cacheKey = `moviesmod_driveseed_v7_${tmdbId}_${mediaType}${seasonNum ? `_s${seasonNum}` : ''}`;
         let resolvedQualities = await getFromCache(cacheKey);
 
         if (!resolvedQualities) {
@@ -834,11 +834,42 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
             if (relevantLinks.length > 0) {
                 console.log(`[MoviesMod] Found ${relevantLinks.length} relevant quality links.`);
                 const qualityPromises = relevantLinks.map(async (link) => {
-                    const finalLinks = await resolveIntermediateLink(link.url, selectedResult.url, link.quality);
-                    if (finalLinks && finalLinks.length > 0) {
-                        return { quality: link.quality, finalLinks: finalLinks };
+                    try {
+                        const finalLinks = await resolveIntermediateLink(link.url, selectedResult.url, link.quality);
+                        if (!finalLinks || finalLinks.length === 0) return null;
+
+                        // Resolve all the way to driveseed URLs for caching
+                        const driveseedPromises = finalLinks.map(async (targetLink) => {
+                            try {
+                                let currentUrl = targetLink.url;
+
+                                // Handle SID links if they appear
+                                if (currentUrl.includes('tech.unblockedgames.world') || currentUrl.includes('tech.creativeexpressionsblog.com')) {
+                                    const resolvedUrl = await resolveTechUnblockedLink(currentUrl);
+                                    if (!resolvedUrl) return null;
+                                    currentUrl = resolvedUrl;
+                                }
+                                
+                                // Only cache if it's a driveseed URL
+                                if (currentUrl && currentUrl.includes('driveseed.org')) {
+                                    return { ...targetLink, driveseedUrl: currentUrl };
+                                }
+                                return null;
+                            } catch (error) {
+                                console.error(`[MoviesMod] Error resolving server ${targetLink.server}: ${error.message}`);
+                                return null;
+                            }
+                        });
+
+                        const driveseedLinks = (await Promise.all(driveseedPromises)).filter(Boolean);
+                        if (driveseedLinks.length > 0) {
+                            return { quality: link.quality, driveseedLinks: driveseedLinks };
+                        }
+                        return null;
+                    } catch (error) {
+                        console.error(`[MoviesMod] Error processing quality ${link.quality}: ${error.message}`);
+                        return null;
                     }
-                    return null;
                 });
 
                 resolvedQualities = (await Promise.all(qualityPromises)).filter(Boolean);
@@ -846,49 +877,41 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
                 resolvedQualities = [];
             }
             
+            if (resolvedQualities.length > 0) {
+                console.log(`[MoviesMod] Caching ${resolvedQualities.length} qualities with resolved driveseed URLs for key: ${cacheKey}`);
+            }
             await saveToCache(cacheKey, resolvedQualities);
         }
 
         if (!resolvedQualities || resolvedQualities.length === 0) {
-            console.log('[MoviesMod] No intermediate links found from cache or scraping.');
+            console.log('[MoviesMod] No driveseed links found from cache or scraping.');
             return [];
         }
 
-        console.log(`[MoviesMod] Processing ${resolvedQualities.length} qualities to get final streams.`);
+        console.log(`[MoviesMod] Processing ${resolvedQualities.length} qualities with cached driveseed URLs to get final streams.`);
         const streams = [];
         const processedFileNames = new Set();
 
         const qualityProcessingPromises = resolvedQualities.map(async (qualityInfo) => {
-            const { quality, finalLinks } = qualityInfo;
+            const { quality, driveseedLinks } = qualityInfo;
             
-                let targetLinks = finalLinks;
+            let targetLinks = driveseedLinks;
             if ((mediaType === 'tv' || mediaType === 'series') && episodeNum !== null) {
-                targetLinks = finalLinks.filter(fl => fl.server.toLowerCase().includes(`episode ${episodeNum}`) || fl.server.toLowerCase().includes(`ep ${episodeNum}`) || fl.server.toLowerCase().includes(`e${episodeNum}`));
+                targetLinks = driveseedLinks.filter(fl => fl.server.toLowerCase().includes(`episode ${episodeNum}`) || fl.server.toLowerCase().includes(`ep ${episodeNum}`) || fl.server.toLowerCase().includes(`e${episodeNum}`));
                 if (targetLinks.length === 0) {
                     console.log(`[MoviesMod] No episode ${episodeNum} found for ${quality}`);
-                        return [];
-                    }
+                    return [];
                 }
+            }
 
             const finalStreamPromises = targetLinks.map(async (targetLink) => {
                 try {
-                    let currentUrl = targetLink.url;
-
-                    // Step 1: Handle SID links if they appear
-                    if (currentUrl.includes('tech.unblockedgames.world') || currentUrl.includes('tech.creativeexpressionsblog.com')) {
-                        console.log(`[MoviesMod] Bypassing SID link: ${currentUrl}`);
-                        const resolvedUrl = await resolveTechUnblockedLink(currentUrl);
-                        if (!resolvedUrl) {
-                            console.warn(`[MoviesMod] Failed to bypass tech.unblockedgames.world for: ${currentUrl}`);
-                            return null;
-                        }
-                        console.log(`[MoviesMod] Bypassed. Continuing with resolved URL: ${resolvedUrl}`);
-                        currentUrl = resolvedUrl; // The resolved URL should be a driveseed link
-                    }
+                    const { driveseedUrl } = targetLink;
+                    if (!driveseedUrl) return null;
                     
-                    // Step 2: Now process the (potentially resolved) driveseed link
-                    if (currentUrl.includes('driveseed.org')) {
-                        const { downloadOptions, size: driveseedSize, fileName } = await resolveDriveseedLink(currentUrl);
+                    // Process the cached driveseed link directly
+                     if (driveseedUrl.includes('driveseed.org')) {
+                         const { downloadOptions, size: driveseedSize, fileName } = await resolveDriveseedLink(driveseedUrl);
                         
                         if (fileName && processedFileNames.has(fileName)) {
                             console.log(`[MoviesMod] Skipping duplicate file: ${fileName}`);
