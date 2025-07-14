@@ -3,9 +3,17 @@ const fs = require('fs').promises;
 const path = require('path');
 const cheerio = require('cheerio');
 const { CookieJar } = require('tough-cookie');
-const { wrapper } = require('axios-cookiejar-support');
 const { URLSearchParams, URL } = require('url');
 const FormData = require('form-data');
+
+// Dynamic import for axios-cookiejar-support
+let axiosCookieJarSupport = null;
+const getAxiosCookieJarSupport = async () => {
+  if (!axiosCookieJarSupport) {
+    axiosCookieJarSupport = await import('axios-cookiejar-support');
+  }
+  return axiosCookieJarSupport;
+};
 
 // --- Domain Fetching ---
 let topMoviesDomain = 'https://topmovies.rodeo'; // Fallback domain
@@ -177,6 +185,9 @@ async function resolveSidToDriveleech(sidUrl) {
     console.log(`Resolving SID link: ${sidUrl}`);
     const { origin } = new URL(sidUrl);
     const jar = new CookieJar();
+    
+    // Get the wrapper function from dynamic import
+    const { wrapper } = await getAxiosCookieJarSupport();
     const session = wrapper(axios.create({
         jar,
         headers: {
@@ -692,4 +703,4 @@ async function getTopMoviesStreams(tmdbId, mediaType = 'movie', season = null, e
   }
 }
 
-module.exports = { getTopMoviesStreams }; 
+module.exports = { getTopMoviesStreams };

@@ -157,6 +157,23 @@ console.log(`[addon.js] SoaperTV provider fetching enabled: ${ENABLE_SOAPERTV_PR
 const ENABLE_DRAMADRIP_PROVIDER = process.env.ENABLE_DRAMADRIP_PROVIDER !== 'false'; // Defaults to true if not set or not 'false'
 console.log(`[addon.js] DramaDrip provider fetching enabled: ${ENABLE_DRAMADRIP_PROVIDER}`);
 
+// External provider service configuration
+const USE_EXTERNAL_PROVIDERS = process.env.USE_EXTERNAL_PROVIDERS === 'true';
+const EXTERNAL_UHDMOVIES_URL = USE_EXTERNAL_PROVIDERS ? process.env.EXTERNAL_UHDMOVIES_URL : null;
+const EXTERNAL_DRAMADRIP_URL = USE_EXTERNAL_PROVIDERS ? process.env.EXTERNAL_DRAMADRIP_URL : null;
+const EXTERNAL_TOPMOVIES_URL = USE_EXTERNAL_PROVIDERS ? process.env.EXTERNAL_TOPMOVIES_URL : null;
+const EXTERNAL_MOVIESMOD_URL = USE_EXTERNAL_PROVIDERS ? process.env.EXTERNAL_MOVIESMOD_URL : null;
+
+console.log(`[addon.js] External providers: ${USE_EXTERNAL_PROVIDERS ? 'enabled' : 'disabled'}`);
+if (USE_EXTERNAL_PROVIDERS) {
+    console.log(`[addon.js] External UHDMovies URL: ${EXTERNAL_UHDMOVIES_URL || 'Not configured (using local)'}`); 
+    console.log(`[addon.js] External DramaDrip URL: ${EXTERNAL_DRAMADRIP_URL || 'Not configured (using local)'}`); 
+    console.log(`[addon.js] External TopMovies URL: ${EXTERNAL_TOPMOVIES_URL || 'Not configured (using local)'}`); 
+    console.log(`[addon.js] External MoviesMod URL: ${EXTERNAL_MOVIESMOD_URL || 'Not configured (using local)'}`); 
+} else {
+    console.log(`[addon.js] All providers will use local implementations`);
+}
+
 // NEW: Stream caching config
 const STREAM_CACHE_DIR = process.env.VERCEL ? path.join('/tmp', '.streams_cache') : path.join(__dirname, '.streams_cache');
 const STREAM_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
@@ -177,6 +194,40 @@ const { getMoviesModStreams } = require('./providers/moviesmod.js'); // NEW: Imp
 const { getTopMoviesStreams } = require('./providers/topmovies.js'); // NEW: Import from topmovies.js
 const { getDramaDripStreams } = require('./providers/dramadrip.js'); // NEW: Import from dramadrip.js
 const { getAnimePaheStreams } = require('./providers/animepahe.js'); // NEW: Import from animepahe.js
+const axios = require('axios'); // For external provider requests
+
+// Helper function to make requests to external provider services
+async function fetchFromExternalProvider(baseUrl, providerName, tmdbId, type, season = null, episode = null) {
+    try {
+        const endpoint = `/api/streams/${providerName.toLowerCase()}/${tmdbId}`;
+        const url = `${baseUrl.replace(/\/$/, '')}${endpoint}`;
+        
+        // Build query parameters
+        const queryParams = new URLSearchParams({ type });
+        if (season !== null) queryParams.append('season', season);
+        if (episode !== null) queryParams.append('episode', episode);
+        
+        const fullUrl = `${url}?${queryParams.toString()}`;
+        console.log(`[External Provider] Making request to: ${fullUrl}`);
+        
+        const response = await axios.get(fullUrl, {
+            timeout: 30000, // 30 second timeout
+            headers: {
+                'User-Agent': 'NuvioStreamsAddon/1.0'
+            }
+        });
+        
+        if (response.data && response.data.success) {
+            return response.data.streams || [];
+        } else {
+            console.error(`[External Provider] Request failed:`, response.data?.error || 'Unknown error');
+            return [];
+        }
+    } catch (error) {
+        console.error(`[External Provider] Error making request to ${baseUrl}/api/streams/${providerName.toLowerCase()}/${tmdbId}:`, error.message);
+        return [];
+    }
+}
 
 // --- Analytics Configuration ---
 const GA_MEASUREMENT_ID = process.env.GA_MEASUREMENT_ID;
@@ -1388,7 +1439,16 @@ builder.defineStreamHandler(async (args) => {
             // No cache or expired, fetch fresh
             try {
                 console.log(`[UHDMovies] Fetching new streams...`);
-                const streams = await getUHDMoviesStreams(tmdbId, tmdbTypeFromId, seasonNum, episodeNum);
+                let streams;
+                
+                // Check if external service URL is configured
+                if (EXTERNAL_UHDMOVIES_URL) {
+                    console.log(`[UHDMovies] Using external service: ${EXTERNAL_UHDMOVIES_URL}`);
+                    streams = await fetchFromExternalProvider(EXTERNAL_UHDMOVIES_URL, 'uhdmovies', tmdbId, tmdbTypeFromId, seasonNum, episodeNum);
+                } else {
+                    console.log(`[UHDMovies] Using local provider`);
+                    streams = await getUHDMoviesStreams(tmdbId, tmdbTypeFromId, seasonNum, episodeNum);
+                }
                 
                 if (streams && streams.length > 0) {
                     console.log(`[UHDMovies] Successfully fetched ${streams.length} streams.`);
@@ -1430,7 +1490,16 @@ builder.defineStreamHandler(async (args) => {
             // No cache or expired, fetch fresh
             try {
                 console.log(`[MoviesMod] Fetching new streams...`);
-                const streams = await getMoviesModStreams(tmdbId, tmdbTypeFromId, seasonNum, episodeNum);
+                let streams;
+                
+                // Check if external service URL is configured
+                if (EXTERNAL_MOVIESMOD_URL) {
+                    console.log(`[MoviesMod] Using external service: ${EXTERNAL_MOVIESMOD_URL}`);
+                    streams = await fetchFromExternalProvider(EXTERNAL_MOVIESMOD_URL, 'moviesmod', tmdbId, tmdbTypeFromId, seasonNum, episodeNum);
+                } else {
+                    console.log(`[MoviesMod] Using local provider`);
+                    streams = await getMoviesModStreams(tmdbId, tmdbTypeFromId, seasonNum, episodeNum);
+                }
                 
                 if (streams && streams.length > 0) {
                     console.log(`[MoviesMod] Successfully fetched ${streams.length} streams.`);
@@ -1478,7 +1547,16 @@ builder.defineStreamHandler(async (args) => {
             // No cache or expired, fetch fresh
             try {
                 console.log(`[TopMovies] Fetching new streams...`);
-                const streams = await getTopMoviesStreams(tmdbId, tmdbTypeFromId);
+                let streams;
+                
+                // Check if external service URL is configured
+                if (EXTERNAL_TOPMOVIES_URL) {
+                    console.log(`[TopMovies] Using external service: ${EXTERNAL_TOPMOVIES_URL}`);
+                    streams = await fetchFromExternalProvider(EXTERNAL_TOPMOVIES_URL, 'topmovies', tmdbId, tmdbTypeFromId);
+                } else {
+                    console.log(`[TopMovies] Using local provider`);
+                    streams = await getTopMoviesStreams(tmdbId, tmdbTypeFromId);
+                }
                 
                 if (streams && streams.length > 0) {
                     console.log(`[TopMovies] Successfully fetched ${streams.length} streams.`);
@@ -1520,7 +1598,16 @@ builder.defineStreamHandler(async (args) => {
             // No cache or expired, fetch fresh
             try {
                 console.log(`[DramaDrip] Fetching new streams...`);
-                const streams = await getDramaDripStreams(tmdbId, tmdbTypeFromId, seasonNum, episodeNum);
+                let streams;
+                
+                // Check if external service URL is configured
+                if (EXTERNAL_DRAMADRIP_URL) {
+                    console.log(`[DramaDrip] Using external service: ${EXTERNAL_DRAMADRIP_URL}`);
+                    streams = await fetchFromExternalProvider(EXTERNAL_DRAMADRIP_URL, 'dramadrip', tmdbId, tmdbTypeFromId, seasonNum, episodeNum);
+                } else {
+                    console.log(`[DramaDrip] Using local provider`);
+                    streams = await getDramaDripStreams(tmdbId, tmdbTypeFromId, seasonNum, episodeNum);
+                }
                 
                 if (streams && streams.length > 0) {
                     console.log(`[DramaDrip] Successfully fetched ${streams.length} streams.`);
@@ -1951,4 +2038,4 @@ ${warningMessage}`;
 });
 
 // Build and export the addon
-module.exports = builder.getInterface(); 
+module.exports = builder.getInterface();

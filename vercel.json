@@ -3,7 +3,8 @@
   "builds": [
     {
       "src": "server.js",
-      "use": "@vercel/node"
+      "use": "@vercel/node",
+      "config": { "includeFiles": ["providers/**", "views/**"] }
     }
   ],
   "routes": [
@@ -11,12 +12,5 @@
       "src": "/(.*)",
       "dest": "server.js"
     }
-  ],
-  "env": {
-    "VERCEL": "true",
-    "DISABLE_CACHE": "false",
-    "SHOWBOX_PROXY_URL_VALUE": "https://starlit-valkyrie-39f5ab.netlify.app/?destination=",
-    "SCRAPER_MODE": "proxy",
-    "USE_SCRAPER_API": "false"
-  }
-} 
+  ]
+}
