@@ -375,12 +375,32 @@ async function resolveTechUnblockedLink(sidUrl) {
 // Resolves driveseed.org links to find download options
 async function resolveDriveseedLink(driveseedUrl) {
     try {
-        const { data } = await axios.get(driveseedUrl, { headers: { 'Referer': 'https://links.modpro.blog/' } });
-        const redirectMatch = data.match(/window\.location\.replace\("([^"]+)"\)/);
-        if (!redirectMatch) return null;
+        console.log(`[DramaDrip] Resolving Driveseed link: ${driveseedUrl}`);
+        const { data } = await axios.get(driveseedUrl, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Referer': 'https://links.modpro.blog/', 
+            }
+        });
 
-        const finalUrl = `https://driveseed.org${redirectMatch[1]}`;
-        const { data: finalData } = await axios.get(finalUrl, { headers: { 'Referer': driveseedUrl } });
+        let finalData = data;
+        let finalUrl = driveseedUrl;
+        
+        // Check if there's a JavaScript redirect
+        const redirectMatch = data.match(/window\.location\.replace\("([^"]+)"\)/);
+        if (redirectMatch && redirectMatch[1]) {
+            const finalPath = redirectMatch[1];
+            finalUrl = `https://driveseed.org${finalPath}`;
+            console.log(`[DramaDrip] JS redirect found. Following to: ${finalUrl}`);
+            
+            const finalResponse = await axios.get(finalUrl, {
+                 headers: { 'Referer': driveseedUrl }
+            });
+            finalData = finalResponse.data;
+        } else {
+            console.log(`[DramaDrip] No redirect found, treating as final page: ${driveseedUrl}`);
+        }
+        
         const $ = cheerio.load(finalData);
         const downloadOptions = [];
         let title = null;
@@ -398,18 +418,20 @@ async function resolveDriveseedLink(driveseedUrl) {
 
         $('a:contains("Instant Download"), a:contains("Resume Cloud"), a:contains("Resume Worker Bot")').each((i, el) => {
             const button = $(el);
-            const title = button.text().trim();
+            const buttonTitle = button.text().trim();
             let type = 'unknown';
-            if (title.includes('Instant')) type = 'instant';
-            if (title.includes('Resume Cloud')) type = 'resume';
-            if (title.includes('Worker Bot')) type = 'worker';
+            if (buttonTitle.includes('Instant')) type = 'instant';
+            if (buttonTitle.includes('Resume Cloud')) type = 'resume';
+            if (buttonTitle.includes('Worker Bot')) type = 'worker';
 
             let url = button.attr('href');
             if (type === 'resume' && url && !url.startsWith('http')) {
                 url = `https://driveseed.org${url}`;
             }
-            if(url) downloadOptions.push({ title, type, url });
+            if(url) downloadOptions.push({ title: buttonTitle, type, url });
         });
+
+        console.log(`[DramaDrip] Found ${downloadOptions.length} download options for: ${title}`);
         return { downloadOptions, title, size };
     } catch (error) {
         console.error(`[DramaDrip] Error resolving Driveseed link: ${error.message}`);
