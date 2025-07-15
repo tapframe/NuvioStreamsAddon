@@ -4,7 +4,10 @@
   "description": "Stremio addon for ShowBox streaming links",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node test_cache_populator.js && node test_redis_cache.js",
+    "lint": "echo 'No linter configured yet'",
+    "dev": "node server.js"
   },
   "dependencies": {
     "aromanize": "^0.1.5",
