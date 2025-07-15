@@ -117,12 +117,11 @@ class RedisCache {
                 const fileData = await fs.readFile(cachePath, 'utf-8');
                 console.log(`[${this.providerName} Cache] FILE SYSTEM CACHE HIT for: ${path.join(subDir, cacheKey)}`);
                 
-                // If Redis is available, populate Redis for next time
+                // If Redis is available, populate Redis for next time (permanent cache)
                 if (this.redisClient && this.redisClient.status === 'ready') {
                     try {
-                        const ttlSeconds = this.getTTLForSubDir(subDir);
-                        await this.redisClient.set(fullCacheKey, fileData, 'EX', ttlSeconds);
-                        console.log(`[${this.providerName} Cache] Populated REDIS CACHE from FILE SYSTEM for: ${fullCacheKey} (TTL: ${ttlSeconds / 3600}h)`);
+                        await this.redisClient.set(fullCacheKey, fileData);
+                        console.log(`[${this.providerName} Cache] Populated REDIS CACHE from FILE SYSTEM for: ${fullCacheKey} (PERMANENT - no expiration)`);
                     } catch (redisSetError) {
                         console.warn(`[${this.providerName} Cache] REDIS CACHE SET ERROR (after file read) for ${fullCacheKey}: ${redisSetError.message}`);
                     }
@@ -155,12 +154,11 @@ class RedisCache {
         const dataToSave = typeof content === 'string' ? content : JSON.stringify(content, null, 2);
         const fullCacheKey = subDir ? `${this.providerName.toLowerCase()}:${subDir}:${cacheKey}` : `${this.providerName.toLowerCase()}:${cacheKey}`;
 
-        // Attempt to save to Redis first
+        // Attempt to save to Redis first (no expiration - permanent cache)
         if (this.redisClient && this.redisClient.status === 'ready') {
             try {
-                const ttlSeconds = this.getTTLForSubDir(subDir);
-                await this.redisClient.set(fullCacheKey, dataToSave, 'EX', ttlSeconds);
-                console.log(`[${this.providerName} Cache] SAVED TO REDIS CACHE: ${fullCacheKey} (TTL: ${ttlSeconds / 3600}h)`);
+                await this.redisClient.set(fullCacheKey, dataToSave);
+                console.log(`[${this.providerName} Cache] SAVED TO REDIS CACHE: ${fullCacheKey} (PERMANENT - no expiration)`);
             } catch (redisError) {
                 console.warn(`[${this.providerName} Cache] REDIS CACHE WRITE ERROR for ${fullCacheKey}: ${redisError.message}. Proceeding with file system cache.`);
             }
@@ -182,14 +180,11 @@ class RedisCache {
         }
     }
 
-    getTTLForSubDir(subDir) {
-        // Default TTL configurations based on data type
-        if (subDir.includes('search') || subDir.includes('results')) return 6 * 60 * 60; // 6 hours
-        if (subDir.includes('tmdb') || subDir.includes('api')) return 48 * 60 * 60; // 48 hours
-        if (subDir.includes('stream') || subDir.includes('links')) return 12 * 60 * 60; // 12 hours
-        if (subDir.includes('size') || subDir.includes('metadata')) return 72 * 60 * 60; // 72 hours
-        return 24 * 60 * 60; // Default 24 hours
-    }
+    // TTL method removed - all cache entries are now permanent
+    // getTTLForSubDir(subDir) {
+    //     // This method is no longer used as all cache entries are permanent
+    //     // Previously configured TTL based on data type but now all data persists indefinitely
+    // }
 
     async ensureCacheDir(dirPath) {
         try {
