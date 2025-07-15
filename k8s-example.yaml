@@ -1,0 +1,155 @@
+# Example Kubernetes deployment for Nuvio Streams
+# This demonstrates how to use the automated releases for production deployment
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nuvio-streams
+  labels:
+    app: nuvio-streams
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: nuvio-streams
+  template:
+    metadata:
+      labels:
+        app: nuvio-streams
+    spec:
+      containers:
+      - name: nuvio-streams
+        # Use the GitHub Container Registry with automated releases
+        # Replace 'latest' with specific version tags from GitHub releases
+        image: ghcr.io/tapframe/nuvio-streams-addon:latest
+        ports:
+        - containerPort: 3000
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: PORT
+          value: "3000"
+        # Add your environment variables here
+        # - name: REDIS_URL
+        #   valueFrom:
+        #     secretKeyRef:
+        #       name: nuvio-secrets
+        #       key: redis-url
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1001
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: cache
+          mountPath: /app/.cache
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: cache
+        emptyDir: {}
+      securityContext:
+        fsGroup: 1001
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nuvio-streams-service
+spec:
+  selector:
+    app: nuvio-streams
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 3000
+  type: ClusterIP
+
+---
+# Optional: Horizontal Pod Autoscaler
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: nuvio-streams-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: nuvio-streams
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+
+---
+# Optional: Pod Disruption Budget
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: nuvio-streams-pdb
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: nuvio-streams
+
+---
+# Example Ingress (adjust for your ingress controller)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nuvio-streams-ingress
+  annotations:
+    # nginx.ingress.kubernetes.io/rewrite-target: /
+    # cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  # tls:
+  # - hosts:
+  #   - your-domain.com
+  #   secretName: nuvio-streams-tls
+  rules:
+  - host: your-domain.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: nuvio-streams-service
+            port:
+              number: 80

@@ -1,10 +1,15 @@
 {
-  "name": "stremio-showbox-scraper",
-  "version": "0.1.0",
-  "description": "Stremio addon for ShowBox streaming links",
+  "name": "nuvio-streams-addon",
+  "version": "1.0.0",
+  "description": "Stremio addon for multiple streaming providers including ShowBox, UHDMovies, and more",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "node server.js",
+    "test": "node -e \"console.log('Tests would go here')\"",
+    "lint": "echo 'Linting would go here'",
+    "validate": "node -e \"JSON.parse(require('fs').readFileSync('manifest.json', 'utf8')); console.log('✅ Manifest is valid JSON')\"",
+    "prepare": "npm run validate"
   },
   "dependencies": {
     "aromanize": "^0.1.5",
@@ -30,6 +35,25 @@
     "yargs": "^17.7.2"
   },
   "engines": {
-    "node": ">=14.0.0"
-  }
+    "node": ">=16.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tapframe/NuvioStreamsAddon.git"
+  },
+  "keywords": [
+    "stremio",
+    "addon",
+    "streaming",
+    "showbox",
+    "movies",
+    "tv-shows",
+    "anime"
+  ],
+  "author": "tapframe",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/tapframe/NuvioStreamsAddon/issues"
+  },
+  "homepage": "https://github.com/tapframe/NuvioStreamsAddon#readme"
 }
