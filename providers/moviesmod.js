@@ -11,6 +11,7 @@ const { URLSearchParams, URL } = require('url');
 const fs = require('fs').promises;
 const path = require('path');
 const { findBestMatch } = require('string-similarity');
+const RedisCache = require('../utils/redisCache');
 
 // Dynamic import for axios-cookiejar-support
 let axiosCookieJarSupport = null;
@@ -56,6 +57,10 @@ async function getMoviesModDomain() {
 const CACHE_ENABLED = process.env.DISABLE_CACHE !== 'true';
 console.log(`[MoviesMod Cache] Internal cache is ${CACHE_ENABLED ? 'enabled' : 'disabled'}.`);
 const CACHE_DIR = process.env.VERCEL ? path.join('/tmp', '.moviesmod_cache') : path.join(__dirname, '.cache', 'moviesmod');
+
+// Initialize Redis cache
+const redisCache = new RedisCache('MoviesMod');
+
 // --- Caching Helper Functions ---
 const ensureCacheDir = async () => {
     if (!CACHE_ENABLED) return;
@@ -70,33 +75,25 @@ const ensureCacheDir = async () => {
 
 const getFromCache = async (key) => {
     if (!CACHE_ENABLED) return null;
-    const cacheFile = path.join(CACHE_DIR, `${key}.json`);
-    try {
-        const data = await fs.readFile(cacheFile, 'utf-8');
-        const cached = JSON.parse(data);
-
-        console.log(`[MoviesMod Cache] HIT for key: ${key}`);
-        return cached.data || cached; // Support both new format (data field) and legacy format
-    } catch (error) {
-        if (error.code !== 'ENOENT') {
-            console.error(`[MoviesMod Cache] READ ERROR for key ${key}: ${error.message}`);
-        }
-        return null;
+    
+    // Try Redis cache first, then fallback to file system
+    const cachedData = await redisCache.getFromCache(key, '', CACHE_DIR);
+    if (cachedData) {
+        return cachedData.data || cachedData; // Support both new format (data field) and legacy format
     }
+    
+    return null;
 };
 
 const saveToCache = async (key, data) => {
     if (!CACHE_ENABLED) return;
-    const cacheFile = path.join(CACHE_DIR, `${key}.json`);
+    
     const cacheData = {
         data: data
     };
-    try {
-        await fs.writeFile(cacheFile, JSON.stringify(cacheData, null, 2), 'utf-8');
-        console.log(`[MoviesMod Cache] SAVED for key: ${key}`);
-    } catch (error) {
-        console.error(`[MoviesMod Cache] WRITE ERROR for key ${key}: ${error.message}`);
-    }
+    
+    // Save to both Redis and file system
+    await redisCache.saveToCache(key, cacheData, '', CACHE_DIR);
 };
 
 // Initialize cache directory on startup

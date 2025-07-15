@@ -34,6 +34,10 @@ if (USE_REDIS_CACHE) {
         if (!process.env.REDIS_URL) {
             throw new Error("REDIS_URL environment variable is not set or is empty.");
         }
+        
+        // Check if this is a local Redis instance or remote
+        const isLocal = process.env.REDIS_URL.includes('localhost') || process.env.REDIS_URL.includes('127.0.0.1');
+        
         redis = new Redis(process.env.REDIS_URL, {
             maxRetriesPerRequest: 5,
             retryStrategy(times) {
@@ -49,7 +53,8 @@ if (USE_REDIS_CACHE) {
                 console.warn(`[Redis Cache] reconnectOnError invoked due to error: "${err.message}". Decided to reconnect: ${shouldReconnect}`);
                 return shouldReconnect;
             },
-            tls: {},
+            // TLS is optional - only use if explicitly specified with rediss:// protocol
+            tls: process.env.REDIS_URL.startsWith('rediss://') ? {} : undefined,
             enableOfflineQueue: true,
             enableReadyCheck: true,
             autoResubscribe: true,

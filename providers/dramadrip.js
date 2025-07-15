@@ -6,6 +6,7 @@ const { URLSearchParams, URL } = require('url');
 const fs = require('fs').promises;
 const path = require('path');
 const { findBestMatch } = require('string-similarity');
+const RedisCache = require('../utils/redisCache');
 
 // Dynamic import for axios-cookiejar-support
 let axiosCookieJarSupport = null;
@@ -62,32 +63,29 @@ const ensureCacheDir = async () => {
     }
 };
 
+// Initialize Redis cache
+const redisCache = new RedisCache('DramaDrip');
+
 const getFromCache = async (key) => {
     if (!CACHE_ENABLED) return null;
-    const cacheFile = path.join(CACHE_DIR, `${key}.json`);
-    try {
-        const data = await fs.readFile(cacheFile, 'utf-8');
-        const cached = JSON.parse(data);
-        console.log(`[DramaDrip Cache] HIT for key: ${key}`);
-        return cached.data || cached; // Support both new format (data field) and legacy format
-    } catch (error) {
-        return null;
+    
+    // Try Redis cache first, then fallback to file system
+    const cachedData = await redisCache.getFromCache(key, '', CACHE_DIR);
+    if (cachedData) {
+        return cachedData;
     }
+    
+    return null;
 };
 
 const saveToCache = async (key, data) => {
     if (!CACHE_ENABLED) return;
-    const cacheFile = path.join(CACHE_DIR, `${key}.json`);
-    const cacheData = {
-        data: data
-    };
-    try {
-        await fs.writeFile(cacheFile, JSON.stringify(cacheData, null, 2), 'utf-8');
-        console.log(`[DramaDrip Cache] SAVED for key: ${key}`);
-    } catch (error) {
-        console.error(`[DramaDrip Cache] WRITE ERROR for key ${key}: ${error.message}`);
-    }
+    
+    // Save to both Redis and file system
+    await redisCache.saveToCache(key, data, '', CACHE_DIR);
 };
+
+
 
 // Initialize cache directory
 ensureCacheDir();

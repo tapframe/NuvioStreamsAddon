@@ -17,6 +17,10 @@ if (process.env.USE_REDIS_CACHE === 'true') { // Modified condition
         if (!process.env.REDIS_URL) {
             throw new Error("REDIS_URL environment variable is not set or is empty for Showbox Redis.");
         }
+        
+        // Check if this is a local Redis instance or remote
+        const isLocal = process.env.REDIS_URL.includes('localhost') || process.env.REDIS_URL.includes('127.0.0.1');
+        
         // console.log(`Attempting to connect to Redis at: ${process.env.REDIS_URL}`); // Original log, can be kept or removed. Let's keep it for now.
         redisClient = new Redis(process.env.REDIS_URL, {
             maxRetriesPerRequest: 5, // Increased from 3
@@ -31,11 +35,8 @@ if (process.env.USE_REDIS_CACHE === 'true') { // Modified condition
                 }
                 return false;
             },
-            // --- BEGIN: Upstash Compatibility Fix ---
-            // Upstash requires a TLS connection, and ioredis needs this explicit
-            // empty object to properly enable and configure TLS.
-            tls: {},
-            // --- END: Upstash Compatibility Fix ---
+            // TLS is optional - only use if explicitly specified with rediss:// protocol
+            tls: process.env.REDIS_URL.startsWith('rediss://') ? {} : undefined,
             enableOfflineQueue: true,
             enableReadyCheck: true,
             autoResubscribe: true,
