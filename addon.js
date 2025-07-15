@@ -1630,7 +1630,7 @@ builder.defineStreamHandler(async (args) => {
             }
         },
 
-        // AnimePahe provider with cache integration
+        // AnimePahe provider with internal caching
         animepahe: async () => {
             if (!ENABLE_ANIMEPAHE_PROVIDER) {
                 console.log('[AnimePahe] Skipping fetch: Disabled by environment variable.');
@@ -1647,39 +1647,14 @@ builder.defineStreamHandler(async (args) => {
                 return [];
             }
 
-            const ANIMEPAHE_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
-
-            // Try to get cached streams first
-            const cachedStreams = await getStreamFromCache('animepahe', tmdbTypeFromId, tmdbId, seasonNum, episodeNum);
-            if (cachedStreams) {
-                console.log(`[AnimePahe] Using ${cachedStreams.length} streams from cache.`);
-                return cachedStreams.map(stream => ({ ...stream, provider: 'AnimePahe' }));
-            }
-
-            // No cache or expired, fetch fresh
             try {
-                console.log(`[AnimePahe] Fetching new streams...`);
-        // Read the ANIMEPAHE_USE_PROXY environment variable
                 const useAnimePaheProxy = process.env.ANIMEPAHE_USE_PROXY !== 'false';
                 console.log(`[AnimePahe] Proxy usage: ${useAnimePaheProxy}`);
 
                 const streams = await getAnimePaheStreams(tmdbId, movieOrSeriesTitle, tmdbTypeFromId, seasonNum, episodeNum, seasonTitle);
-
-                if (streams && streams.length > 0) {
-                    console.log(`[AnimePahe] Successfully fetched ${streams.length} streams.`);
-                    // Save to cache with custom 10-day TTL
-                    await saveStreamToCache('animepahe', tmdbTypeFromId, tmdbId, streams, 'ok', seasonNum, episodeNum, null, null, ANIMEPAHE_CACHE_TTL_MS);
-                    return streams.map(stream => ({ ...stream, provider: 'AnimePahe' }));
-                } else {
-                    console.log(`[AnimePahe] No streams returned.`);
-                    // Save empty result with default (shorter) TTL for quick retry
-                    await saveStreamToCache('animepahe', tmdbTypeFromId, tmdbId, [], 'failed', seasonNum, episodeNum);
-                    return [];
-                }
+                return streams.map(stream => ({ ...stream, provider: 'AnimePahe' }));
             } catch (err) {
                 console.error(`[AnimePahe] Error fetching streams:`, err.message);
-                // Save error status to cache with default (shorter) TTL for quick retry
-                await saveStreamToCache('animepahe', tmdbTypeFromId, tmdbId, [], 'failed', seasonNum, episodeNum);
                 return [];
             }
         }

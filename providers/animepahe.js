@@ -2,12 +2,12 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
 const FormData = require('form-data');
-const crypto = require('crypto');
-const path = require('path');
-const fs = require('fs').promises;
 const { promisify } = require('util');
 const sleep = promisify(setTimeout);
 const stringSimilarity = require('string-similarity');
+const fs = require('fs').promises;
+const path = require('path');
+const RedisCache = require('../utils/redisCache');
 
 // --- Configuration & Constants ---
 const MAIN_URL = 'https://animepahe.ru';
@@ -21,69 +21,55 @@ const HEADERS = {
     'Cache-Control': 'no-cache',
     'Pragma': 'no-cache'
 };
-const TMDB_API_KEY = process.env.TMDB_API_KEY || '5b9790d9305dca8713b9a0afad42ea8d'; // Public API key
+const TMDB_API_KEY = process.env.TMDB_API_KEY || '5b9790d9305dca8713b9a0afad42ea8d';
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 1000;
 
-// Determine cache directory based on environment
-const CACHE_DIR = process.env.VERCEL ? path.join('/tmp', '.cache') : path.join(__dirname, '.cache', 'animepahe');
-const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+// --- Caching Configuration ---
+const CACHE_ENABLED = process.env.DISABLE_CACHE !== 'true';
+console.log(`[AnimePahe] Internal cache is ${CACHE_ENABLED ? 'enabled' : 'disabled'}.`);
+const CACHE_DIR = process.env.VERCEL ? path.join('/tmp', '.animepahe_cache') : path.join(__dirname, '.cache', 'animepahe');
 
-// --- Cache Management Functions ---
+// Initialize Redis cache
+const redisCache = new RedisCache('AnimePahe');
+
+// --- Caching Helper Functions ---
 const ensureCacheDir = async () => {
+    if (!CACHE_ENABLED) return;
     try {
         await fs.mkdir(CACHE_DIR, { recursive: true });
     } catch (error) {
         if (error.code !== 'EEXIST') {
-            console.warn(`[AnimePahe] Warning: Could not create cache directory ${CACHE_DIR}: ${error.message}`);
+            console.error(`[AnimePahe Cache] Error creating cache directory: ${error.message}`);
         }
     }
 };
 
-const getFromCache = async (cacheKey) => {
-    if (process.env.DISABLE_CACHE === 'true') {
-        console.log(`[AnimePahe] CACHE DISABLED: Skipping read for ${cacheKey}`);
-        return null;
+const getFromCache = async (key) => {
+    if (!CACHE_ENABLED) return null;
+    
+    // Try Redis cache first, then fallback to file system
+    const cachedData = await redisCache.getFromCache(key, '', CACHE_DIR);
+    if (cachedData) {
+        return cachedData.data || cachedData; // Support both new format (data field) and legacy format
     }
-    const cachePath = path.join(CACHE_DIR, `${cacheKey}.json`);
-    try {
-        const data = await fs.readFile(cachePath, 'utf-8');
-        const parsed = JSON.parse(data);
-        
-        // Check if cache is expired
-        if (parsed.timestamp && Date.now() - parsed.timestamp < CACHE_TTL_MS) {
-            console.log(`[AnimePahe] CACHE HIT for: ${cacheKey}`);
-            return parsed.data;
-        } else {
-            console.log(`[AnimePahe] CACHE EXPIRED for: ${cacheKey}`);
-            return null;
-        }
-    } catch (error) {
-        if (error.code !== 'ENOENT') {
-            console.warn(`[AnimePahe] CACHE READ ERROR for ${cacheKey}: ${error.message}`);
-        }
-        return null;
-    }
+    
+    return null;
 };
 
-const saveToCache = async (cacheKey, content) => {
-    if (process.env.DISABLE_CACHE === 'true') {
-        console.log(`[AnimePahe] CACHE DISABLED: Skipping write for ${cacheKey}`);
-        return;
-    }
-    await ensureCacheDir();
-    const cachePath = path.join(CACHE_DIR, `${cacheKey}.json`);
-    try {
-        const dataToSave = {
-            timestamp: Date.now(),
-            data: content
-        };
-        await fs.writeFile(cachePath, JSON.stringify(dataToSave, null, 2), 'utf-8');
-        console.log(`[AnimePahe] SAVED TO CACHE: ${cacheKey}`);
-    } catch (error) {
-        console.warn(`[AnimePahe] CACHE WRITE ERROR for ${cacheKey}: ${error.message}`);
-    }
+const saveToCache = async (key, data) => {
+    if (!CACHE_ENABLED) return;
+    
+    const cacheData = {
+        data: data
+    };
+    
+    // Save to both Redis and file system
+    await redisCache.saveToCache(key, cacheData, '', CACHE_DIR);
 };
+
+// Initialize cache directory on startup
+ensureCacheDir();
 
 // --- Helper Functions ---
 async function fetchWithRetry(url, options = {}, maxRetries = MAX_RETRIES) {
@@ -133,10 +119,6 @@ async function getTmdbAnimeDetails(tmdbId, mediaType) {
 
 // --- AnimePahe API Functions ---
 async function searchAnime(title) {
-    const cacheKey = `search_${title.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
-    const cachedResults = await getFromCache(cacheKey);
-    if (cachedResults) return cachedResults;
-    
     try {
         const url = `${PROXY_URL}${MAIN_URL}/api?m=search&l=8&q=${encodeURIComponent(title)}`;
         console.log(`[AnimePahe] Searching for anime: "${title}"`);
@@ -148,7 +130,7 @@ async function searchAnime(title) {
             return [];
         }
         
-        const results = data.data.map(item => ({
+        return data.data.map(item => ({
             id: item.id,
             title: item.title,
             type: item.type,
@@ -160,62 +142,13 @@ async function searchAnime(title) {
             poster: item.poster,
             session: item.session
         }));
-        
-        await saveToCache(cacheKey, results);
-        return results;
     } catch (error) {
         console.error(`[AnimePahe] Search error: ${error.message}`);
         return [];
     }
 }
 
-async function loadAnimeDetails(session) {
-    const cacheKey = `anime_${session}`;
-    const cachedDetails = await getFromCache(cacheKey);
-    if (cachedDetails) return cachedDetails;
-    
-    try {
-        const url = `${PROXY_URL}${MAIN_URL}/anime/${session}`;
-        console.log(`[AnimePahe] Loading anime details for session: ${session}`);
-        
-        const response = await axios.get(url, { headers: HEADERS });
-        const $ = cheerio.load(response.data);
-        
-        const japTitle = $('h2.japanese').text();
-        const animeTitle = $('span.sr-only.unselectable').text();
-        const poster = $('.anime-poster a').attr('href');
-        const tvType = $('a[href*="/anime/type/"]').text();
-        
-        const year = response.data.match(/<strong>Aired:<\/strong>[^,]*, (\d+)/)?.[1];
-        
-        let status = 'Unknown';
-        if ($('a[href="/anime/airing"]').length > 0) status = 'Ongoing';
-        else if ($('a[href="/anime/completed"]').length > 0) status = 'Completed';
-        
-        const animeDetails = {
-            title: animeTitle || japTitle || '',
-            engName: animeTitle,
-            japName: japTitle,
-            poster: poster,
-            type: tvType.includes('Movie') ? 'movie' : 'tv',
-            year: parseInt(year) || null,
-            status: status,
-            session: session
-        };
-        
-        await saveToCache(cacheKey, animeDetails);
-        return animeDetails;
-    } catch (error) {
-        console.error(`[AnimePahe] Error loading anime details: ${error.message}`);
-        return null;
-    }
-}
-
 async function getEpisodesList(session) {
-    const cacheKey = `episodes_${session}`;
-    const cachedEpisodes = await getFromCache(cacheKey);
-    if (cachedEpisodes) return cachedEpisodes;
-    
     try {
         const episodes = [];
         
@@ -259,8 +192,6 @@ async function getEpisodesList(session) {
         
         // Sort episodes by episode number
         episodes.sort((a, b) => a.episode - b.episode);
-        
-        await saveToCache(cacheKey, episodes);
         return episodes;
     } catch (error) {
         console.error(`[AnimePahe] Error generating episodes list: ${error.message}`);
@@ -270,10 +201,6 @@ async function getEpisodesList(session) {
 
 async function getVideoLinks(animeSession, episodeSession) {
     console.log(`[AnimePahe] getVideoLinks → animeSession: ${animeSession}, episodeSession: ${episodeSession}`);
-    const startTime = Date.now();
-    const cacheKey = `links_${animeSession}_${episodeSession}`;
-    const cachedLinks = await getFromCache(cacheKey);
-    if (cachedLinks) return cachedLinks;
     
     try {
         const episodeUrl = `${PROXY_URL}${MAIN_URL}/play/${animeSession}/${episodeSession}`;
@@ -306,17 +233,11 @@ async function getVideoLinks(animeSession, episodeSession) {
                 });
             }
         });
-        console.log(`[AnimePahe] Parsed ${links.length} download link(s) from episode page in ${(Date.now() - startTime)}ms`);
-        if (links.length === 0) {
-            const htmlSnippet = $.html().substring(0, 400).replace(/\s+/g, ' ');
-            console.warn(`[AnimePahe] No links found. HTML snippet: ${htmlSnippet}`);
-        }
         
-        await saveToCache(cacheKey, links);
+        console.log(`[AnimePahe] Parsed ${links.length} download link(s) from episode page`);
         return links;
     } catch (error) {
         console.error(`[AnimePahe] Error loading video links: ${error.message}`);
-        console.error(error.stack);
         return [];
     }
 }
@@ -337,7 +258,6 @@ async function extractPahe(url) {
             console.error('[AnimePahe] No redirect location found');
             return null;
         }
-        console.log(`[AnimePahe] Redirect location: ${location}`);
         
         const kwikUrl = 'https://' + location.split('https://').pop();
         console.log(`[AnimePahe] Kwik URL: ${kwikUrl}`);
@@ -349,7 +269,6 @@ async function extractPahe(url) {
                 'Referer': 'https://kwik.cx/'
             }
         });
-        console.log(`[AnimePahe] Kwik page status: ${kwikResponse.status}`);
         
         const kwikContent = kwikResponse.data;
         
@@ -357,7 +276,6 @@ async function extractPahe(url) {
         const paramsMatch = kwikContent.match(/\("(\w+)",\d+,"(\w+)",(\d+),(\d+),\d+\)/);
         if (!paramsMatch) {
             console.error('[AnimePahe] Could not find decryption parameters');
-            console.warn(`[AnimePahe] Kwik content snippet: ${kwikContent.substring(0, 200).replace(/\s+/g, ' ')}`);
             return null;
         }
         
@@ -366,7 +284,6 @@ async function extractPahe(url) {
         
         // Step 4: Decrypt using the custom algorithm
         const decrypted = decryptPahe(fullString, key, parseInt(v1), parseInt(v2));
-        console.log(`[AnimePahe] Decrypted content length: ${decrypted.length}`);
         
         // Step 5: Extract URL and token from decrypted content
         const urlMatch = decrypted.match(/action="([^"]+)"/);
@@ -374,13 +291,11 @@ async function extractPahe(url) {
         
         if (!urlMatch || !tokenMatch) {
             console.error('[AnimePahe] Could not extract URL or token from decrypted content');
-            console.warn(`[AnimePahe] Decrypted snippet: ${decrypted.substring(0, 200).replace(/\s+/g, ' ')}`);
             return null;
         }
         
         const postUrl = urlMatch[1];
         const token = tokenMatch[1];
-        console.log(`[AnimePahe] Post URL: ${postUrl}`);
         
         // Step 6: Make POST request with form data to get final URL
         const formData = new FormData();
@@ -395,7 +310,6 @@ async function extractPahe(url) {
             maxRedirects: 0,
             validateStatus: (status) => status >= 200 && status < 400
         });
-        console.log(`[AnimePahe] Final response status: ${finalResponse.status}`);
         
         if (finalResponse.status !== 302) {
             console.error('[AnimePahe] Failed to get redirect');
@@ -403,7 +317,7 @@ async function extractPahe(url) {
         }
         
         const finalUrl = finalResponse.headers.location;
-        console.log(`[AnimePahe] Final video URL: ${finalUrl}`);
+        console.log(`[AnimePahe] Final video URL extracted successfully`);
         
         return {
             url: finalUrl,
@@ -415,7 +329,6 @@ async function extractPahe(url) {
         
     } catch (error) {
         console.error(`[AnimePahe] Error extracting from Pahe: ${error.message}`);
-        console.error(error.stack);
         return null;
     }
 }
@@ -457,9 +370,20 @@ function decryptPahe(fullString, key, v1, v2) {
 
 // --- Main function to get streams ---
 async function getAnimePaheStreams(tmdbId, title, mediaType, seasonNum = null, episodeNum = null, seasonTitle = null) {
-    console.log(`[AnimePahe] Getting streams for TMDB ID: ${tmdbId}, Type: ${mediaType}, Season: ${seasonNum}, Episode: ${episodeNum}`);
+    console.log(`[AnimePahe] Attempting to fetch streams for TMDB ID: ${tmdbId}, Type: ${mediaType}${mediaType === 'tv' ? `, S:${seasonNum}E:${episodeNum}` : ''}`);
     
+    const cacheKey = `animepahe_final_v1_${tmdbId}_${mediaType}${seasonNum ? `_s${seasonNum}e${episodeNum}` : ''}`;
+
     try {
+        // 1. Check cache first
+        let cachedStreams = await getFromCache(cacheKey);
+        if (cachedStreams) {
+            console.log(`[AnimePahe] Cache HIT for ${cacheKey}. Using ${cachedStreams.length} cached streams.`);
+            return cachedStreams;
+        } else {
+            console.log(`[AnimePahe] Cache MISS for ${cacheKey}. Fetching from source.`);
+        }
+
         // For movies, we don't need season/episode numbers
         if (mediaType === 'movie' && (seasonNum !== null || episodeNum !== null)) {
             console.log('[AnimePahe] Ignoring season/episode numbers for movie');
@@ -470,6 +394,7 @@ async function getAnimePaheStreams(tmdbId, title, mediaType, seasonNum = null, e
         // For TV shows, we need both season and episode numbers
         if (mediaType === 'tv' && (seasonNum === null || episodeNum === null)) {
             console.error('[AnimePahe] Missing season or episode number for TV show');
+            await saveToCache(cacheKey, []); // Cache empty result
             return [];
         }
         
@@ -501,9 +426,6 @@ async function getAnimePaheStreams(tmdbId, title, mediaType, seasonNum = null, e
             
             // Filter results to only include those that contain the main anime title to avoid matching unrelated animes
             const relevantResults = searchResults.filter(r => r.title.toLowerCase().includes(animeTitle.toLowerCase()));
-            if(relevantResults.length === 0) {
-                console.log("[AnimePahe] No search results contain the main title, using all search results for matching.");
-            }
             const resultsToSearch = relevantResults.length > 0 ? relevantResults : searchResults;
 
             const titles = resultsToSearch.map(r => r.title);
@@ -544,14 +466,7 @@ async function getAnimePaheStreams(tmdbId, title, mediaType, seasonNum = null, e
             return [];
         }
         
-        // Step 3: Get anime details
-        const animeDetails = await loadAnimeDetails(bestMatch.session);
-        if (!animeDetails) {
-            console.error('[AnimePahe] Failed to load anime details');
-            return [];
-        }
-        
-        // Step 4: For TV shows, get episodes list and find the right episode
+        // Step 3: For TV shows, get episodes list and find the right episode
         let episodeSession = null;
         if (mediaType === 'tv') {
             const episodesList = await getEpisodesList(bestMatch.session);
@@ -596,14 +511,14 @@ async function getAnimePaheStreams(tmdbId, title, mediaType, seasonNum = null, e
             return [];
         }
         
-        // Step 5: Get video links
+        // Step 4: Get video links
         const videoLinks = await getVideoLinks(bestMatch.session, episodeSession);
         if (videoLinks.length === 0) {
             console.error('[AnimePahe] No video links found');
             return [];
         }
         
-        // Step 6: Extract streams from video links
+        // Step 5: Extract streams from video links
         const streams = [];
         for (const link of videoLinks) {
             try {
@@ -630,11 +545,17 @@ async function getAnimePaheStreams(tmdbId, title, mediaType, seasonNum = null, e
         }
         
         console.log(`[AnimePahe] Found ${streams.length} streams`);
+        
+        // Save to cache
+        await saveToCache(cacheKey, streams);
+        
         return streams;
     } catch (error) {
         console.error(`[AnimePahe] Error getting streams: ${error.message}`);
+        // Cache empty result to prevent re-scraping
+        await saveToCache(cacheKey, []);
         return [];
     }
 }
 
-module.exports = { getAnimePaheStreams }; 
+module.exports = { getAnimePaheStreams };
