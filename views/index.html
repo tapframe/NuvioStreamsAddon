@@ -2079,6 +2079,7 @@
                     <div class="cookie-config" id="cookieConfigSection">
                         <p>ShowBox fetches content from a cloud storage provider called FebBox. Each FebBox user gets 100GB/month of fast streaming before speeds are reduced.</p>
                         <p><strong>Why use your own cookie?</strong> Without personalization, you'll share cookies with other addon users, which can exhaust the 100GB quota quickly and result in slow or failed streams. When not using a personal cookie, ShowBox streams are limited to sizes below 9GB.</p>
+                        <p style="font-size: 0.85rem; color: var(--text-light); margin-bottom: 1rem;"><strong>💡 Tip:</strong> If you constantly see "not a valid cookie" even with a correct cookie, use the <span style="color: #ffcc00;">Override & Set</span> button to bypass validation issues.</p>
                         
                         <div class="cookie-form">
                             <div class="cookie-input-container">
@@ -2102,6 +2103,7 @@
                             </select>
                             <div class="button-group">
                             <button id="setCookieBtn" class="btn btn-secondary">Set Cookie</button>
+                            <button id="overrideCookieBtn" class="btn" style="background: rgba(255,204,0,0.2); border: 1px solid #ffcc00; color: #ffcc00;">Override & Set</button>
                             <button id="howToGetBtn" class="how-to-get-btn">How to Get</button>
                             </div>
                         </div>
@@ -2390,6 +2392,7 @@
         const cookieInput = document.getElementById('cookieInput');
         const regionSelector = document.getElementById('regionSelector');
         const setCookieBtn = document.getElementById('setCookieBtn');
+        const overrideCookieBtn = document.getElementById('overrideCookieBtn');
         const manifestResult = document.querySelector('.manifest-result');
         const personalManifestUrlSpan = document.getElementById('personalManifestUrl');
         const checkCookieBtn = document.getElementById('checkCookieBtn'); // Get the new check button
@@ -2818,6 +2821,7 @@
 
                 if (result.isValid) {
                     cookieStatusIndicator.className = 'cookie-status-indicator valid';
+                    cookieStatusIndicator.style.backgroundColor = ''; // Reset any override background color
                     if (setCookieBtn) {
                         setCookieBtn.disabled = false; // Enable on valid
                         setCookieBtn.style.opacity = '1';
@@ -3065,6 +3069,40 @@
                 
                 // Restart region status checking
                 startRegionStatusCheck();
+            });
+        }
+
+        // Override Cookie Button Event Listener
+        if (overrideCookieBtn) {
+            overrideCookieBtn.addEventListener('click', async () => {
+                // Analytics: Track override cookie configuration
+                gtag('event', 'cookie_override', {
+                    'event_category': 'configuration',
+                    'event_label': 'override_cookie_clicked'
+                });
+                
+                const cookieValue = cookieInput.value.trim();
+                
+                if (cookieValue) {
+                    // Force the cookie to be treated as valid without validation
+                    cookieStatusIndicator.className = 'cookie-status-indicator valid';
+                    cookieStatusIndicator.style.backgroundColor = '#ffcc00';
+                    
+                    // Generate manifest with the override cookie
+                    await regeneratePersonalizedManifest();
+                    
+                    // Show override confirmation message
+                    toast.innerHTML = "Cookie applied without validation. <span style='color: #ffcc00;'>Invalid cookie may not work.</span>";
+                    toast.classList.add('show');
+                    setTimeout(() => { toast.classList.remove('show'); }, 4000);
+                    
+                    // Restart region status checking
+                    startRegionStatusCheck();
+                } else {
+                    toast.textContent = "Please enter your FebBox cookie first.";
+                    toast.classList.add('show');
+                    setTimeout(() => { toast.classList.remove('show'); }, 3000);
+                }
             });
         }
 
