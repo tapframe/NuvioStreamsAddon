@@ -325,11 +325,8 @@ const getFromCache = async (cacheKey, subDir = '') => {
         // If Redis is available, and we got a hit from file system, let's populate Redis for next time
         if (redisClient && redisClient.status === 'ready') {
             try {
-                let ttlSeconds = 24 * 60 * 60; // Default 24 hours, same logic as saveToCache
-                if (subDir === 'showbox_search_results') ttlSeconds = 6 * 60 * 60;
-                else if (subDir.startsWith('tmdb_')) ttlSeconds = 48 * 60 * 60;
-                else if (subDir.startsWith('febbox_')) ttlSeconds = 12 * 60 * 60;
-                else if (subDir === 'stream_sizes') ttlSeconds = 72 * 60 * 60;
+                let ttlSeconds = null; // No TTL by default (cache indefinitely)
+                if (subDir === 'showbox_search_results') ttlSeconds = 6 * 60 * 60; // Only search results expire after 6 hours
 
                 await redisClient.set(fullCacheKey, fileData, 'EX', ttlSeconds);
                 console.log(`  Populated REDIS CACHE from FILE SYSTEM for: ${fullCacheKey} (TTL: ${ttlSeconds / 3600}h)`);
@@ -369,14 +366,14 @@ const saveToCache = async (cacheKey, content, subDir = '') => {
             // TMDB data (subDir 'tmdb_api', 'tmdb_external_id') can have longer TTL like 24-72 hours.
             // FebBox HTML/parsed data ('febbox_page_html', 'febbox_parsed_page', 'febbox_season_folders', 'febbox_parsed_season_folders') can have medium TTL like 6-24 hours.
             // Stream sizes ('stream_sizes') can have a longer TTL if they don't change often, or shorter if they do.
-            let ttlSeconds = 24 * 60 * 60; // Default 24 hours
-            if (subDir === 'showbox_search_results') ttlSeconds = 6 * 60 * 60; // 6 hours
-            else if (subDir.startsWith('tmdb_')) ttlSeconds = 48 * 60 * 60; // 48 hours
-            else if (subDir.startsWith('febbox_')) ttlSeconds = 12 * 60 * 60; // 12 hours
-            else if (subDir === 'stream_sizes') ttlSeconds = 72 * 60 * 60; // 72 hours
+            let ttlSeconds = null; // No TTL by default (cache indefinitely)
+            if (subDir === 'showbox_search_results') ttlSeconds = 6 * 60 * 60; // Only search results expire after 6 hours
 
-
-            await redisClient.set(fullCacheKey, dataToSave, 'EX', ttlSeconds);
+            if (ttlSeconds) {
+                await redisClient.set(fullCacheKey, dataToSave, 'EX', ttlSeconds);
+            } else {
+                await redisClient.set(fullCacheKey, dataToSave); // No expiration
+            }
             console.log(`  SAVED TO REDIS CACHE: ${fullCacheKey} (TTL: ${ttlSeconds / 3600}h)`);
         } catch (redisError) {
             console.warn(`  REDIS CACHE WRITE ERROR for ${fullCacheKey}: ${redisError.message}. Proceeding with file system cache.`);
