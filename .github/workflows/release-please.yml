@@ -18,7 +18,7 @@ jobs:
         id: release
         with:
           release-type: node
-          package-name: stremio-showbox-scraper
+          skip-labeling: true
           
       # Optional: Deploy or publish after release
       - uses: actions/checkout@v4
