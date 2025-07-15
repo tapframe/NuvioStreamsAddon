@@ -16,14 +16,14 @@ const RedisCache = require('../utils/redisCache');
 // Dynamic import for axios-cookiejar-support
 let axiosCookieJarSupport = null;
 const getAxiosCookieJarSupport = async () => {
-  if (!axiosCookieJarSupport) {
-    axiosCookieJarSupport = await import('axios-cookiejar-support');
-  }
-  return axiosCookieJarSupport;
+    if (!axiosCookieJarSupport) {
+        axiosCookieJarSupport = await import('axios-cookiejar-support');
+    }
+    return axiosCookieJarSupport;
 };
 
 function escapeRegExp(string) {
-  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // $& means the whole matched string
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // $& means the whole matched string
 }
 
 // --- Domain Fetching ---
@@ -75,23 +75,23 @@ const ensureCacheDir = async () => {
 
 const getFromCache = async (key) => {
     if (!CACHE_ENABLED) return null;
-    
+
     // Try Redis cache first, then fallback to file system
     const cachedData = await redisCache.getFromCache(key, '', CACHE_DIR);
     if (cachedData) {
         return cachedData.data || cachedData; // Support both new format (data field) and legacy format
     }
-    
+
     return null;
 };
 
 const saveToCache = async (key, data) => {
     if (!CACHE_ENABLED) return;
-    
+
     const cacheData = {
         data: data
     };
-    
+
     // Save to both Redis and file system
     await redisCache.saveToCache(key, cacheData, '', CACHE_DIR);
 };
@@ -102,18 +102,18 @@ ensureCacheDir();
 // Helper function to extract quality from text
 function extractQuality(text) {
     if (!text) return 'Unknown';
-    
+
     const qualityMatch = text.match(/(480p|720p|1080p|2160p|4k)/i);
     if (qualityMatch) {
         return qualityMatch[1];
     }
-    
+
     // Try to extract from full text
     const cleanMatch = text.match(/(480p|720p|1080p|2160p|4k)[^)]*\)/i);
     if (cleanMatch) {
         return cleanMatch[0];
     }
-    
+
     return 'Unknown';
 }
 
@@ -168,11 +168,11 @@ async function extractDownloadLinks(moviePageUrl) {
 
         // Get all relevant headers (for movies and TV shows) in document order
         const headers = contentBox.find('h3:contains("Season"), h4');
-        
+
         headers.each((i, el) => {
             const header = $(el);
             const headerText = header.text().trim();
-            
+
             // Define the content block for this header
             const blockContent = header.nextUntil('h3, h4');
 
@@ -218,7 +218,7 @@ async function resolveIntermediateLink(initialUrl, refererUrl, quality) {
         if (urlObject.hostname.includes('dramadrip.com')) {
             const { data: dramaData } = await axios.get(initialUrl, { headers: { 'Referer': refererUrl } });
             const $$ = cheerio.load(dramaData);
-            
+
             let episodePageLink = null;
             const seasonMatch = quality.match(/Season \d+/i);
             // Extract the specific quality details, e.g., "1080p x264"
@@ -234,7 +234,7 @@ async function resolveIntermediateLink(initialUrl, refererUrl, quality) {
                     const link = $$(el);
                     const linkText = link.text().trim().toLowerCase();
                     const seasonHeader = link.closest('.wp-block-buttons').prevAll('h2.wp-block-heading').first().text().trim().toLowerCase();
-                    
+
                     const seasonIsMatch = seasonHeader.includes(seasonIdentifier);
                     // Ensure that the link text contains all parts of our specific quality
                     const allPartsMatch = qualityParts.every(part => linkText.includes(part));
@@ -251,16 +251,16 @@ async function resolveIntermediateLink(initialUrl, refererUrl, quality) {
                 console.error(`[MoviesMod] Could not find a specific quality match on dramadrip page for: ${quality}`);
                 return [];
             }
-            
+
             // Pass quality to recursive call
             return await resolveIntermediateLink(episodePageLink, initialUrl, quality);
-            
+
         } else if (urlObject.hostname.includes('cinematickit.org')) {
             // Handle cinematickit.org pages
             const { data } = await axios.get(initialUrl, { headers: { 'Referer': refererUrl } });
             const $ = cheerio.load(data);
             const finalLinks = [];
-            
+
             // Look for episode links on cinematickit.org
             $('a[href*="driveseed.org"]').each((i, el) => {
                 const link = $(el).attr('href');
@@ -272,7 +272,7 @@ async function resolveIntermediateLink(initialUrl, refererUrl, quality) {
                     });
                 }
             });
-            
+
             // If no driveseed links found, try other patterns
             if (finalLinks.length === 0) {
                 $('a[href*="modrefer.in"], a[href*="dramadrip.com"]').each((i, el) => {
@@ -286,14 +286,14 @@ async function resolveIntermediateLink(initialUrl, refererUrl, quality) {
                     }
                 });
             }
-            
+
             return finalLinks;
 
         } else if (urlObject.hostname.includes('episodes.modpro.blog')) {
             const { data } = await axios.get(initialUrl, { headers: { 'Referer': refererUrl } });
             const $ = cheerio.load(data);
             const finalLinks = [];
-            
+
             $('.entry-content a[href*="driveseed.org"], .entry-content a[href*="tech.unblockedgames.world"], .entry-content a[href*="tech.creativeexpressionsblog.com"]').each((i, el) => {
                 const link = $(el).attr('href');
                 const text = $(el).text().trim();
@@ -323,7 +323,7 @@ async function resolveIntermediateLink(initialUrl, refererUrl, quality) {
 
             const $ = cheerio.load(data);
             const finalLinks = [];
-            
+
             $('.timed-content-client_show_0_5_0 a').each((i, el) => {
                 const link = $(el).attr('href');
                 const text = $(el).text().trim();
@@ -347,122 +347,122 @@ async function resolveIntermediateLink(initialUrl, refererUrl, quality) {
 
 // Function to resolve tech.unblockedgames.world links to driveleech URLs (adapted from UHDMovies)
 async function resolveTechUnblockedLink(sidUrl) {
-  console.log(`[MoviesMod] Resolving SID link: ${sidUrl}`);
-  const { origin } = new URL(sidUrl);
-  const jar = new CookieJar();
-  
-  // Get the wrapper function from dynamic import
-  const { wrapper } = await getAxiosCookieJarSupport();
-  const session = wrapper(axios.create({
-    jar,
-    headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-        'Accept-Language': 'en-US,en;q=0.5',
-        'Connection': 'keep-alive',
-        'Upgrade-Insecure-Requests': '1'
-    }
-  }));
+    console.log(`[MoviesMod] Resolving SID link: ${sidUrl}`);
+    const { origin } = new URL(sidUrl);
+    const jar = new CookieJar();
 
-  try {
-    // Step 0: Get the _wp_http value
-    console.log("  [SID] Step 0: Fetching initial page...");
-    const responseStep0 = await session.get(sidUrl);
-    let $ = cheerio.load(responseStep0.data);
-    const initialForm = $('#landing');
-    const wp_http_step1 = initialForm.find('input[name="_wp_http"]').val();
-    const action_url_step1 = initialForm.attr('action');
-
-    if (!wp_http_step1 || !action_url_step1) {
-      console.error("  [SID] Error: Could not find _wp_http in initial form.");
-      return null;
-    }
-
-    // Step 1: POST to the first form's action URL
-    console.log("  [SID] Step 1: Submitting initial form...");
-    const step1Data = new URLSearchParams({ '_wp_http': wp_http_step1 });
-    const responseStep1 = await session.post(action_url_step1, step1Data, {
-      headers: { 'Referer': sidUrl, 'Content-Type': 'application/x-www-form-urlencoded' }
-    });
-
-    // Step 2: Parse verification page for second form
-    console.log("  [SID] Step 2: Parsing verification page...");
-    $ = cheerio.load(responseStep1.data);
-    const verificationForm = $('#landing');
-    const action_url_step2 = verificationForm.attr('action');
-    const wp_http2 = verificationForm.find('input[name="_wp_http2"]').val();
-    const token = verificationForm.find('input[name="token"]').val();
-
-    if (!action_url_step2) {
-      console.error("  [SID] Error: Could not find verification form.");
-      return null;
-    }
-
-    // Step 3: POST to the verification URL
-    console.log("  [SID] Step 3: Submitting verification...");
-    const step2Data = new URLSearchParams({ '_wp_http2': wp_http2, 'token': token });
-    const responseStep2 = await session.post(action_url_step2, step2Data, {
-      headers: { 'Referer': responseStep1.request.res.responseUrl, 'Content-Type': 'application/x-www-form-urlencoded' }
-    });
-
-    // Step 4: Find dynamic cookie and link from JavaScript
-    console.log("  [SID] Step 4: Parsing final page for JS data...");
-    let finalLinkPath = null;
-    let cookieName = null;
-    let cookieValue = null;
-
-    const scriptContent = responseStep2.data;
-    const cookieMatch = scriptContent.match(/s_343\('([^']+)',\s*'([^']+)'/);
-    const linkMatch = scriptContent.match(/c\.setAttribute\("href",\s*"([^"]+)"\)/);
-    
-    if (cookieMatch) {
-      cookieName = cookieMatch[1].trim();
-      cookieValue = cookieMatch[2].trim();
-    }
-    if (linkMatch) {
-      finalLinkPath = linkMatch[1].trim();
-    }
-
-    if (!finalLinkPath || !cookieName || !cookieValue) {
-      console.error("  [SID] Error: Could not extract dynamic cookie/link from JS.");
-      return null;
-    }
-    
-    const finalUrl = new URL(finalLinkPath, origin).href;
-    console.log(`  [SID] Dynamic link found: ${finalUrl}`);
-    console.log(`  [SID] Dynamic cookie found: ${cookieName}`);
-
-    // Step 5: Set cookie and make final request
-    console.log("  [SID] Step 5: Setting cookie and making final request...");
-    await jar.setCookie(`${cookieName}=${cookieValue}`, origin);
-    
-    const finalResponse = await session.get(finalUrl, {
-      headers: { 'Referer': responseStep2.request.res.responseUrl }
-    });
-
-    // Step 6: Extract driveleech URL from meta refresh tag
-    $ = cheerio.load(finalResponse.data);
-    const metaRefresh = $('meta[http-equiv="refresh"]');
-    if (metaRefresh.length > 0) {
-        const content = metaRefresh.attr('content');
-        const urlMatch = content.match(/url=(.*)/i);
-        if (urlMatch && urlMatch[1]) {
-            const driveleechUrl = urlMatch[1].replace(/"/g, "").replace(/'/g, "");
-            console.log(`  [SID] SUCCESS! Resolved Driveleech URL: ${driveleechUrl}`);
-            return driveleechUrl;
+    // Get the wrapper function from dynamic import
+    const { wrapper } = await getAxiosCookieJarSupport();
+    const session = wrapper(axios.create({
+        jar,
+        headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1'
         }
-    }
+    }));
 
-    console.error("  [SID] Error: Could not find meta refresh tag with Driveleech URL.");
-    return null;
+    try {
+        // Step 0: Get the _wp_http value
+        console.log("  [SID] Step 0: Fetching initial page...");
+        const responseStep0 = await session.get(sidUrl);
+        let $ = cheerio.load(responseStep0.data);
+        const initialForm = $('#landing');
+        const wp_http_step1 = initialForm.find('input[name="_wp_http"]').val();
+        const action_url_step1 = initialForm.attr('action');
 
-  } catch (error) {
-    console.error(`  [SID] Error during SID resolution: ${error.message}`);
-    if (error.response) {
-      console.error(`  [SID] Status: ${error.response.status}`);
+        if (!wp_http_step1 || !action_url_step1) {
+            console.error("  [SID] Error: Could not find _wp_http in initial form.");
+            return null;
+        }
+
+        // Step 1: POST to the first form's action URL
+        console.log("  [SID] Step 1: Submitting initial form...");
+        const step1Data = new URLSearchParams({ '_wp_http': wp_http_step1 });
+        const responseStep1 = await session.post(action_url_step1, step1Data, {
+            headers: { 'Referer': sidUrl, 'Content-Type': 'application/x-www-form-urlencoded' }
+        });
+
+        // Step 2: Parse verification page for second form
+        console.log("  [SID] Step 2: Parsing verification page...");
+        $ = cheerio.load(responseStep1.data);
+        const verificationForm = $('#landing');
+        const action_url_step2 = verificationForm.attr('action');
+        const wp_http2 = verificationForm.find('input[name="_wp_http2"]').val();
+        const token = verificationForm.find('input[name="token"]').val();
+
+        if (!action_url_step2) {
+            console.error("  [SID] Error: Could not find verification form.");
+            return null;
+        }
+
+        // Step 3: POST to the verification URL
+        console.log("  [SID] Step 3: Submitting verification...");
+        const step2Data = new URLSearchParams({ '_wp_http2': wp_http2, 'token': token });
+        const responseStep2 = await session.post(action_url_step2, step2Data, {
+            headers: { 'Referer': responseStep1.request.res.responseUrl, 'Content-Type': 'application/x-www-form-urlencoded' }
+        });
+
+        // Step 4: Find dynamic cookie and link from JavaScript
+        console.log("  [SID] Step 4: Parsing final page for JS data...");
+        let finalLinkPath = null;
+        let cookieName = null;
+        let cookieValue = null;
+
+        const scriptContent = responseStep2.data;
+        const cookieMatch = scriptContent.match(/s_343\('([^']+)',\s*'([^']+)'/);
+        const linkMatch = scriptContent.match(/c\.setAttribute\("href",\s*"([^"]+)"\)/);
+
+        if (cookieMatch) {
+            cookieName = cookieMatch[1].trim();
+            cookieValue = cookieMatch[2].trim();
+        }
+        if (linkMatch) {
+            finalLinkPath = linkMatch[1].trim();
+        }
+
+        if (!finalLinkPath || !cookieName || !cookieValue) {
+            console.error("  [SID] Error: Could not extract dynamic cookie/link from JS.");
+            return null;
+        }
+
+        const finalUrl = new URL(finalLinkPath, origin).href;
+        console.log(`  [SID] Dynamic link found: ${finalUrl}`);
+        console.log(`  [SID] Dynamic cookie found: ${cookieName}`);
+
+        // Step 5: Set cookie and make final request
+        console.log("  [SID] Step 5: Setting cookie and making final request...");
+        await jar.setCookie(`${cookieName}=${cookieValue}`, origin);
+
+        const finalResponse = await session.get(finalUrl, {
+            headers: { 'Referer': responseStep2.request.res.responseUrl }
+        });
+
+        // Step 6: Extract driveleech URL from meta refresh tag
+        $ = cheerio.load(finalResponse.data);
+        const metaRefresh = $('meta[http-equiv="refresh"]');
+        if (metaRefresh.length > 0) {
+            const content = metaRefresh.attr('content');
+            const urlMatch = content.match(/url=(.*)/i);
+            if (urlMatch && urlMatch[1]) {
+                const driveleechUrl = urlMatch[1].replace(/"/g, "").replace(/'/g, "");
+                console.log(`  [SID] SUCCESS! Resolved Driveleech URL: ${driveleechUrl}`);
+                return driveleechUrl;
+            }
+        }
+
+        console.error("  [SID] Error: Could not find meta refresh tag with Driveleech URL.");
+        return null;
+
+    } catch (error) {
+        console.error(`  [SID] Error during SID resolution: ${error.message}`);
+        if (error.response) {
+            console.error(`  [SID] Status: ${error.response.status}`);
+        }
+        return null;
     }
-    return null;
-  }
 }
 
 // Resolve driveseed.org links to get download options
@@ -480,7 +480,7 @@ async function resolveDriveseedLink(driveseedUrl) {
         if (redirectMatch && redirectMatch[1]) {
             const finalPath = redirectMatch[1];
             const finalUrl = `https://driveseed.org${finalPath}`;
-            
+
             const finalResponse = await axios.get(finalUrl, {
                 headers: {
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
@@ -571,7 +571,7 @@ async function resolveWorkerSeedLink(workerSeedUrl) {
         console.log(`[MoviesMod] Resolving Worker-seed link: ${workerSeedUrl}`);
 
         const jar = new CookieJar();
-        
+
         // Get the wrapper function from dynamic import
         const { wrapper } = await getAxiosCookieJarSupport();
         const session = wrapper(axios.create({
@@ -587,7 +587,7 @@ async function resolveWorkerSeedLink(workerSeedUrl) {
 
         // Step 2: Use regex to extract the token and the correct ID from the script
         const scriptTags = pageHtml.match(/<script type="text\/javascript">([\s\S]*?)<\/script>/g);
-        
+
         if (!scriptTags) {
             console.error('[MoviesMod] Could not find any script tags on the page.');
             return null;
@@ -597,7 +597,7 @@ async function resolveWorkerSeedLink(workerSeedUrl) {
 
         if (!scriptContent) {
             console.error('[MoviesMod] Could not find the relevant script tag containing formData.append.');
-            
+
             // Debug: Log available script content
             console.log(`[MoviesMod] Found ${scriptTags.length} script tags. Checking for token patterns...`);
             scriptTags.forEach((script, i) => {
@@ -605,7 +605,7 @@ async function resolveWorkerSeedLink(workerSeedUrl) {
                     console.log(`[MoviesMod] Script ${i} snippet:`, script.substring(0, 300));
                 }
             });
-            
+
             return null;
         }
 
@@ -615,22 +615,22 @@ async function resolveWorkerSeedLink(workerSeedUrl) {
         if (!tokenMatch || !tokenMatch[1] || !idMatch || !idMatch[1]) {
             console.error('[MoviesMod] Could not extract token or correct ID from the script.');
             console.log('[MoviesMod] Script content snippet:', scriptContent.substring(0, 500));
-            
+
             // Try alternative patterns
             const altTokenMatch = scriptContent.match(/token['"]?\s*[:=]\s*['"]([^'"]+)['"]/);
             const altIdMatch = scriptContent.match(/id['"]?\s*[:=]\s*['"]([^'"]+)['"]/);
-            
+
             if (altTokenMatch && altIdMatch) {
                 console.log('[MoviesMod] Found alternative patterns, trying those...');
                 const token = altTokenMatch[1];
                 const id = altIdMatch[1];
                 console.log(`[MoviesMod] Alternative token: ${token.substring(0, 20)}...`);
                 console.log(`[MoviesMod] Alternative id: ${id}`);
-                
+
                 // Continue with these values
                 return await makeWorkerSeedRequest(session, token, id, workerSeedUrl);
             }
-            
+
             return null;
         }
 
@@ -654,10 +654,10 @@ async function resolveWorkerSeedLink(workerSeedUrl) {
 async function makeWorkerSeedRequest(session, token, correctId, workerSeedUrl) {
     // Step 3: Make the POST request with the correct data using the same session
     const apiUrl = `https://workerseed.dev/download?id=${correctId}`;
-    
+
     const formData = new FormData();
     formData.append('token', token);
-   
+
     console.log(`[MoviesMod] Step 3: POSTing to endpoint: ${apiUrl} with extracted token.`);
 
     // Use the session instance, which will automatically include the cookies
@@ -720,7 +720,7 @@ async function validateVideoUrl(url, timeout = 10000) {
                 'Range': 'bytes=0-1' // Just request first byte to test
             }
         });
-        
+
         // Check if status is OK (200-299) or partial content (206)
         if (response.status >= 200 && response.status < 400) {
             console.log(`[MoviesMod] ✓ URL validation successful (${response.status})`);
@@ -738,8 +738,8 @@ async function validateVideoUrl(url, timeout = 10000) {
 // Main function to get streams for TMDB content
 async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeNum = null) {
     try {
-        console.log(`[MoviesMod] Fetching streams for TMDB ${mediaType}/${tmdbId}${seasonNum ? `, S${seasonNum}E${episodeNum}`: ''}`);
-        
+        console.log(`[MoviesMod] Fetching streams for TMDB ${mediaType}/${tmdbId}${seasonNum ? `, S${seasonNum}E${episodeNum}` : ''}`);
+
         // Define a cache key based on the media type and ID. For series, cache per season.
         const cacheKey = `moviesmod_final_v1_${tmdbId}_${mediaType}${seasonNum ? `_s${seasonNum}` : ''}`;
         let resolvedQualities = await getFromCache(cacheKey);
@@ -747,13 +747,13 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
         if (!resolvedQualities) {
             console.log(`[MoviesMod Cache] MISS for key: ${cacheKey}. Fetching from source.`);
 
-        // We need to fetch title and year from TMDB API
-        const TMDB_API_KEY = "439c478a771f35c05022f9feabcca01c";
+            // We need to fetch title and year from TMDB API
+            const TMDB_API_KEY = "439c478a771f35c05022f9feabcca01c";
 
             const { default: fetch } = await import('node-fetch');
             const tmdbUrl = `https://api.themoviedb.org/3/${mediaType === 'tv' ? 'tv' : 'movie'}/${tmdbId}?api_key=${TMDB_API_KEY}&language=en-US`;
             const tmdbDetails = await (await fetch(tmdbUrl)).json();
-            
+
             const title = mediaType === 'tv' ? tmdbDetails.name : tmdbDetails.title;
             const year = mediaType === 'tv' ? tmdbDetails.first_air_date?.substring(0, 4) : tmdbDetails.release_date?.substring(0, 4);
             if (!title) throw new Error('Could not get title from TMDB');
@@ -765,7 +765,7 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
             // --- NEW: Use string similarity to find the best match ---
             const titles = searchResults.map(r => r.title);
             const bestMatch = findBestMatch(title, titles);
-            
+
             console.log(`[MoviesMod] Best match for "${title}" is "${bestMatch.bestMatch.target}" with a rating of ${bestMatch.bestMatch.rating.toFixed(2)}`);
 
             let selectedResult = null;
@@ -781,20 +781,20 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
                     }
                 }
             }
-            
+
             if (!selectedResult) {
                 // If no good match is found, try a stricter direct search using regex with word boundaries
                 console.log('[MoviesMod] Similarity match failed or was below threshold. Trying stricter name/year search with word boundaries...');
                 const titleRegex = new RegExp(`\\b${escapeRegExp(title.toLowerCase())}\\b`);
 
                 if (mediaType === 'movie') {
-                    selectedResult = searchResults.find(r => 
+                    selectedResult = searchResults.find(r =>
                         titleRegex.test(r.title.toLowerCase()) &&
                         (!year || r.title.includes(year))
                     );
                 } else { // for 'tv'
                     // For TV, be more lenient on year, but check for title and 'season' keyword.
-                    selectedResult = searchResults.find(r => 
+                    selectedResult = searchResults.find(r =>
                         titleRegex.test(r.title.toLowerCase()) &&
                         r.title.toLowerCase().includes('season')
                     );
@@ -804,7 +804,7 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
             if (!selectedResult) {
                 throw new Error(`No suitable search result found for "${title} (${year})". Best similarity match was too low or failed year check.`);
             }
-            
+
             console.log(`[MoviesMod] Selected: ${selectedResult.title}`);
             const downloadLinks = await extractDownloadLinks(selectedResult.url);
             if (downloadLinks.length === 0) throw new Error('No download links found');
@@ -813,7 +813,7 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
             if ((mediaType === 'tv' || mediaType === 'series') && seasonNum !== null) {
                 relevantLinks = downloadLinks.filter(link => link.quality.toLowerCase().includes(`season ${seasonNum}`) || link.quality.toLowerCase().includes(`s${seasonNum}`));
             }
-            
+
             // Filter out 480p links before processing
             relevantLinks = relevantLinks.filter(link => !link.quality.toLowerCase().includes('480p'));
             console.log(`[MoviesMod] ${relevantLinks.length} links remaining after 480p filter.`);
@@ -836,7 +836,7 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
                                     if (!resolvedUrl) return null;
                                     currentUrl = resolvedUrl;
                                 }
-                                
+
                                 // Only process if it's a driveseed URL
                                 if (currentUrl && currentUrl.includes('driveseed.org')) {
                                     // Now resolve the driveseed redirect URL to get the final file page URL
@@ -883,7 +883,7 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
             } else {
                 resolvedQualities = [];
             }
-            
+
             if (resolvedQualities.length > 0) {
                 console.log(`[MoviesMod] Caching ${resolvedQualities.length} qualities with resolved final file page URLs for key: ${cacheKey}`);
             }
@@ -901,7 +901,7 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
 
         const qualityProcessingPromises = resolvedQualities.map(async (qualityInfo) => {
             const { quality, finalFilePageLinks } = qualityInfo;
-            
+
             let targetLinks = finalFilePageLinks;
             if ((mediaType === 'tv' || mediaType === 'series') && episodeNum !== null) {
                 targetLinks = finalFilePageLinks.filter(fl => fl.server.toLowerCase().includes(`episode ${episodeNum}`) || fl.server.toLowerCase().includes(`ep ${episodeNum}`) || fl.server.toLowerCase().includes(`e${episodeNum}`));
@@ -915,7 +915,7 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
                 try {
                     const { finalFilePageUrl } = targetLink;
                     if (!finalFilePageUrl) return null;
-                    
+
                     // Process the cached final file page URL directly
                     if (finalFilePageUrl.includes('driveseed.org')) {
                         // Load the cached file page directly
@@ -931,7 +931,7 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
                         // Extract file size and name information
                         let driveseedSize = 'Unknown';
                         let fileName = null;
-                        
+
                         const sizeElement = $('li.list-group-item:contains("Size :")').text();
                         if (sizeElement) {
                             const sizeMatch = sizeElement.match(/Size\s*:\s*([0-9.,]+\s*[KMGT]B)/);
@@ -945,38 +945,50 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
                             fileName = nameElement.text().replace('Name :', '').trim();
                         } else {
                             const h5Title = $('div.card-header h5').clone().children().remove().end().text().trim();
-                             if (h5Title) {
+                            if (h5Title) {
                                 fileName = h5Title.replace(/\[.*\]/, '').trim();
-                             }
+                            }
                         }
 
                         // Extract download options
                         const downloadOptions = [];
-                        
-                        // Look for Resume Cloud link
-                        const resumeCloudLink = $('a[href*="resumecloud"]').attr('href');
+
+                        // Find Resume Cloud button (primary)
+                        const resumeCloudLink = $('a:contains("Resume Cloud")').attr('href');
                         if (resumeCloudLink) {
-                            downloadOptions.push({ title: 'Resume Cloud', url: resumeCloudLink, type: 'resume' });
+                            downloadOptions.push({
+                                title: 'Resume Cloud',
+                                type: 'resume',
+                                url: `https://driveseed.org${resumeCloudLink}`,
+                                priority: 1
+                            });
                         }
-                        
-                        // Look for Resume Worker Bot link
-                        const workerBotLink = $('a[href*="workerseed"]').attr('href');
-                        if (workerBotLink) {
-                            downloadOptions.push({ title: 'Resume Worker Bot', url: workerBotLink, type: 'worker' });
+
+                        // Find Resume Worker Bot (fallback)
+                        const workerSeedLink = $('a:contains("Resume Worker Bot")').attr('href');
+                        if (workerSeedLink) {
+                            downloadOptions.push({
+                                title: 'Resume Worker Bot',
+                                type: 'worker',
+                                url: workerSeedLink,
+                                priority: 2
+                            });
                         }
-                        
-                        // Look for Instant Download link
-                        const instantDownloadLink = $('a[href*="videoseed"]').attr('href');
+
+                        // Find Instant Download (final fallback)
+                        const instantDownloadLink = $('a:contains("Instant Download")').attr('href');
                         if (instantDownloadLink) {
-                            downloadOptions.push({ title: 'Instant Download', url: instantDownloadLink, type: 'instant' });
+                            downloadOptions.push({
+                                title: 'Instant Download',
+                                type: 'instant',
+                                url: instantDownloadLink,
+                                priority: 3
+                            });
                         }
-                        
-                        // Sort by priority: Resume Cloud > Resume Worker Bot > Instant Download
-                        downloadOptions.sort((a, b) => {
-                            const priority = { 'resume': 1, 'worker': 2, 'instant': 3 };
-                            return priority[a.type] - priority[b.type];
-                        });
-                        
+
+                        // Sort by priority
+                        downloadOptions.sort((a, b) => a.priority - b.priority);
+
                         if (fileName && processedFileNames.has(fileName)) {
                             console.log(`[MoviesMod] Skipping duplicate file: ${fileName}`);
                             return null;
@@ -991,7 +1003,7 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
                             try {
                                 console.log(`[MoviesMod] Trying ${option.title} for ${quality}...`);
                                 let finalDownloadUrl = null;
-                                
+
                                 if (option.type === 'resume') {
                                     finalDownloadUrl = await resolveResumeCloudLink(option.url);
                                 } else if (option.type === 'worker') {
@@ -999,7 +1011,7 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
                                 } else if (option.type === 'instant') {
                                     finalDownloadUrl = await resolveVideoSeedLink(option.url);
                                 }
-                                
+
                                 if (finalDownloadUrl) {
                                     // Validate the URL before using it
                                     const isValid = await validateVideoUrl(finalDownloadUrl);
@@ -1017,18 +1029,18 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
                                 console.log(`[MoviesMod] ✗ ${option.title} threw error: ${error.message}, trying next method...`);
                             }
                         }
-                        
+
                         if (!selectedResult) {
                             console.log(`[MoviesMod] ✗ All download methods failed for ${quality}`);
                             return null;
                         }
-                        
+
                         let actualQuality = extractQuality(quality);
                         const sizeInfo = driveseedSize || quality.match(/\[([^\]]+)\]/)?.[1];
                         const cleanFileName = fileName ? fileName.replace(/\.[^/.]+$/, "").replace(/[._]/g, ' ') : `Stream from ${quality}`;
                         const techDetails = getTechDetails(quality);
                         const techDetailsString = techDetails.length > 0 ? ` • ${techDetails.join(' • ')}` : '';
-                            
+
                         return {
                             name: `MoviesMod\n${actualQuality}`,
                             title: `${cleanFileName}\n${sizeInfo || ''}${techDetailsString}`,
