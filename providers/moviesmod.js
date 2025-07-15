@@ -741,7 +741,7 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
         console.log(`[MoviesMod] Fetching streams for TMDB ${mediaType}/${tmdbId}${seasonNum ? `, S${seasonNum}E${episodeNum}` : ''}`);
 
         // Define a cache key based on the media type and ID. For series, cache per season.
-        const cacheKey = `moviesmod_final_v1_${tmdbId}_${mediaType}${seasonNum ? `_s${seasonNum}` : ''}`;
+        const cacheKey = `moviesmod_final_v10_${tmdbId}_${mediaType}${seasonNum ? `_s${seasonNum}` : ''}`;
         let resolvedQualities = await getFromCache(cacheKey);
 
         if (!resolvedQualities) {

@@ -513,7 +513,7 @@ async function resolveFinalLink(downloadOption) {
 async function getDramaDripStreams(tmdbId, mediaType, seasonNum, episodeNum) {
 
     try {
-        const cacheKey = `dramadrip_final_v1_${tmdbId}_${mediaType}${seasonNum ? `_s${seasonNum}e${episodeNum}` : ''}`;
+        const cacheKey = `dramadrip_final_v10_${tmdbId}_${mediaType}${seasonNum ? `_s${seasonNum}e${episodeNum}` : ''}`;
         
         // 1. Check cache for resolved intermediate links
         let cachedLinks = await getFromCache(cacheKey);
