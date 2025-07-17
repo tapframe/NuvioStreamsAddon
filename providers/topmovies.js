@@ -155,7 +155,7 @@ async function resolveLeechproLink(leechproUrl) {
         
         const timedContent = $('.timed-content-client_show_0_5_0');
         if (timedContent.length > 0) {
-            const supportedLink = timedContent.find('a[href*="tech.unblockedgames.world"], a[href*="tech.creativeexpressionsblog.com"], a[href*="driveseed.org"], a[href*="driveleech.net"]').first();
+            const supportedLink = timedContent.find('a[href*="tech.unblockedgames.world"], a[href*="tech.creativeexpressionsblog.com"], a[href*="tech.examzculture.in"], a[href*="driveseed.org"], a[href*="driveleech.net"]').first();
             if (supportedLink.length > 0) {
                 resolvedLink = supportedLink.attr('href');
             }
@@ -163,7 +163,7 @@ async function resolveLeechproLink(leechproUrl) {
 
         // Fallback: look anywhere on the page for the links
         if (!resolvedLink) {
-            const allSupportedLinks = $('a[href*="tech.unblockedgames.world"], a[href*="tech.creativeexpressionsblog.com"], a[href*="driveseed.org"], a[href*="driveleech.net"]');
+            const allSupportedLinks = $('a[href*="tech.unblockedgames.world"], a[href*="tech.creativeexpressionsblog.com"], a[href*="tech.examzculture.in"], a[href*="driveseed.org"], a[href*="driveleech.net"]');
             if (allSupportedLinks.length > 0) {
                 resolvedLink = allSupportedLinks.first().attr('href');
             }
@@ -639,7 +639,7 @@ async function getTopMoviesStreams(tmdbId, mediaType = 'movie', season = null, e
 
                 let driveleechUrl = intermediateUrl;
                 // If it's a SID link, resolve it first
-                if (intermediateUrl.includes('tech.unblockedgames.world') || intermediateUrl.includes('tech.creativeexpressionsblog.com')) {
+                if (intermediateUrl.includes('tech.unblockedgames.world') || intermediateUrl.includes('tech.creativeexpressionsblog.com') || intermediateUrl.includes('tech.examzculture.in')) {
                     driveleechUrl = await resolveSidToDriveleech(intermediateUrl);
                 }
                 

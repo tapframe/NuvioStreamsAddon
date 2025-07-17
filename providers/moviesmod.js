@@ -294,7 +294,7 @@ async function resolveIntermediateLink(initialUrl, refererUrl, quality) {
             const $ = cheerio.load(data);
             const finalLinks = [];
 
-            $('.entry-content a[href*="driveseed.org"], .entry-content a[href*="tech.unblockedgames.world"], .entry-content a[href*="tech.creativeexpressionsblog.com"]').each((i, el) => {
+            $('.entry-content a[href*="driveseed.org"], .entry-content a[href*="tech.unblockedgames.world"], .entry-content a[href*="tech.creativeexpressionsblog.com"], .entry-content a[href*="tech.examzculture.in"]').each((i, el) => {
                 const link = $(el).attr('href');
                 const text = $(el).text().trim();
                 if (link && text && !text.toLowerCase().includes('batch')) {
@@ -835,7 +835,7 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
                                 let currentUrl = targetLink.url;
 
                                 // Handle SID links if they appear
-                                if (currentUrl.includes('tech.unblockedgames.world') || currentUrl.includes('tech.creativeexpressionsblog.com')) {
+                                if (currentUrl.includes('tech.unblockedgames.world') || currentUrl.includes('tech.creativeexpressionsblog.com') || currentUrl.includes('tech.examzculture.in')) {
                                     const resolvedUrl = await resolveTechUnblockedLink(currentUrl);
                                     if (!resolvedUrl) return null;
                                     currentUrl = resolvedUrl;

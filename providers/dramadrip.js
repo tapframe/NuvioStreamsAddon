@@ -207,7 +207,7 @@ async function resolveCinemaKitOrModproLink(initialUrl, refererUrl) {
             episodeLinks.each((i, el) => {
                 const link = $(el).attr('href');
                 const text = $(el).text().trim();
-                const isSupported = link && (link.includes('driveseed.org') || link.includes('tech.unblockedgames.world') || link.includes('tech.creativeexpressionsblog.com'));
+                const isSupported = link && (link.includes('driveseed.org') || link.includes('tech.unblockedgames.world') || link.includes('tech.creativeexpressionsblog.com') || link.includes('tech.examzculture.in'));
                 if (isSupported && text && !text.toLowerCase().includes('batch') && !text.toLowerCase().includes('zip')) {
                     finalLinks.push({ type: 'episode', name: text.replace(/\s+/g, ' '), url: link });
                 }
@@ -220,7 +220,7 @@ async function resolveCinemaKitOrModproLink(initialUrl, refererUrl) {
             seriesBtnLinks.each((i, el) => {
                 const link = $(el).attr('href');
                 const text = $(el).text().trim();
-                const isSupported = link && (link.includes('driveseed.org') || link.includes('tech.unblockedgames.world') || link.includes('tech.creativeexpressionsblog.com'));
+                const isSupported = link && (link.includes('driveseed.org') || link.includes('tech.unblockedgames.world') || link.includes('tech.creativeexpressionsblog.com') || link.includes('tech.examzculture.in'));
                 if (isSupported && text && !text.toLowerCase().includes('batch') && !text.toLowerCase().includes('zip')) {
                      finalLinks.push({ type: 'episode', name: text.replace(/\s+/g, ' '), url: link });
                 }
@@ -232,7 +232,7 @@ async function resolveCinemaKitOrModproLink(initialUrl, refererUrl) {
         $('.wp-block-button.movie_btn a').each((i, el) => {
              const link = $(el).attr('href');
              const text = $(el).text().trim();
-             const isSupported = link && (link.includes('driveseed.org') || link.includes('tech.unblockedgames.world') || link.includes('tech.creativeexpressionsblog.com'));
+             const isSupported = link && (link.includes('driveseed.org') || link.includes('tech.unblockedgames.world') || link.includes('tech.creativeexpressionsblog.com') || link.includes('tech.examzculture.in'));
              if(isSupported && text) {
                 finalLinks.push({ type: 'server', name: text, url: link });
              }
@@ -613,7 +613,7 @@ async function getDramaDripStreams(tmdbId, mediaType, seasonNum, episodeNum) {
                     if (!targetUrl) return null;
 
                     // Handle SID links first
-                    if (targetUrl.includes('tech.unblockedgames.world') || targetUrl.includes('tech.creativeexpressionsblog.com')) {
+                    if (targetUrl.includes('tech.unblockedgames.world') || targetUrl.includes('tech.creativeexpressionsblog.com') || targetUrl.includes('tech.examzculture.in')) {
                         const resolvedUrl = await resolveTechUnblockedLink(targetUrl);
                         if (!resolvedUrl) return null;
                         targetUrl = resolvedUrl;
