@@ -744,6 +744,17 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
         const cacheKey = `moviesmod_final_v10_${tmdbId}_${mediaType}${seasonNum ? `_s${seasonNum}` : ''}`;
         let resolvedQualities = await getFromCache(cacheKey);
 
+        // Ensure resolvedQualities is properly structured
+        if (resolvedQualities && !Array.isArray(resolvedQualities)) {
+            console.log(`[MoviesMod] Cache data is not an array, attempting to extract data property:`, typeof resolvedQualities);
+            if (resolvedQualities.data && Array.isArray(resolvedQualities.data)) {
+                resolvedQualities = resolvedQualities.data;
+            } else {
+                console.log(`[MoviesMod] Cache data structure is invalid, treating as cache miss`);
+                resolvedQualities = null;
+            }
+        }
+
         if (!resolvedQualities || resolvedQualities.length === 0) {
             if (resolvedQualities && resolvedQualities.length === 0) {
                 console.log(`[MoviesMod] Cache contains empty data for ${cacheKey}. Refetching from source.`);
@@ -896,6 +907,12 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
 
         if (!resolvedQualities || resolvedQualities.length === 0) {
             console.log('[MoviesMod] No final file page URLs found from cache or scraping.');
+            return [];
+        }
+
+        // Ensure resolvedQualities is an array
+        if (!Array.isArray(resolvedQualities)) {
+            console.error('[MoviesMod] resolvedQualities is not an array:', typeof resolvedQualities, resolvedQualities);
             return [];
         }
 
