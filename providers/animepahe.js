@@ -377,11 +377,15 @@ async function getAnimePaheStreams(tmdbId, title, mediaType, seasonNum = null, e
     try {
         // 1. Check cache first
         let cachedStreams = await getFromCache(cacheKey);
-        if (cachedStreams) {
+        if (cachedStreams && cachedStreams.length > 0) {
             console.log(`[AnimePahe] Cache HIT for ${cacheKey}. Using ${cachedStreams.length} cached streams.`);
             return cachedStreams;
         } else {
-            console.log(`[AnimePahe] Cache MISS for ${cacheKey}. Fetching from source.`);
+            if (cachedStreams && cachedStreams.length === 0) {
+                console.log(`[AnimePahe] Cache contains empty data for ${cacheKey}. Refetching from source.`);
+            } else {
+                console.log(`[AnimePahe] Cache MISS for ${cacheKey}. Fetching from source.`);
+            }
         }
 
         // For movies, we don't need season/episode numbers

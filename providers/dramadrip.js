@@ -517,9 +517,14 @@ async function getDramaDripStreams(tmdbId, mediaType, seasonNum, episodeNum) {
         
         // 1. Check cache for resolved intermediate links
         let cachedLinks = await getFromCache(cacheKey);
-        if (cachedLinks) {
+        if (cachedLinks && cachedLinks.length > 0) {
             console.log(`[DramaDrip Cache] Using ${cachedLinks.length} cached intermediate links.`);
         } else {
+            if (cachedLinks && cachedLinks.length === 0) {
+                console.log(`[DramaDrip] Cache contains empty data for ${cacheKey}. Refetching from source.`);
+            } else {
+                console.log(`[DramaDrip Cache] MISS for key: ${cacheKey}. Fetching from source.`);
+            }
             console.log(`[DramaDrip Cache] MISS for key: ${cacheKey}. Fetching from source.`);
             // 2. If cache miss, fetch from source
             const { data: tmdbData } = await axios.get(`https://api.themoviedb.org/3/${mediaType}/${tmdbId}?api_key=${TMDB_API_KEY}`);

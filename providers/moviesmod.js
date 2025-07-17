@@ -744,8 +744,12 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
         const cacheKey = `moviesmod_final_v10_${tmdbId}_${mediaType}${seasonNum ? `_s${seasonNum}` : ''}`;
         let resolvedQualities = await getFromCache(cacheKey);
 
-        if (!resolvedQualities) {
-            console.log(`[MoviesMod Cache] MISS for key: ${cacheKey}. Fetching from source.`);
+        if (!resolvedQualities || resolvedQualities.length === 0) {
+            if (resolvedQualities && resolvedQualities.length === 0) {
+                console.log(`[MoviesMod] Cache contains empty data for ${cacheKey}. Refetching from source.`);
+            } else {
+                console.log(`[MoviesMod Cache] MISS for key: ${cacheKey}. Fetching from source.`);
+            }
 
             // We need to fetch title and year from TMDB API
             const TMDB_API_KEY = "439c478a771f35c05022f9feabcca01c";

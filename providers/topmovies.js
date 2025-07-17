@@ -589,9 +589,14 @@ async function getTopMoviesStreams(tmdbId, mediaType = 'movie', season = null, e
     
     // 1. Check cache for intermediate links
     let cachedLinks = await getFromCache(cacheKey);
-    if (cachedLinks) {
+    if (cachedLinks && cachedLinks.length > 0) {
         console.log(`[TopMovies Cache] Using ${cachedLinks.length} cached driveleech links.`);
     } else {
+        if (cachedLinks && cachedLinks.length === 0) {
+            console.log(`[TopMovies] Cache contains empty data for ${cacheKey}. Refetching from source.`);
+        } else {
+            console.log(`[TopMovies Cache] MISS for key: ${cacheKey}. Fetching from source.`);
+        }
         console.log(`[TopMovies Cache] MISS for key: ${cacheKey}. Fetching from source.`);
         // 2. Get TMDB info
         const tmdbUrl = `https://api.themoviedb.org/3/movie/${tmdbId}?api_key=${TMDB_API_KEY}`;

@@ -993,9 +993,14 @@ async function getUHDMoviesStreams(tmdbId, mediaType = 'movie', season = null, e
   try {
     // 1. Check cache first
     let cachedLinks = await getFromCache(cacheKey);
-    if (cachedLinks) {
+    if (cachedLinks && cachedLinks.length > 0) {
         console.log(`[UHDMovies] Cache HIT for ${cacheKey}. Using ${cachedLinks.length} cached Driveleech links.`);
     } else {
+        if (cachedLinks && cachedLinks.length === 0) {
+            console.log(`[UHDMovies] Cache contains empty data for ${cacheKey}. Refetching from source.`);
+        } else {
+            console.log(`[UHDMovies] Cache MISS for ${cacheKey}. Fetching from source.`);
+        }
         console.log(`[UHDMovies] Cache MISS for ${cacheKey}. Fetching from source.`);
         // 2. If cache miss, get TMDB info to perform search
         const tmdbUrl = `https://api.themoviedb.org/3/${mediaType === 'tv' ? 'tv' : 'movie'}/${tmdbId}?api_key=${TMDB_API_KEY_UHDMOVIES}`;
