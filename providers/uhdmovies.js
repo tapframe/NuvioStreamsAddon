@@ -988,7 +988,7 @@ async function resolveSidToDriveleech(sidUrl) {
 async function getUHDMoviesStreams(tmdbId, mediaType = 'movie', season = null, episode = null) {
   console.log(`[UHDMovies] Attempting to fetch streams for TMDB ID: ${tmdbId}, Type: ${mediaType}${mediaType === 'tv' ? `, S:${season}E:${episode}` : ''}`);
 
-  const cacheKey = `uhd_final_v10_${tmdbId}_${mediaType}${season ? `_s${season}e${episode}` : ''}`;
+  const cacheKey = `uhd_final_v11_${tmdbId}_${mediaType}${season ? `_s${season}e${episode}` : ''}`;
 
   try {
     // 1. Check cache first
@@ -1038,7 +1038,7 @@ async function getUHDMoviesStreams(tmdbId, mediaType = 'movie', season = null, e
 
       if (searchResults.length === 0) {
         console.log(`[UHDMovies] No search results found for "${mediaInfo.title}".`);
-        await saveToCache(cacheKey, []); // Cache empty result to prevent re-scraping
+        // Don't cache empty results to allow retrying later
         return [];
       }
 
@@ -1047,7 +1047,7 @@ async function getUHDMoviesStreams(tmdbId, mediaType = 'movie', season = null, e
 
       if (matchingResults.length === 0) {
         console.log(`[UHDMovies] No matching content found for "${mediaInfo.title}" (${mediaInfo.year}).`);
-        await saveToCache(cacheKey, []);
+        // Don't cache empty results to allow retrying later
         return [];
       }
 
@@ -1074,7 +1074,7 @@ async function getUHDMoviesStreams(tmdbId, mediaType = 'movie', season = null, e
       const downloadInfo = await (mediaType === 'tv' ? extractTvShowDownloadLinks(matchingResult.link, season, episode) : extractDownloadLinks(matchingResult.link, mediaInfo.year));
       if (downloadInfo.links.length === 0) {
         console.log('[UHDMovies] No download links found on page.');
-        await saveToCache(cacheKey, []);
+        // Don't cache empty results to allow retrying later
         return [];
       }
 
@@ -1123,8 +1123,7 @@ async function getUHDMoviesStreams(tmdbId, mediaType = 'movie', season = null, e
         console.log(`[UHDMovies] Caching ${cachedLinks.length} resolved final file page URLs for key: ${cacheKey}`);
         await saveToCache(cacheKey, cachedLinks);
       } else {
-        console.log(`[UHDMovies] No final file page URLs could be resolved. Caching empty result.`);
-        await saveToCache(cacheKey, []);
+        console.log(`[UHDMovies] No final file page URLs could be resolved. Not caching to allow retrying later.`);
         return [];
       }
     }
