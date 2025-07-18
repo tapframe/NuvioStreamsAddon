@@ -1,30 +1,31 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    
+
     <!-- Google Analytics 4 -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-VQD9XG9K3C"></script>
     <script>
         window.dataLayer = window.dataLayer || [];
-        function gtag(){dataLayer.push(arguments);}
+        function gtag() { dataLayer.push(arguments); }
         gtag('js', new Date());
-        
+
         // Replace 'G-VQD9XG9K3C' with your actual GA4 Measurement ID
         gtag('config', 'G-VQD9XG9K3C', {
             // Enhanced measurement settings
             send_page_view: true,
             allow_google_signals: true,
             allow_ad_personalization_signals: false, // Set to true if you want ads personalization
-            
+
             // Custom parameters for your addon
             custom_map: {
                 'custom_parameter_1': 'provider_used',
                 'custom_parameter_2': 'content_type'
             }
         });
-        
+
         // Custom event tracking functions for your addon
         function trackProviderUsage(providerName, contentType) {
             gtag('event', 'provider_usage', {
@@ -34,7 +35,7 @@
                 'event_label': providerName + '_' + contentType
             });
         }
-        
+
         function trackStreamRequest(tmdbId, title, type) {
             gtag('event', 'stream_request', {
                 'tmdb_id': tmdbId,
@@ -44,7 +45,7 @@
                 'event_label': type + '_' + tmdbId
             });
         }
-        
+
         function trackPageSection(sectionName) {
             gtag('event', 'page_interaction', {
                 'section_name': sectionName,
@@ -53,7 +54,7 @@
             });
         }
     </script>
-    
+
     <title>Nuvio Streams | Elfhosted</title>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap">
     <style>
@@ -76,13 +77,13 @@
             --nuvio-app: #8c52ff;
             --nuvio-app-hover: #7038e0;
         }
-        
+
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
             font-family: 'Poppins', sans-serif;
             background-color: var(--background);
@@ -95,7 +96,7 @@
             background: linear-gradient(135deg, #000000 0%, #050505 100%);
             overflow-x: hidden;
         }
-        
+
         .cards-container {
             position: relative;
             display: flex;
@@ -107,11 +108,11 @@
             z-index: 1;
             padding: 0 0.5rem;
         }
-        
+
         .cards-container.expanded {
             justify-content: space-between;
         }
-        
+
         .card {
             background-color: var(--card);
             border-radius: 0.8rem;
@@ -122,10 +123,12 @@
             border: 1px solid #181818;
             position: relative;
             transform-origin: center center;
-            overflow: hidden; /* Prevent children from overflowing */
-            box-sizing: border-box; /* Include padding and border in the element's width and height */
+            overflow: hidden;
+            /* Prevent children from overflowing */
+            box-sizing: border-box;
+            /* Include padding and border in the element's width and height */
         }
-        
+
         /* Always-on Outer Glow for Main Card */
         .card:before {
             content: "";
@@ -135,38 +138,47 @@
             right: -2px;
             bottom: -2px;
             background: linear-gradient(45deg, var(--primary), transparent, var(--secondary));
-            z-index: -1; 
+            z-index: -1;
             border-radius: 0.9rem;
-            opacity: 0.4; /* Always visible, subtle */
+            opacity: 0.4;
+            /* Always visible, subtle */
             transition: opacity 0.4s ease-out;
-            pointer-events: none; /* Ensure it doesn't block interactions */
+            pointer-events: none;
+            /* Ensure it doesn't block interactions */
         }
-        
+
         .card:hover:before {
-            opacity: 0.7; /* Intensify on hover */
+            opacity: 0.7;
+            /* Intensify on hover */
         }
 
         /* Inner Glow for Main Card when Expanded */
         .main-card:after {
             content: "";
             position: absolute;
-            inset: 1px; /* Creates a 1px gap for the border, effectively inside */
-            border-radius: inherit; /* Match parent card's rounding */
-            background: linear-gradient(165deg, rgba(0,163,255,0.2), rgba(0,193,110,0.2));
-            z-index: 0; /* Behind content, on top of card background */
+            inset: 1px;
+            /* Creates a 1px gap for the border, effectively inside */
+            border-radius: inherit;
+            /* Match parent card's rounding */
+            background: linear-gradient(165deg, rgba(0, 163, 255, 0.2), rgba(0, 193, 110, 0.2));
+            z-index: 0;
+            /* Behind content, on top of card background */
             opacity: 0;
-            transition: opacity 0.5s ease-in-out 0.3s; /* Delayed appearance */
-            pointer-events: none; /* Ensure it doesn't block interactions */
+            transition: opacity 0.5s ease-in-out 0.3s;
+            /* Delayed appearance */
+            pointer-events: none;
+            /* Ensure it doesn't block interactions */
         }
 
         .expanded .main-card:after {
-            opacity: 1; /* Show inner glow when expanded */
+            opacity: 1;
+            /* Show inner glow when expanded */
         }
-        
+
         .expanded .main-card {
             transform: translateX(-20%) scale(0.95);
         }
-        
+
         .catalog-container {
             position: absolute;
             right: 0;
@@ -180,13 +192,13 @@
             flex-direction: column;
             gap: 1rem;
         }
-        
+
         .expanded .catalog-container {
             opacity: 1;
             transform: translateX(0) scale(1);
             pointer-events: all;
         }
-        
+
         .catalog-card {
             background-color: var(--card);
             border-radius: 0.8rem;
@@ -201,24 +213,24 @@
             transform: translateY(20px);
             opacity: 0;
         }
-        
+
         .expanded .catalog-card {
             transform: translateY(0);
             opacity: 1;
         }
-        
+
         .expanded .catalog-card:nth-child(1) {
             transition-delay: 0.1s;
         }
-        
+
         .expanded .catalog-card:nth-child(2) {
             transition-delay: 0.2s;
         }
-        
+
         .expanded .catalog-card:nth-child(3) {
             transition-delay: 0.3s;
         }
-        
+
         /* Always-on Outer Glow for Catalog Cards */
         .catalog-card:before {
             content: "";
@@ -229,32 +241,38 @@
             bottom: -2px;
             z-index: -1;
             border-radius: 0.9rem;
-            opacity: 0.4; /* Always visible, subtle */
+            opacity: 0.4;
+            /* Always visible, subtle */
             transition: opacity 0.4s ease-out;
         }
-        
+
         .catalog-card:hover {
             transform: translateY(-5px);
             box-shadow: 0 15px 40px rgba(0, 0, 0, 0.6);
         }
-        
+
         .catalog-card:hover:before {
-            opacity: 0.7; /* Intensify on hover */
+            opacity: 0.7;
+            /* Intensify on hover */
         }
-        
+
         .dc-universe-card:before {
             background: linear-gradient(45deg, var(--dc-universe), transparent);
         }
-        
+
         .star-wars-card:before {
             background: linear-gradient(45deg, var(--star-wars), transparent);
         }
-        
-        .catalog-logo, .card-header, .card-body, .card-footer {
-            position: relative; /* Ensure content is above pseudo-elements */
+
+        .catalog-logo,
+        .card-header,
+        .card-body,
+        .card-footer {
+            position: relative;
+            /* Ensure content is above pseudo-elements */
             z-index: 1;
         }
-        
+
         .catalog-logo {
             width: 80px;
             height: 80px;
@@ -265,26 +283,26 @@
             justify-content: center;
             font-size: 2rem;
             color: var(--text);
-            background: rgba(0,0,0,0.3);
+            background: rgba(0, 0, 0, 0.3);
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
         }
-        
+
         .dc-universe-logo {
             background: linear-gradient(135deg, var(--dc-universe), #2a0010);
         }
-        
+
         .star-wars-logo {
             background: linear-gradient(135deg, var(--star-wars), #443b00);
             color: #000;
         }
-        
+
         .catalog-title {
             font-size: 1.1rem;
             font-weight: 600;
             margin-bottom: 0.5rem;
             text-align: center;
         }
-        
+
         .catalog-desc {
             font-size: 0.8rem;
             color: var(--text-light);
@@ -292,7 +310,7 @@
             margin-bottom: 1rem;
             line-height: 1.4;
         }
-        
+
         .install-catalog-btn {
             background: linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%);
             color: white;
@@ -309,35 +327,42 @@
             position: relative;
             z-index: 2;
         }
-        
+
         .dc-universe-btn {
             background: linear-gradient(135deg, var(--dc-universe) 0%, var(--dc-universe-hover) 100%);
         }
-        
+
         .star-wars-btn {
             background: linear-gradient(135deg, var(--star-wars) 0%, var(--star-wars-hover) 100%);
             color: #000;
         }
-        
+
         .install-catalog-btn:hover {
             transform: translateY(-2px);
-            box-shadow: 0 6px 15px rgba(0, 163, 255, 0.3); /* Default primary color shadow */
+            box-shadow: 0 6px 15px rgba(0, 163, 255, 0.3);
+            /* Default primary color shadow */
         }
-        .dc-universe-btn:hover { box-shadow: 0 6px 15px rgba(255,0,72,0.3); }
-        .star-wars-btn:hover { box-shadow: 0 6px 15px rgba(255,232,31,0.3); }
-        
+
+        .dc-universe-btn:hover {
+            box-shadow: 0 6px 15px rgba(255, 0, 72, 0.3);
+        }
+
+        .star-wars-btn:hover {
+            box-shadow: 0 6px 15px rgba(255, 232, 31, 0.3);
+        }
+
         .card-header {
             padding: 1.5rem 1.5rem 1rem;
             text-align: center;
             /* position: relative; z-index: 1 already added above */
         }
-        
+
         .logo {
             max-width: 180px;
             margin-bottom: 1rem;
             filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.4));
         }
-        
+
         h1 {
             font-size: 1.5rem;
             font-weight: 600;
@@ -346,7 +371,7 @@
             letter-spacing: 0.5px;
             text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
         }
-        
+
         .card-body {
             padding: 1.5rem 2rem 2rem;
             display: grid;
@@ -355,15 +380,15 @@
             overflow: visible;
             /* position: relative; z-index: 1 already added above */
         }
-        
-        .card-body > p {
+
+        .card-body>p {
             margin-bottom: 0;
         }
-        
+
         .card-body .full-width {
             grid-column: 1 / -1;
         }
-        
+
         .providers {
             background-color: rgba(15, 15, 15, 0.7);
             border-radius: 0.6rem;
@@ -373,7 +398,7 @@
             border: 1px solid var(--border);
             height: 100%;
         }
-        
+
         .providers h2 {
             font-size: 1rem;
             font-weight: 500;
@@ -381,17 +406,17 @@
             color: var(--text);
             opacity: 0.9;
         }
-        
+
         .provider-item {
             display: flex;
             align-items: center;
             margin-bottom: 0.5rem;
         }
-        
+
         .provider-item:last-child {
             margin-bottom: 0;
         }
-        
+
         .provider-icon {
             width: 20px;
             height: 20px;
@@ -403,41 +428,44 @@
             flex-shrink: 0;
             font-size: 0.8rem;
         }
-        
+
         .showbox-icon {
             background: linear-gradient(135deg, #ff7a00, #ff0050);
         }
-        
+
         .xprime-icon {
             background: linear-gradient(135deg, #00a3ff, #00c16e);
         }
-        
+
         .hollymovie-icon {
             background: linear-gradient(135deg, #e50914, #831010);
         }
-        
+
         .soapertv-icon {
-            background: linear-gradient(135deg, #3498db, #2980b9); /* Blue gradient for Soaper TV */
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            /* Blue gradient for Soaper TV */
         }
-        
+
         .cuevana-icon {
-            background: linear-gradient(135deg, #9b59b6, #8e44ad); /* Purple gradient for Cuevana */
+            background: linear-gradient(135deg, #9b59b6, #8e44ad);
+            /* Purple gradient for Cuevana */
         }
-        
+
         .hianime-icon {
-            background: linear-gradient(135deg, #ff3a3a, #ff7c7c); /* Red gradient for Hianime */
+            background: linear-gradient(135deg, #ff3a3a, #ff7c7c);
+            /* Red gradient for Hianime */
         }
-        
+
         .coming-soon-icon {
             background: linear-gradient(135deg, #6742d9, #9f7aea);
         }
-        
+
         .provider-name {
             font-weight: 500;
             font-size: 0.9rem;
             color: var(--text);
         }
-        
+
         .provider-detail {
             font-size: 0.75rem;
             color: var(--text-light);
@@ -445,7 +473,7 @@
             font-style: italic;
             opacity: 0.8;
         }
-        
+
         .coming-soon {
             font-size: 0.7rem;
             color: #9f7aea;
@@ -454,7 +482,7 @@
             letter-spacing: 0.5px;
             text-transform: uppercase;
         }
-        
+
         .provider-info-note {
             font-size: 0.8rem;
             color: var(--text-light);
@@ -470,7 +498,7 @@
             border: 1px solid var(--border);
             height: calc(100% - 1rem);
         }
-        
+
         .provider-info-note .info-icon {
             font-size: 1rem;
             margin-right: 0.5rem;
@@ -486,9 +514,10 @@
             margin: 0;
             border: 1px solid var(--border);
             position: relative;
-            grid-column: 1 / -1; /* Make it span full width */
+            grid-column: 1 / -1;
+            /* Make it span full width */
         }
-        
+
         .disclaimer-header {
             font-size: 0.85rem;
             font-weight: 500;
@@ -498,19 +527,19 @@
             display: flex;
             align-items: center;
         }
-        
+
         .disclaimer-icon {
             margin-right: 0.4rem;
             color: var(--text-light);
             font-size: 0.85rem;
         }
-        
+
         .disclaimer-content {
             display: flex;
             flex-wrap: wrap;
             gap: 0.75rem;
         }
-        
+
         .disclaimer-content p {
             flex: 1;
             min-width: 240px;
@@ -518,14 +547,14 @@
             font-size: 0.8rem;
             line-height: 1.4;
         }
-        
+
         .buttons {
             display: flex;
             gap: 0.75rem;
             margin-top: 1.5rem;
             grid-column: 1 / -1;
         }
-        
+
         .btn {
             flex: 1;
             display: inline-flex;
@@ -542,29 +571,30 @@
             outline: none;
             letter-spacing: 0.5px;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-            -webkit-tap-highlight-color: transparent; /* Remove tap highlight on mobile */
+            -webkit-tap-highlight-color: transparent;
+            /* Remove tap highlight on mobile */
         }
-        
+
         .btn-primary {
             background: linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%);
             color: white;
         }
-        
+
         .btn-primary:hover {
             transform: translateY(-2px);
             box-shadow: 0 6px 15px rgba(0, 163, 255, 0.3);
         }
-        
+
         .btn-secondary {
             background: linear-gradient(135deg, var(--secondary) 0%, var(--secondary-hover) 100%);
             color: white;
         }
-        
+
         .btn-secondary:hover {
             transform: translateY(-2px);
             box-shadow: 0 6px 15px rgba(0, 193, 110, 0.3);
         }
-        
+
         .toast {
             position: fixed;
             bottom: 1.5rem;
@@ -586,12 +616,12 @@
             max-width: 500px;
             text-align: center;
         }
-        
+
         .toast.show {
             opacity: 1;
             transform: translateX(-50%) translateY(-5px);
         }
-        
+
         .card-footer {
             padding: 1rem 1.5rem;
             border-top: 1px solid var(--border);
@@ -599,14 +629,14 @@
             background-color: rgba(15, 15, 15, 0.5);
             /* position: relative; z-index: 1 already added above */
         }
-        
+
         .footer-text {
             color: var(--text-light);
             font-size: 0.75rem;
             font-weight: 300;
             margin-bottom: 0.6rem;
         }
-        
+
         .more-addons-btn {
             display: inline-flex;
             align-items: center;
@@ -630,33 +660,33 @@
             border: none;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
         }
-        
+
         .more-addons-btn:hover {
             background-color: rgba(255, 255, 255, 0.1);
             transform: translateY(-2px);
             box-shadow: 0 6px 15px rgba(0, 163, 255, 0.3);
         }
-        
+
         .more-addons-btn .arrow {
             margin-left: 0.5rem;
             transition: transform 0.3s ease;
         }
-        
+
         .expanded .more-addons-btn .arrow {
             transform: rotate(180deg);
         }
-        
+
         .github-link {
             color: var(--text-light);
             text-decoration: none;
             font-weight: 500;
             transition: color 0.2s ease;
         }
-        
+
         .github-link:hover {
             color: var(--text);
         }
-        
+
         .close-catalog {
             position: absolute;
             top: 0.5rem;
@@ -677,13 +707,13 @@
             transform: scale(0);
             z-index: 3;
         }
-        
+
         .expanded .close-catalog {
             opacity: 1;
             transform: scale(1);
             transition-delay: 0.3s;
         }
-        
+
         .close-catalog:hover {
             background-color: rgba(255, 255, 255, 0.1);
         }
@@ -694,19 +724,20 @@
                 align-items: center;
                 gap: 2rem;
             }
-            
+
             .expanded .main-card {
                 transform: translateY(-2%) scale(0.95);
             }
-            
+
             .catalog-container {
                 position: relative;
                 width: 100%;
                 max-width: 400px;
                 margin-top: 1rem;
             }
-            
-            .providers, .provider-info-note {
+
+            .providers,
+            .provider-info-note {
                 grid-column: 1 / -1;
             }
         }
@@ -717,76 +748,77 @@
                 gap: 1rem;
                 padding: 1rem 1.25rem 1.5rem;
             }
-            
+
             .card {
                 max-width: 400px;
                 overflow: hidden;
             }
-            
+
             .disclaimer-content {
                 flex-direction: column;
                 gap: 0.5rem;
             }
-            
+
             .disclaimer-content p {
                 min-width: 100%;
                 width: 100%;
                 box-sizing: border-box;
             }
-            
+
             .cookie-form {
                 grid-template-columns: 1fr;
                 width: 100%;
             }
-            
+
             .buttons {
                 flex-direction: column;
                 gap: 0.5rem;
                 width: 100%;
             }
-            
+
             h1 {
                 font-size: 1.3rem;
             }
-            
+
             .logo {
                 max-width: 150px;
             }
-            
+
             .button-group {
                 flex-direction: column;
                 gap: 0.5rem;
                 width: 100%;
             }
-            
+
             .how-to-get-btn {
                 margin-left: 0;
                 width: 100%;
                 text-align: center;
             }
-            
+
             .cookie-config-container {
                 margin-bottom: 0.75rem;
                 width: 100%;
             }
 
-            .provider-info-note, .providers {
+            .provider-info-note,
+            .providers {
                 width: 100%;
                 box-sizing: border-box;
             }
         }
-        
+
         @media (max-width: 480px) {
             body {
                 padding: 0;
             }
-            
+
             .cards-container {
                 padding: 0;
                 max-width: 100vw;
                 width: 100vw;
             }
-            
+
             .card {
                 border-radius: 0;
                 max-width: 100%;
@@ -794,115 +826,120 @@
                 margin: 0;
                 border-left: none;
                 border-right: none;
-                overflow: visible; /* Allow card to expand with content */
+                overflow: visible;
+                /* Allow card to expand with content */
             }
-            
+
             .card:before {
                 border-radius: 0;
                 opacity: 0.3;
             }
-            
+
             .card-body {
                 padding: 0.75rem 1rem 1.25rem;
                 gap: 0.75rem;
             }
-            
+
             .card-header {
                 padding: 1.25rem 1.25rem 0.75rem;
             }
-            
+
             .card-footer {
                 padding: 0.75rem 1rem;
             }
-            
-            .providers, .provider-info-note, .disclaimer {
+
+            .providers,
+            .provider-info-note,
+            .disclaimer {
                 padding: 0.75rem;
                 border-radius: 0.5rem;
             }
-            
+
             .cookie-config {
                 padding: 0.75rem;
                 border-radius: 0.5rem;
             }
-            
+
             .toggle-text {
                 font-size: 0.9rem;
             }
-            
+
             .recommended-tag {
                 font-size: 0.7rem;
                 padding: 0.25rem 0.5rem;
             }
-            
+
             .toast {
                 padding: 0.6rem 1rem;
                 font-size: 0.8rem;
                 width: calc(100% - 1.5rem);
                 bottom: 1rem;
             }
-            
+
             /* Adjust long text fields */
             .manifest-url-box span {
                 font-size: 0.7rem;
             }
-            
+
             .provider-detail {
-                display: none; /* Hide provider details on very small screens */
+                display: none;
+                /* Hide provider details on very small screens */
             }
-            
-            .cookie-input, #regionSelector {
+
+            .cookie-input,
+            #regionSelector {
                 font-size: 0.8rem;
                 padding: 0.6rem 0.75rem;
             }
-            
+
             .btn {
                 padding: 0.6rem 0.75rem;
                 font-size: 0.85rem;
             }
-            
+
             .video-tutorial-panel {
                 width: 100%;
                 right: -100%;
                 padding: 15px;
             }
-            
+
             .video-tutorial-panel.show {
                 right: 0;
             }
-            
+
             .step-text {
                 font-size: 0.85rem;
             }
-            
+
             .close-tutorial {
                 font-size: 1.8rem;
                 padding: 5px;
             }
-            
+
             /* Fix for personalized addon section */
             .manifest-result {
                 padding: 0.75rem;
                 margin-bottom: 1rem;
             }
-            
+
             .manifest-url-box {
                 padding: 0.75rem;
             }
-            
+
             .manifest-url-box span {
                 font-size: 0.75rem;
                 line-height: 1.3;
             }
-            
+
             .copy-btn {
                 width: 100%;
                 padding: 0.6rem 0;
             }
-            
+
             #personalizedManifest {
                 margin-bottom: 1rem;
             }
-            
+
             .cookie-config {
                 overflow: visible;
             }
@@ -915,39 +952,55 @@
             overflow: visible;
             animation: pulse 2s infinite;
         }
-        
+
         .nuvio-app-card:before {
             background: linear-gradient(45deg, var(--nuvio-app), var(--primary), var(--secondary));
             background-size: 200% 200%;
             animation: gradientFlow 10s ease infinite;
         }
-        
+
         @keyframes gradientFlow {
-            0% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-            100% { background-position: 0% 50%; }
+            0% {
+                background-position: 0% 50%;
+            }
+
+            50% {
+                background-position: 100% 50%;
+            }
+
+            100% {
+                background-position: 0% 50%;
+            }
         }
-        
+
         @keyframes pulse {
-            0% { box-shadow: 0 0 0 0 rgba(140, 82, 255, 0.4); }
-            70% { box-shadow: 0 0 0 10px rgba(140, 82, 255, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(140, 82, 255, 0); }
+            0% {
+                box-shadow: 0 0 0 0 rgba(140, 82, 255, 0.4);
+            }
+
+            70% {
+                box-shadow: 0 0 0 10px rgba(140, 82, 255, 0);
+            }
+
+            100% {
+                box-shadow: 0 0 0 0 rgba(140, 82, 255, 0);
+            }
         }
-        
+
         .nuvio-app-logo {
             background: linear-gradient(135deg, var(--nuvio-app), #3a1980);
             transform: scale(1.1);
             position: relative;
         }
-        
+
         .nuvio-app-btn {
             background: linear-gradient(135deg, var(--nuvio-app) 0%, var(--nuvio-app-hover) 100%);
         }
-        
+
         .nuvio-app-btn:hover {
             box-shadow: 0 6px 15px rgba(140, 82, 255, 0.4);
         }
-        
+
         .new-badge {
             position: absolute;
             top: -10px;
@@ -963,7 +1016,7 @@
             transform: rotate(5deg);
             letter-spacing: 0.5px;
         }
-        
+
         /* Cookie Configuration Styles */
         .cookie-config-container {
             margin-bottom: 1.25rem;
@@ -1014,11 +1067,19 @@
             letter-spacing: 0.5px;
             margin-left: auto;
         }
-        
+
         @keyframes pulse-tag {
-            0% { box-shadow: 0 0 0 0 rgba(255, 58, 58, 0.4); }
-            70% { box-shadow: 0 0 0 6px rgba(255, 58, 58, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(255, 58, 58, 0); }
+            0% {
+                box-shadow: 0 0 0 0 rgba(255, 58, 58, 0.4);
+            }
+
+            70% {
+                box-shadow: 0 0 0 6px rgba(255, 58, 58, 0);
+            }
+
+            100% {
+                box-shadow: 0 0 0 0 rgba(255, 58, 58, 0);
+            }
         }
 
         .cookie-config {
@@ -1032,7 +1093,7 @@
             opacity: 1;
             transition: max-height 0.5s ease-in-out, opacity 0.3s ease-in-out, padding 0.5s ease-in-out;
         }
-        
+
         .cookie-config p {
             font-size: 0.85rem;
             line-height: 1.5;
@@ -1153,7 +1214,8 @@
         /* Video Tutorial Panel Styles */
         .video-tutorial-panel {
             position: fixed;
-            right: -420px; /* Start offscreen */
+            right: -420px;
+            /* Start offscreen */
             top: 0;
             width: 400px;
             height: 100%;
@@ -1165,11 +1227,11 @@
             overflow-y: auto;
             border-left: 2px solid var(--primary);
         }
-        
+
         .video-tutorial-panel.show {
             right: 0;
         }
-        
+
         .tutorial-header {
             display: flex;
             justify-content: space-between;
@@ -1178,13 +1240,13 @@
             padding-bottom: 10px;
             border-bottom: 1px solid var(--border);
         }
-        
+
         .tutorial-title {
             font-size: 1.2rem;
             font-weight: 600;
             color: var(--text);
         }
-        
+
         .close-tutorial {
             background: none;
             border: none;
@@ -1193,11 +1255,11 @@
             cursor: pointer;
             transition: color 0.2s ease;
         }
-        
+
         .close-tutorial:hover {
             color: var(--text);
         }
-        
+
         .video-container {
             margin-bottom: 20px;
             border-radius: 8px;
@@ -1205,11 +1267,11 @@
             background-color: #000;
             position: relative;
         }
-        
+
         .video-player {
             width: 100%;
         }
-        
+
         .video-warning-overlay {
             position: absolute;
             bottom: 0;
@@ -1221,28 +1283,28 @@
             font-size: 0.75rem;
             text-align: center;
         }
-        
+
         .video-warning-overlay span {
             color: rgba(255, 58, 58, 0.9);
             font-weight: bold;
         }
-        
+
         .tutorial-steps {
             margin-bottom: 20px;
         }
-        
+
         .tutorial-steps h3 {
             font-size: 1rem;
             margin-bottom: 15px;
             color: var(--primary);
         }
-        
+
         .step {
             margin-bottom: 15px;
             display: flex;
             align-items: flex-start;
         }
-        
+
         .step-number {
             background-color: var(--primary);
             color: white;
@@ -1257,13 +1319,13 @@
             margin-right: 10px;
             flex-shrink: 0;
         }
-        
+
         .step-text {
             font-size: 0.9rem;
             color: var(--text-light);
             line-height: 1.5;
         }
-        
+
         .how-to-get-btn {
             background-color: rgba(0, 163, 255, 0.1);
             border: 1px solid rgba(0, 163, 255, 0.3);
@@ -1274,13 +1336,14 @@
             cursor: pointer;
             transition: all 0.3s ease;
             margin-left: 0.5rem;
-            -webkit-tap-highlight-color: transparent; /* Remove tap highlight on mobile */
+            -webkit-tap-highlight-color: transparent;
+            /* Remove tap highlight on mobile */
         }
-        
+
         .how-to-get-btn:hover {
             background-color: rgba(0, 163, 255, 0.2);
         }
-        
+
         .tutorial-warning {
             margin-top: 20px;
             padding: 15px;
@@ -1288,20 +1351,20 @@
             background-color: rgba(255, 58, 58, 0.1);
             border: 1px solid rgba(255, 58, 58, 0.3);
         }
-        
+
         .tutorial-warning h3 {
             color: var(--primary);
             font-size: 1rem;
             margin-bottom: 10px;
         }
-        
+
         .tutorial-warning p {
             color: var(--text-light);
             font-size: 0.9rem;
             margin-bottom: 10px;
             line-height: 1.5;
         }
-        
+
         .tutorial-warning p:last-child {
             margin-bottom: 0;
         }
@@ -1322,11 +1385,13 @@
             border: 1px solid var(--border);
             background-color: rgba(20, 20, 20, 0.9);
             color: var(--text);
-            margin-left: auto; /* Pushes it to the right */
+            margin-left: auto;
+            /* Pushes it to the right */
         }
+
         .provider-sort-select:disabled {
             opacity: 0.5;
-            background-color: rgba(30,30,30,0.7);
+            background-color: rgba(30, 30, 30, 0.7);
         }
 
         @media (max-width: 700px) {
@@ -1344,17 +1409,25 @@
 
         /* Mobile and touch optimization */
         @media (hover: none) {
+
             /* Increase touch targets for mobile */
-            .btn, .toggle-btn, .how-to-get-btn, .more-addons-btn {
-                min-height: 44px; /* Apple's recommended minimum touch target size */
+            .btn,
+            .toggle-btn,
+            .how-to-get-btn,
+            .more-addons-btn {
+                min-height: 44px;
+                /* Apple's recommended minimum touch target size */
             }
-            
-            .cookie-input, #regionSelector {
+
+            .cookie-input,
+            #regionSelector {
                 height: 44px;
             }
-            
+
             /* Remove hover effects that don't work well on touch devices */
-            .btn:hover, .how-to-get-btn:hover, .more-addons-btn:hover {
+            .btn:hover,
+            .how-to-get-btn:hover,
+            .more-addons-btn:hover {
                 transform: none;
                 box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
             }
@@ -1382,17 +1455,17 @@
             max-width: 500px;
             text-align: center;
         }
-        
+
         .region-status-alert.show {
             opacity: 1;
             transform: translateX(-50%) translateY(0);
         }
-        
+
         .region-unavailable {
             color: #ff3a3a;
             font-weight: 500;
         }
-        
+
         .region-good {
             color: #00c16e;
             font-weight: 500;
@@ -1401,55 +1474,64 @@
         /* Styles for cookie status indicator */
         .cookie-input-container {
             position: relative;
-            display: flex; 
+            display: flex;
             align-items: center;
-            width: 100%; /* Ensure container takes full width of its grid cell */
+            width: 100%;
+            /* Ensure container takes full width of its grid cell */
         }
 
         #cookieStatusIndicator {
             width: 10px;
             height: 10px;
             border-radius: 50%;
-            background-color: #555; /* Default/neutral gray */
-            margin-right: 8px; 
+            background-color: #555;
+            /* Default/neutral gray */
+            margin-right: 8px;
             transition: background-color 0.3s ease, box-shadow 0.3s ease;
-            flex-shrink: 0; 
+            flex-shrink: 0;
         }
 
         #cookieStatusIndicator.valid {
-            background-color: #28a745; /* Green */
+            background-color: #28a745;
+            /* Green */
             box-shadow: 0 0 6px #28a745;
         }
 
         #cookieStatusIndicator.invalid {
-            background-color: #dc3545; /* Red */
+            background-color: #dc3545;
+            /* Red */
             box-shadow: 0 0 6px #dc3545;
         }
 
         #cookieStatusIndicator.pending {
-            background-color: #ffc107; /* Yellow */
+            background-color: #ffc107;
+            /* Yellow */
             box-shadow: 0 0 6px #ffc107;
             animation: pulse-yellow 1.5s infinite ease-in-out;
         }
-        
+
         @keyframes pulse-yellow {
             0% {
                 transform: scale(1);
                 opacity: 0.7;
             }
+
             50% {
                 transform: scale(1.25);
                 opacity: 1;
             }
+
             100% {
                 transform: scale(1);
                 opacity: 0.7;
             }
         }
-        
+
         .cookie-input-container .cookie-input {
-            flex-grow: 1; /* Make input field take remaining space */
-            margin-right: 0.5rem; /* Add some space before the new check button */
+            flex-grow: 1;
+            /* Make input field take remaining space */
+            margin-right: 0.5rem;
+            /* Add some space before the new check button */
         }
 
         /* Styles for the new inline check button */
@@ -1462,7 +1544,8 @@
             border-radius: 0.4rem;
             cursor: pointer;
             transition: all 0.2s ease;
-            flex-shrink: 0; /* Prevent button from shrinking */
+            flex-shrink: 0;
+            /* Prevent button from shrinking */
         }
 
         .inline-check-btn:hover {
@@ -1476,11 +1559,13 @@
 
         /* First add the CSS for the VidSrc icon */
         .vidsrc-icon {
-            background: linear-gradient(135deg, #2196F3, #03A9F4); /* Blue gradient for VidSrc */
+            background: linear-gradient(135deg, #2196F3, #03A9F4);
+            /* Blue gradient for VidSrc */
         }
 
         .vidzee-icon {
-            background: linear-gradient(135deg, #4CAF50, #8BC34A); /* Green gradient for VidZee */
+            background: linear-gradient(135deg, #4CAF50, #8BC34A);
+            /* Green gradient for VidZee */
         }
 
         /* Migration Tool Styles */
@@ -1490,13 +1575,15 @@
             border-radius: 0.6rem;
             padding: 1.25rem;
             margin-bottom: 1.5rem;
-            grid-column: 1 / -1; /* Span full width in grid */
+            grid-column: 1 / -1;
+            /* Span full width in grid */
         }
 
         .migration-tool-container h2 {
             font-size: 1.1rem;
             font-weight: 600;
-            color: #ff6432; /* Orange-red for urgency */
+            color: #ff6432;
+            /* Orange-red for urgency */
             margin-bottom: 0.75rem;
             text-align: center;
         }
@@ -1527,7 +1614,7 @@
             width: 100%;
             box-sizing: border-box;
         }
-        
+
         .migration-input:focus {
             border-color: #ff6432;
             box-shadow: 0 0 0 2px rgba(255, 100, 50, 0.2);
@@ -1544,7 +1631,8 @@
             flex-grow: 1;
             padding: 0.65rem 1rem;
             border-radius: 0.5rem;
-            border: 1px solid var(--secondary) !important; /* Green border for success */
+            border: 1px solid var(--secondary) !important;
+            /* Green border for success */
             background-color: rgba(0, 193, 110, 0.05) !important;
             color: var(--text) !important;
             font-size: 0.9rem;
@@ -1564,16 +1652,17 @@
             padding: 12px 20px;
             font-weight: 500;
             z-index: 1000;
-            display: none; /* Hidden by default */
+            display: none;
+            /* Hidden by default */
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
         }
-        
+
         .instance-banner a {
             color: white;
             text-decoration: underline;
             font-weight: 600;
         }
-        
+
         .instance-banner-close {
             position: absolute;
             right: 10px;
@@ -1587,22 +1676,24 @@
             opacity: 0.7;
             transition: opacity 0.2s;
         }
-        
+
         .instance-banner-close:hover {
             opacity: 1;
         }
-        
+
         /* Adjust body padding when banner is visible */
         body.has-instance-banner {
             padding-top: 50px;
         }
-        
+
         /* Adjust for mobile */
         @media (max-width: 600px) {
             .instance-banner {
-                padding: 10px 30px 10px 10px; /* Make room for close button */
+                padding: 10px 30px 10px 10px;
+                /* Make room for close button */
                 font-size: 14px;
             }
+
             body.has-instance-banner {
                 padding-top: 40px;
             }
@@ -1610,25 +1701,30 @@
 
         /* Add MP4Hydra icon style after VidZee icon */
         .mp4hydra-icon {
-            background: linear-gradient(135deg, #ff9800, #ff5722); /* Orange gradient for MP4Hydra */
+            background: linear-gradient(135deg, #ff9800, #ff5722);
+            /* Orange gradient for MP4Hydra */
         }
 
         /* Add UHDMovies icon style */
         .uhdmovies-icon {
-            background: linear-gradient(135deg, #673ab7, #9c27b0); /* Purple gradient for UHDMovies */
+            background: linear-gradient(135deg, #673ab7, #9c27b0);
+            /* Purple gradient for UHDMovies */
         }
 
         /* Add MoviesMod icon style */
         .moviesmod-icon {
-            background: linear-gradient(135deg, #ff5757, #ff8c00); /* Red-orange gradient for MoviesMod */
+            background: linear-gradient(135deg, #ff5757, #ff8c00);
+            /* Red-orange gradient for MoviesMod */
         }
 
         .topmovies-icon {
-            background: linear-gradient(135deg, #00d2ff, #3a7bd5); /* Blue gradient for TopMovies */
+            background: linear-gradient(135deg, #00d2ff, #3a7bd5);
+            /* Blue gradient for TopMovies */
         }
 
         .dramadrip-icon {
-            background: linear-gradient(135deg, #f7797d, #FBD786, #C6FFDD); /* Colorful gradient for DramaDrip */
+            background: linear-gradient(135deg, #f7797d, #FBD786, #C6FFDD);
+            /* Colorful gradient for DramaDrip */
         }
 
         .provider-option.uhdmovies.selected {
@@ -1639,6 +1735,7 @@
         .provider-option.moviesmod {
             background-image: linear-gradient(to right, rgba(255, 87, 87, 0.15), rgba(0, 0, 0, 0));
         }
+
         .provider-option.moviesmod.selected {
             background-color: rgba(255, 87, 87, 0.15);
             border-color: #FF5757;
@@ -1655,74 +1752,100 @@
         }
     </style>
 </head>
+
 <body>
     <!-- Banner for Official Instance -->
-    <div id="officialInstanceBanner" class="instance-banner" style="display: none; background: linear-gradient(135deg, #00c16e, #00a3ff);">
-        🚀 Welcome to the official instance, proudly hosted by <a href="https://elfhosted.com/" style="color: white; text-decoration: underline; font-weight: bold;">ElfHosted</a>! ❤️
+    <div id="officialInstanceBanner" class="instance-banner"
+        style="display: none; background: linear-gradient(135deg, #00c16e, #00a3ff);">
+        🚀 Welcome to the official instance, proudly hosted by <a href="https://elfhosted.com/"
+            style="color: white; text-decoration: underline; font-weight: bold;">ElfHosted</a>! ❤️
         <button id="closeOfficialBanner" class="instance-banner-close">×</button>
     </div>
 
     <!-- Banner for Private ElfHosted Instances -->
-    <div id="privateInstanceBanner" class="instance-banner" style="display: none; background: linear-gradient(135deg, #8c52ff, #00a3ff);">
+    <div id="privateInstanceBanner" class="instance-banner"
+        style="display: none; background: linear-gradient(135deg, #8c52ff, #00a3ff);">
         ✨ You are on a private ElfHosted instance. Enjoy premium features! ❤️
         <button id="closePrivateBanner" class="instance-banner-close">×</button>
     </div>
 
     <!-- Banner for Unofficial Instances -->
-    <div id="unofficialInstanceBanner" class="instance-banner" style="display: none; background: linear-gradient(135deg, #ff3a3a, #ff6432);">
-        ⚠️ This is a community instance. For the official, supported instance, please visit <a href="https://nuviostreams.hayd.uk/" style="color: white; text-decoration: underline; font-weight: bold;">nuviostreams.hayd.uk</a>.
+    <div id="unofficialInstanceBanner" class="instance-banner"
+        style="display: none; background: linear-gradient(135deg, #ff3a3a, #ff6432);">
+        ⚠️ This is a community instance. For the official, supported instance, please visit <a
+            href="https://nuviostreams.hayd.uk/"
+            style="color: white; text-decoration: underline; font-weight: bold;">nuviostreams.hayd.uk</a>.
         <button id="closeUnofficialBanner" class="instance-banner-close">×</button>
     </div>
 
     <!-- Remove the Vercel-to-Koyeb Banner -->
     <div id="instanceBanner" class="instance-banner" style="display: none;">
-        ⚠️ This Vercel instance will shut down soon! Please use our new Koyeb instance: 
+        ⚠️ This Vercel instance will shut down soon! Please use our new Koyeb instance:
         <a href="https://aesthetic-jodie-tapframe-ab46446c.koyeb.app/" target="_blank">
             Click here to access the Koyeb instance
         </a>
         <button id="closeBanner" class="instance-banner-close">×</button>
     </div>
-    
+
     <div class="cards-container" id="cardsContainer">
         <div class="card main-card">
             <div class="card-header">
                 <div style="display: flex; justify-content: center; align-items: center; margin-bottom: 1.5rem;">
-                    <img src="https://raw.githubusercontent.com/tapframe/NuvioStreaming/main/assets/titlelogo.png" alt="Nuvio Streams Logo" class="logo" style="max-width: 180px; height: auto; margin-right: 1.5rem; margin-bottom: 0;">
-                    <img src="https://store.elfhosted.com/wp-content/uploads/2024/11/logo.svg" alt="ElfHosted Logo" style="height: 100px; margin-left: 1.5rem;">
+                    <img src="https://raw.githubusercontent.com/tapframe/NuvioStreaming/main/assets/titlelogo.png"
+                        alt="Nuvio Streams Logo" class="logo"
+                        style="max-width: 180px; height: auto; margin-right: 1.5rem; margin-bottom: 0;">
+                    <img src="https://store.elfhosted.com/wp-content/uploads/2024/11/logo.svg" alt="ElfHosted Logo"
+                        style="height: 100px; margin-left: 1.5rem;">
                 </div>
                 <h1>Nuvio Streams | Elfhosted</h1>
             </div>
             <div class="card-body">
                 <!-- REMOVE URGENT MIGRATION TOOL SECTION -->
-                
-                <p class="full-width">Your gateway to high-quality streaming on Stremio. Enjoy movies and TV shows from multiple sources with our powerful addon.</p>
-                
+
+                <p class="full-width">Your gateway to high-quality streaming on Stremio. Enjoy movies and TV shows from
+                    multiple sources with our powerful addon.</p>
+
                 <!-- ElfHosted Information -->
-                <div id="elfhostedInfoSection" class="full-width" style="background: linear-gradient(135deg, rgba(140, 82, 255, 0.15), rgba(0, 163, 255, 0.15)); border-radius: 0.6rem; padding: 1rem; margin: 1rem 0; border: 1px solid rgba(140, 82, 255, 0.3); animation: pulse 2s infinite; display: none;">
+                <div id="elfhostedInfoSection" class="full-width"
+                    style="background: linear-gradient(135deg, rgba(140, 82, 255, 0.15), rgba(0, 163, 255, 0.15)); border-radius: 0.6rem; padding: 1rem; margin: 1rem 0; border: 1px solid rgba(140, 82, 255, 0.3); animation: pulse 2s infinite; display: none;">
                     <p style="font-size: 1rem; text-align: center; margin-bottom: 0.5rem; color: #fff;">
                         <span style="font-weight: 600; color: #8c52ff;"> NEW HOSTING PARTNER </span>
                     </p>
                     <p style="text-align: center; margin-bottom: 0.75rem;">
-                        Hosting infrastructure donated by <a href="https://elfhosted.com/" target="_blank" style="color: #00c16e; font-weight: 600; text-decoration: none;">ElfHosted</a> ❤️, and independently maintained by <a href="https://hayd.uk" target="_blank" style="color: #00a3ff; font-weight: 600; text-decoration: none;">Hayduk</a>. See the <a href="https://stremio-addons-guide.elfhosted.com/" target="_blank" style="color: #00a3ff; font-weight: 600; text-decoration: none;">ElfHosted Stremio Addons Guide</a> for more addons, or grab <a href="https://store.elfhosted.com/product/nuviostreams/" target="_blank" style="color: #00c16e; font-weight: 600; text-decoration: none;">your own isolated, private instance</a> (<i>directly supports your developer!</i>)
+                        Hosting infrastructure donated by <a href="https://elfhosted.com/" target="_blank"
+                            style="color: #00c16e; font-weight: 600; text-decoration: none;">ElfHosted</a> ❤️, and
+                        independently maintained by <a href="https://hayd.uk" target="_blank"
+                            style="color: #00a3ff; font-weight: 600; text-decoration: none;">Hayduk</a>. See the <a
+                            href="https://stremio-addons-guide.elfhosted.com/" target="_blank"
+                            style="color: #00a3ff; font-weight: 600; text-decoration: none;">ElfHosted Stremio Addons
+                            Guide</a> for more addons, or grab <a
+                            href="https://store.elfhosted.com/product/nuviostreams/" target="_blank"
+                            style="color: #00c16e; font-weight: 600; text-decoration: none;">your own isolated, private
+                            instance</a> (<i>directly supports your developer!</i>)
                     </p>
-                    
+
                     <!-- Toggle button for private instance features -->
                     <div style="text-align: center; margin-bottom: 0.5rem;">
-                        <button id="togglePrivateFeatures" class="toggle-btn" style="display: inline-flex; align-items: center; background-color: rgba(140, 82, 255, 0.2); border-radius: 0.4rem; padding: 0.4rem 0.8rem; border: 1px solid rgba(140, 82, 255, 0.4); cursor: pointer;">
-                            <span class="toggle-icon" style="margin-right: 0.5rem; transition: transform 0.3s ease;">▼</span>
+                        <button id="togglePrivateFeatures" class="toggle-btn"
+                            style="display: inline-flex; align-items: center; background-color: rgba(140, 82, 255, 0.2); border-radius: 0.4rem; padding: 0.4rem 0.8rem; border: 1px solid rgba(140, 82, 255, 0.4); cursor: pointer;">
+                            <span class="toggle-icon"
+                                style="margin-right: 0.5rem; transition: transform 0.3s ease;">▼</span>
                             <span style="font-weight: 500; color: #8c52ff;">View Private Instance Features</span>
                         </button>
                     </div>
-                    
+
                     <!-- Collapsible features section -->
-                    <div id="privateInstanceFeatures" class="cookie-config collapsed" style="background: rgba(15, 15, 15, 0.5); margin-top: 0.5rem;">
+                    <div id="privateInstanceFeatures" class="cookie-config collapsed"
+                        style="background: rgba(15, 15, 15, 0.5); margin-top: 0.5rem;">
                         <div style="padding: 0.75rem;">
-                            <h3 style="font-size: 0.95rem; margin-bottom: 0.75rem; color: #fff; text-align: center;">ElfHosted Private Instance Information</h3>
-                            
+                            <h3 style="font-size: 0.95rem; margin-bottom: 0.75rem; color: #fff; text-align: center;">
+                                ElfHosted Private Instance Information</h3>
+
                             <ul style="list-style-type: none; padding: 0; margin: 0;">
                                 <li style="display: flex; align-items: flex-start; margin-bottom: 0.6rem;">
                                     <span style="color: #00c16e; margin-right: 0.5rem;">•</span>
-                                    <span style="font-size: 0.85rem; color: #fff;">Private instance with separate rate-limits</span>
+                                    <span style="font-size: 0.85rem; color: #fff;">Private instance with separate
+                                        rate-limits</span>
                                 </li>
                                 <li style="display: flex; align-items: flex-start; margin-bottom: 0.6rem;">
                                     <span style="color: #00c16e; margin-right: 0.5rem;">•</span>
@@ -1730,32 +1853,37 @@
                                 </li>
                                 <li style="display: flex; align-items: flex-start; margin-bottom: 0.6rem;">
                                     <span style="color: #00c16e; margin-right: 0.5rem;">•</span>
-                                    <span style="font-size: 0.85rem; color: #fff;">Additional regional providers in development</span>
+                                    <span style="font-size: 0.85rem; color: #fff;">Additional regional providers in
+                                        development</span>
                                 </li>
                                 <li style="display: flex; align-items: flex-start; margin-bottom: 0;">
                                     <span style="color: #00c16e; margin-right: 0.5rem;">•</span>
-                                    <span style="font-size: 0.85rem; color: #fff;">33% of hosting fees go to addon development</span>
+                                    <span style="font-size: 0.85rem; color: #fff;">33% of hosting fees go to addon
+                                        development</span>
                                 </li>
                             </ul>
-                            
-                            <div style="margin-top: 1rem; background: rgba(10, 10, 10, 0.4); border-radius: 0.5rem; padding: 0.75rem; border: 1px dashed rgba(140, 82, 255, 0.3);">
+
+                            <div
+                                style="margin-top: 1rem; background: rgba(10, 10, 10, 0.4); border-radius: 0.5rem; padding: 0.75rem; border: 1px dashed rgba(140, 82, 255, 0.3);">
                                 <p style="font-size: 0.85rem; color: #fff; margin: 0; text-align: center;">
                                     Hosted by ElfHosted with free trial available
                                 </p>
                             </div>
-                            
+
                             <div style="text-align: center; margin-top: 1rem;">
-                                <a href="https://store.elfhosted.com/product/nuvio-streams/" target="_blank" style="display: inline-block; padding: 0.5rem 1rem; background: rgba(140, 82, 255, 0.2); color: #8c52ff; font-weight: 500; font-size: 0.85rem; border-radius: 0.5rem; text-decoration: none; border: 1px solid rgba(140, 82, 255, 0.4);">View on ElfHosted</a>
+                                <a href="https://store.elfhosted.com/product/nuvio-streams/" target="_blank"
+                                    style="display: inline-block; padding: 0.5rem 1rem; background: rgba(140, 82, 255, 0.2); color: #8c52ff; font-weight: 500; font-size: 0.85rem; border-radius: 0.5rem; text-decoration: none; border: 1px solid rgba(140, 82, 255, 0.4);">View
+                                    on ElfHosted</a>
                             </div>
                         </div>
                     </div>
                 </div>
-                
+
                 <button class="more-addons-btn full-width" id="moreAddonsBtn">
                     More Addons by TapFrame
                     <span class="arrow">→</span>
                 </button>
-                
+
                 <div class="providers">
                     <h2>Available Providers</h2>
                     <div class="provider-item">
@@ -1764,7 +1892,7 @@
                         <span class="provider-detail">May contain 4K/DV/HDR</span>
                     </div>
                     <div class="provider-item">
-                        <div class="provider-icon soapertv-icon">🧼</div> 
+                        <div class="provider-icon soapertv-icon">🧼</div>
                         <div class="provider-name">Soaper TV</div>
                         <span class="provider-detail">Auto Quality</span>
                     </div>
@@ -1794,7 +1922,7 @@
                         <span class="provider-detail">Multi-Source</span>
                     </div>
                 </div>
-                
+
                 <div class="providers">
                     <h2 style="font-size: 1rem; font-weight: 500; margin-bottom: 0.75rem;">Regional & Specialty</h2>
                     <div class="provider-item">
@@ -1808,18 +1936,21 @@
                         <span class="provider-detail">Bollywood/indian contents</span>
                     </div>
                     <div class="provider-item">
-                        <div class="provider-icon animepahe-icon" style="background: linear-gradient(135deg, #ff6b6b, #ff8e8e);">🍥</div>
+                        <div class="provider-icon animepahe-icon"
+                            style="background: linear-gradient(135deg, #ff6b6b, #ff8e8e);">🍥</div>
                         <div class="provider-name">AnimePahe</div>
                         <span class="provider-detail">High-quality anime (SUB/DUB)</span>
                     </div>
                 </div>
 
-                <div class="full-width disclaimer" style="margin-top: 1rem; padding-bottom: 0.5rem; text-align: center;">
+                <div class="full-width disclaimer"
+                    style="margin-top: 1rem; padding-bottom: 0.5rem; text-align: center;">
                     <div class="disclaimer-header" style="justify-content: center;">
                         <span class="disclaimer-icon" style="color: #ff3a3a;">🔌</span>
                         <span style="color: var(--text-light);">Offline Providers</span>
                     </div>
-                    <div class="disclaimer-content" style="justify-content: space-around; margin-top: 0.5rem; text-align: center; gap: 0.5rem;">
+                    <div class="disclaimer-content"
+                        style="justify-content: space-around; margin-top: 0.5rem; text-align: center; gap: 0.5rem;">
                         <div class="provider-item" style="flex-direction: column; min-width: 80px;">
                             <div class="provider-icon cuevana-icon">🇨</div>
                             <div class="provider-name" style="font-size: 0.8rem;">Cuevana</div>
@@ -1846,207 +1977,314 @@
                         <span>Disclaimer</span>
                     </div>
                     <div class="disclaimer-content">
-                    <p>Nuvio Streams is a scraper-based addon that aggregates content from various providers. I do not own or host any of the content provided.</p>
-                        <p>Providers (including ShowBox) may become unavailable without notice. As an independent developer, I'll make every effort to maintain functionality, but sources may stop working unexpectedly.</p>
+                        <p>Nuvio Streams is a scraper-based addon that aggregates content from various providers. I do
+                            not own or host any of the content provided.</p>
+                        <p>Providers (including ShowBox) may become unavailable without notice. As an independent
+                            developer, I'll make every effort to maintain functionality, but sources may stop working
+                            unexpectedly.</p>
                     </div>
                 </div>
-                
+
                 <!-- Provider Selection Section -->
                 <div class="provider-selection-container full-width" style="margin-top: 1.5rem;">
-                    <h2 style="font-size: 1rem; font-weight: 500; margin-bottom: 0.75rem; color: var(--text); opacity: 0.9;">Customize Your Providers</h2>
+                    <h2
+                        style="font-size: 1rem; font-weight: 500; margin-bottom: 0.75rem; color: var(--text); opacity: 0.9;">
+                        Customize Your Providers</h2>
                     <p style="font-size: 0.85rem; line-height: 1.5; margin-bottom: 1rem; color: var(--text-light);">
-                        Select the providers you want to use. Unchecking providers can speed up results if you only use specific sources. Each provider adds to the total loading time, with average fetch times shown below.
+                        Select the providers you want to use. Unchecking providers can speed up results if you only use
+                        specific sources. Each provider adds to the total loading time, with average fetch times shown
+                        below.
                     </p>
-                    <div class="provider-checkbox-list" style="background-color: rgba(15, 15, 15, 0.7); border-radius: 0.6rem; padding: 1rem; border: 1px solid var(--border);">
-                        
-                        <h2 style="margin-bottom: 0.75rem; color: var(--text-light); font-size: 0.95rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem;">Global Providers</h2>
+                    <div class="provider-checkbox-list"
+                        style="background-color: rgba(15, 15, 15, 0.7); border-radius: 0.6rem; padding: 1rem; border: 1px solid var(--border);">
 
-                        <div class="provider-checkbox-item" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
+                        <h2
+                            style="margin-bottom: 0.75rem; color: var(--text-light); font-size: 0.95rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem;">
+                            Global Providers</h2>
+
+                        <div class="provider-checkbox-item"
+                            style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
                             <div style="display: flex; align-items: center;">
-                                <input type="checkbox" id="providerShowbox" name="providerSelect" value="showbox" checked style="margin-right: 0.5rem; accent-color: var(--primary);">
-                                <label for="providerShowbox" style="font-size: 0.9rem;">ShowBox <span style="font-size: 0.75rem; color: var(--text-light);">(~5.3s)</span></label>
+                                <input type="checkbox" id="providerShowbox" name="providerSelect" value="showbox"
+                                    checked style="margin-right: 0.5rem; accent-color: var(--primary);">
+                                <label for="providerShowbox" style="font-size: 0.9rem;">ShowBox <span
+                                        style="font-size: 0.75rem; color: var(--text-light);">(~5.3s)</span></label>
                             </div>
                             <div style="display: flex; align-items: center; gap: 0.8rem;">
-                            <select id="qualityShowbox" name="providerQuality" data-provider="showbox" class="provider-sort-select">
-                                <option value="all" selected>All Qualities</option>
-                                <option value="480p">480p & Up</option>
-                                <option value="720p">720p & Up</option>
-                                <option value="1080p">1080p & Up</option>
+                                <select id="qualityShowbox" name="providerQuality" data-provider="showbox"
+                                    class="provider-sort-select">
+                                    <option value="all" selected>All Qualities</option>
+                                    <option value="480p">480p & Up</option>
+                                    <option value="720p">720p & Up</option>
+                                    <option value="1080p">1080p & Up</option>
                                     <option value="2160p">4K Only</option>
-                            </select>
-                                <div class="codec-filters" style="display: flex; align-items: center; gap: 0.6rem; padding: 0.2rem 0.6rem; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 6px;">
+                                </select>
+                                <div class="codec-filters"
+                                    style="display: flex; align-items: center; gap: 0.6rem; padding: 0.2rem 0.6rem; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 6px;">
                                     <div style="display: flex; align-items: center; gap: 0.3rem;">
-                                        <input type="checkbox" id="excludeDvShowbox" name="excludeDv" data-provider="showbox" style="width: 14px; height: 14px; accent-color: #ff4444;">
-                                        <label for="excludeDvShowbox" style="font-size: 0.75rem; color: var(--text-light); user-select: none; cursor: pointer;">No DV</label>
+                                        <input type="checkbox" id="excludeDvShowbox" name="excludeDv"
+                                            data-provider="showbox"
+                                            style="width: 14px; height: 14px; accent-color: #ff4444;">
+                                        <label for="excludeDvShowbox"
+                                            style="font-size: 0.75rem; color: var(--text-light); user-select: none; cursor: pointer;">No
+                                            DV</label>
                                     </div>
                                     <div style="display: flex; align-items: center; gap: 0.3rem;">
-                                        <input type="checkbox" id="excludeHdrShowbox" name="excludeHdr" data-provider="showbox" style="width: 14px; height: 14px; accent-color: #ff4444;">
-                                        <label for="excludeHdrShowbox" style="font-size: 0.75rem; color: var(--text-light); user-select: none; cursor: pointer;">No HDR</label>
+                                        <input type="checkbox" id="excludeHdrShowbox" name="excludeHdr"
+                                            data-provider="showbox"
+                                            style="width: 14px; height: 14px; accent-color: #ff4444;">
+                                        <label for="excludeHdrShowbox"
+                                            style="font-size: 0.75rem; color: var(--text-light); user-select: none; cursor: pointer;">No
+                                            HDR</label>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                        <div class="provider-checkbox-item" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
+                        <div class="provider-checkbox-item"
+                            style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
                             <div style="display: flex; align-items: center;">
-                                <input type="checkbox" id="providerSoapertv" name="providerSelect" value="soapertv" checked style="margin-right: 0.5rem; accent-color: var(--primary);">
-                                <label for="providerSoapertv" style="font-size: 0.9rem;">Soaper TV <span style="font-size: 0.75rem; color: var(--text-light);">(~7.6s)</span></label>
+                                <input type="checkbox" id="providerSoapertv" name="providerSelect" value="soapertv"
+                                    checked style="margin-right: 0.5rem; accent-color: var(--primary);">
+                                <label for="providerSoapertv" style="font-size: 0.9rem;">Soaper TV <span
+                                        style="font-size: 0.75rem; color: var(--text-light);">(~7.6s)</span></label>
                             </div>
-                            <select id="qualitySoapertv" name="providerQuality" data-provider="soapertv" class="provider-sort-select" disabled="">
+                            <select id="qualitySoapertv" name="providerQuality" data-provider="soapertv"
+                                class="provider-sort-select" disabled="">
                                 <option value="all" selected="">All Qualities</option>
                             </select>
                         </div>
-                        <div class="provider-checkbox-item" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
+                        <div class="provider-checkbox-item"
+                            style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
                             <div style="display: flex; align-items: center;">
-                                <input type="checkbox" id="providerVidzee" name="providerSelect" value="vidzee" checked="" style="margin-right: 0.5rem; accent-color: var(--primary);">
-                                <label for="providerVidzee" style="font-size: 0.9rem;">VidZee <span style="font-size: 0.75rem; color: var(--text-light);">(~5.5s)</span></label>
+                                <input type="checkbox" id="providerVidzee" name="providerSelect" value="vidzee"
+                                    checked="" style="margin-right: 0.5rem; accent-color: var(--primary);">
+                                <label for="providerVidzee" style="font-size: 0.9rem;">VidZee <span
+                                        style="font-size: 0.75rem; color: var(--text-light);">(~5.5s)</span></label>
                             </div>
-                             <select id="qualityVidzee" name="providerQuality" data-provider="vidzee" class="provider-sort-select">
+                            <select id="qualityVidzee" name="providerQuality" data-provider="vidzee"
+                                class="provider-sort-select">
                                 <option value="all" selected="">All Qualities</option>
                             </select>
                         </div>
-                        <div class="provider-checkbox-item" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
+                        <div class="provider-checkbox-item"
+                            style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
                             <div style="display: flex; align-items: center;">
-                                <input type="checkbox" id="providerVidsrc" name="providerSelect" value="vidsrc" checked="" style="margin-right: 0.5rem; accent-color: var(--primary);">
-                                <label for="providerVidsrc" style="font-size: 0.9rem;">VidSrc <span style="font-size: 0.75rem; color: var(--text-light);">(~5.4s)</span></label>
+                                <input type="checkbox" id="providerVidsrc" name="providerSelect" value="vidsrc"
+                                    checked="" style="margin-right: 0.5rem; accent-color: var(--primary);">
+                                <label for="providerVidsrc" style="font-size: 0.9rem;">VidSrc <span
+                                        style="font-size: 0.75rem; color: var(--text-light);">(~5.4s)</span></label>
                             </div>
-                             <select id="qualityVidsrc" name="providerQuality" data-provider="vidsrc" class="provider-sort-select">
+                            <select id="qualityVidsrc" name="providerQuality" data-provider="vidsrc"
+                                class="provider-sort-select">
                                 <option value="all" selected="">All Qualities</option>
                                 <option value="480p">480p &amp; Up</option>
                                 <option value="720p">720p &amp; Up</option>
                                 <option value="1080p">1080p &amp; Up</option>
                             </select>
                         </div>
-                        <div class="provider-checkbox-item" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
+                        <div class="provider-checkbox-item"
+                            style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
                             <div style="display: flex; align-items: center;">
-                                <input type="checkbox" id="providerMp4hydra" name="providerSelect" value="mp4hydra" checked="" style="margin-right: 0.5rem; accent-color: var(--primary);">
-                                <label for="providerMp4hydra" style="font-size: 0.9rem;">MP4Hydra <span style="font-size: 0.75rem; color: var(--text-light);">(~8.1s)</span> <span style="font-size: 0.75rem; color: #ff8c00;">Android TV/Mobile only</span></label>
+                                <input type="checkbox" id="providerMp4hydra" name="providerSelect" value="mp4hydra"
+                                    checked="" style="margin-right: 0.5rem; accent-color: var(--primary);">
+                                <label for="providerMp4hydra" style="font-size: 0.9rem;">MP4Hydra <span
+                                        style="font-size: 0.75rem; color: var(--text-light);">(~8.1s)</span> <span
+                                        style="font-size: 0.75rem; color: #ff8c00;">Android TV/Mobile
+                                        only</span></label>
                             </div>
-                             <select id="qualityMp4hydra" name="providerQuality" data-provider="mp4hydra" class="provider-sort-select">
+                            <select id="qualityMp4hydra" name="providerQuality" data-provider="mp4hydra"
+                                class="provider-sort-select">
                                 <option value="all" selected="">All Qualities</option>
                                 <option value="480p">480p &amp; Up</option>
                                 <option value="720p">720p &amp; Up</option>
                                 <option value="1080p">1080p &amp; Up</option>
                             </select>
                         </div>
-                        <div class="provider-checkbox-item" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
+                        <div class="provider-checkbox-item"
+                            style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
                             <div style="display: flex; align-items: center;">
-                                <input type="checkbox" id="providerUhdmovies" name="providerSelect" value="uhdmovies" checked="" style="margin-right: 0.5rem; accent-color: var(--primary);">
-                                <label for="providerUhdmovies" style="font-size: 0.9rem;">UHDMovies <span style="font-size: 0.75rem; color: var(--text-light);">(~6.5s)</span> <span style="font-size: 0.75rem; color: #00c16e;">4K</span></label>
+                                <input type="checkbox" id="providerUhdmovies" name="providerSelect" value="uhdmovies"
+                                    checked="" style="margin-right: 0.5rem; accent-color: var(--primary);">
+                                <label for="providerUhdmovies" style="font-size: 0.9rem;">UHDMovies <span
+                                        style="font-size: 0.75rem; color: var(--text-light);">(~6.5s)</span> <span
+                                        style="font-size: 0.75rem; color: #00c16e;">4K</span></label>
                             </div>
                             <div style="display: flex; align-items: center; gap: 0.8rem;">
-                             <select id="qualityUhdmovies" name="providerQuality" data-provider="uhdmovies" class="provider-sort-select">
-                                <option value="all">All</option>
-                                <option value="720p">720p+</option>
-                                <option value="1080p">1080p+</option>
-                                <option value="4k">4K+</option>
-                            </select>
-                                <div class="codec-filters" style="display: flex; align-items: center; gap: 0.6rem; padding: 0.2rem 0.6rem; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 6px;">
+                                <select id="qualityUhdmovies" name="providerQuality" data-provider="uhdmovies"
+                                    class="provider-sort-select">
+                                    <option value="all">All</option>
+                                    <option value="720p">720p+</option>
+                                    <option value="1080p">1080p+</option>
+                                    <option value="4k">4K+</option>
+                                </select>
+                                <div class="codec-filters"
+                                    style="display: flex; align-items: center; gap: 0.6rem; padding: 0.2rem 0.6rem; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 6px;">
                                     <div style="display: flex; align-items: center; gap: 0.3rem;">
-                                        <input type="checkbox" id="excludeDvUhdmovies" name="excludeDv" data-provider="uhdmovies" style="width: 14px; height: 14px; accent-color: #ff4444;">
-                                        <label for="excludeDvUhdmovies" style="font-size: 0.75rem; color: var(--text-light); user-select: none; cursor: pointer;">No DV</label>
+                                        <input type="checkbox" id="excludeDvUhdmovies" name="excludeDv"
+                                            data-provider="uhdmovies"
+                                            style="width: 14px; height: 14px; accent-color: #ff4444;">
+                                        <label for="excludeDvUhdmovies"
+                                            style="font-size: 0.75rem; color: var(--text-light); user-select: none; cursor: pointer;">No
+                                            DV</label>
                                     </div>
                                     <div style="display: flex; align-items: center; gap: 0.3rem;">
-                                        <input type="checkbox" id="excludeHdrUhdmovies" name="excludeHdr" data-provider="uhdmovies" style="width: 14px; height: 14px; accent-color: #ff4444;">
-                                        <label for="excludeHdrUhdmovies" style="font-size: 0.75rem; color: var(--text-light); user-select: none; cursor: pointer;">No HDR</label>
+                                        <input type="checkbox" id="excludeHdrUhdmovies" name="excludeHdr"
+                                            data-provider="uhdmovies"
+                                            style="width: 14px; height: 14px; accent-color: #ff4444;">
+                                        <label for="excludeHdrUhdmovies"
+                                            style="font-size: 0.75rem; color: var(--text-light); user-select: none; cursor: pointer;">No
+                                            HDR</label>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                        <div class="provider-checkbox-item" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
+                        <div class="provider-checkbox-item"
+                            style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
                             <div style="display: flex; align-items: center;">
-                                <input type="checkbox" id="providerMoviesmod" name="providerSelect" value="moviesmod" checked="" style="margin-right: 0.5rem; accent-color: var(--primary);">
-                                <label for="providerMoviesmod" style="font-size: 0.9rem;">MoviesMod <span style="font-size: 0.75rem; color: var(--text-light);">(~8.5s)</span> <span style="font-size: 0.75rem; color: var(--text-light);">Multi-Source</span></label>
+                                <input type="checkbox" id="providerMoviesmod" name="providerSelect" value="moviesmod"
+                                    checked="" style="margin-right: 0.5rem; accent-color: var(--primary);">
+                                <label for="providerMoviesmod" style="font-size: 0.9rem;">MoviesMod <span
+                                        style="font-size: 0.75rem; color: var(--text-light);">(~8.5s)</span> <span
+                                        style="font-size: 0.75rem; color: var(--text-light);">Multi-Source</span></label>
                             </div>
-                             <select id="qualityMoviesmod" name="providerQuality" data-provider="moviesmod" class="provider-sort-select">
+                            <select id="qualityMoviesmod" name="providerQuality" data-provider="moviesmod"
+                                class="provider-sort-select">
                                 <option value="all">All</option>
                                 <option value="720p">720p+</option>
                                 <option value="1080p">1080p+</option>
                             </select>
                         </div>
-                        
-                        <h2 style="margin-top: 1.25rem; margin-bottom: 0.75rem; color: var(--text-light); font-size: 0.95rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem;">Regional & Specialty Providers</h2>
 
-                        <div class="provider-checkbox-item" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
+                        <h2
+                            style="margin-top: 1.25rem; margin-bottom: 0.75rem; color: var(--text-light); font-size: 0.95rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem;">
+                            Regional & Specialty Providers</h2>
+
+                        <div class="provider-checkbox-item"
+                            style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
                             <div style="display: flex; align-items: center;">
-                                <input type="checkbox" id="providerDramadrip" name="providerSelect" value="dramadrip" checked="" style="margin-right: 0.5rem; accent-color: var(--primary);">
-                                <label for="providerDramadrip" style="font-size: 0.9rem;">DramaDrip <span style="font-size: 0.75rem; color: var(--text-light);">(~10s)</span> <span style="font-size: 0.75rem; color: #f7797d;">Asian Dramas</span></label>
+                                <input type="checkbox" id="providerDramadrip" name="providerSelect" value="dramadrip"
+                                    checked="" style="margin-right: 0.5rem; accent-color: var(--primary);">
+                                <label for="providerDramadrip" style="font-size: 0.9rem;">DramaDrip <span
+                                        style="font-size: 0.75rem; color: var(--text-light);">(~10s)</span> <span
+                                        style="font-size: 0.75rem; color: #f7797d;">Asian Dramas</span></label>
                             </div>
-                             <select id="qualityDramadrip" name="providerQuality" data-provider="dramadrip" class="provider-sort-select">
+                            <select id="qualityDramadrip" name="providerQuality" data-provider="dramadrip"
+                                class="provider-sort-select">
                                 <option value="all">All</option>
                                 <option value="720p">720p+</option>
                                 <option value="1080p">1080p+</option>
                             </select>
                         </div>
-                        <div class="provider-checkbox-item" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
+                        <div class="provider-checkbox-item"
+                            style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
                             <div style="display: flex; align-items: center;">
-                                <input type="checkbox" id="providerTopmovies" name="providerSelect" value="topmovies" checked="" style="margin-right: 0.5rem; accent-color: var(--primary);">
-                                <label for="providerTopmovies" style="font-size: 0.9rem;">TopMovies <span style="font-size: 0.75rem; color: var(--text-light);">(~9.8s)</span> <span style="font-size: 0.75rem; color: #ff8c00;">Bollywood/Indian</span></label>
+                                <input type="checkbox" id="providerTopmovies" name="providerSelect" value="topmovies"
+                                    checked="" style="margin-right: 0.5rem; accent-color: var(--primary);">
+                                <label for="providerTopmovies" style="font-size: 0.9rem;">TopMovies <span
+                                        style="font-size: 0.75rem; color: var(--text-light);">(~9.8s)</span> <span
+                                        style="font-size: 0.75rem; color: #ff8c00;">Bollywood/Indian</span></label>
                             </div>
-                             <select id="qualityTopmovies" name="providerQuality" data-provider="topmovies" class="provider-sort-select">
+                            <select id="qualityTopmovies" name="providerQuality" data-provider="topmovies"
+                                class="provider-sort-select">
                                 <option value="all">All</option>
                                 <option value="720p">720p+</option>
                                 <option value="1080p">1080p+</option>
                             </select>
                         </div>
-                        <div class="provider-checkbox-item" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
+                        <div class="provider-checkbox-item"
+                            style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
                             <div style="display: flex; align-items: center;">
-                                <input type="checkbox" id="providerAnimepahe" name="providerSelect" value="animepahe" checked="" style="margin-right: 0.5rem; accent-color: var(--primary);">
-                                <label for="providerAnimepahe" style="font-size: 0.9rem;">AnimePahe <span style="font-size: 0.75rem; color: var(--text-light);">(~7.5s)</span> <span style="font-size: 0.75rem; color: #ff6b6b;">Anime SUB/DUB</span></label>
+                                <input type="checkbox" id="providerAnimepahe" name="providerSelect" value="animepahe"
+                                    checked="" style="margin-right: 0.5rem; accent-color: var(--primary);">
+                                <label for="providerAnimepahe" style="font-size: 0.9rem;">AnimePahe <span
+                                        style="font-size: 0.75rem; color: var(--text-light);">(~7.5s)</span> <span
+                                        style="font-size: 0.75rem; color: #ff6b6b;">Anime SUB/DUB</span></label>
                             </div>
-                             <select id="qualityAnimepahe" name="providerQuality" data-provider="animepahe" class="provider-sort-select">
+                            <select id="qualityAnimepahe" name="providerQuality" data-provider="animepahe"
+                                class="provider-sort-select">
                                 <option value="all">All</option>
                                 <option value="720p">720p+</option>
                                 <option value="1080p">1080p+</option>
                             </select>
                         </div>
-                        <div class="provider-checkbox-item" style="display: none; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
+                        <div class="provider-checkbox-item"
+                            style="display: none; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
                             <div style="display: flex; align-items: center;">
-                                <input type="checkbox" id="providerCuevana" name="providerSelect" value="cuevana" disabled style="margin-right: 0.5rem; accent-color: var(--primary); opacity: 0.5;">
-                                <label for="providerCuevana" style="font-size: 0.9rem; opacity: 0.5;">Cuevana (ElfHosted Private Instance Exclusive)</label>
+                                <input type="checkbox" id="providerCuevana" name="providerSelect" value="cuevana"
+                                    disabled style="margin-right: 0.5rem; accent-color: var(--primary); opacity: 0.5;">
+                                <label for="providerCuevana" style="font-size: 0.9rem; opacity: 0.5;">Cuevana (ElfHosted
+                                    Private Instance Exclusive)</label>
                             </div>
-                            <select id="qualityCuevana" name="providerQuality" data-provider="cuevana" class="provider-sort-select" disabled>
+                            <select id="qualityCuevana" name="providerQuality" data-provider="cuevana"
+                                class="provider-sort-select" disabled>
                                 <option value="all" selected>All Qualities</option>
                             </select>
                         </div>
-                        <div class="provider-checkbox-item" style="display: none; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
+                        <div class="provider-checkbox-item"
+                            style="display: none; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
                             <div style="display: flex; align-items: center;">
-                                <input type="checkbox" id="providerHianime" name="providerSelect" value="hianime" disabled style="margin-right: 0.5rem; accent-color: var(--primary); opacity: 0.5;">
-                                <label for="providerHianime" style="font-size: 0.9rem; opacity: 0.5;">Hianime (Offline)</label>
+                                <input type="checkbox" id="providerHianime" name="providerSelect" value="hianime"
+                                    disabled style="margin-right: 0.5rem; accent-color: var(--primary); opacity: 0.5;">
+                                <label for="providerHianime" style="font-size: 0.9rem; opacity: 0.5;">Hianime
+                                    (Offline)</label>
                             </div>
-                            <select id="qualityHianime" name="providerQuality" data-provider="hianime" class="provider-sort-select" disabled>
+                            <select id="qualityHianime" name="providerQuality" data-provider="hianime"
+                                class="provider-sort-select" disabled>
                                 <option value="all" selected>All Qualities</option>
                             </select>
                         </div>
-                        <div class="provider-checkbox-item" style="display: none; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
+                        <div class="provider-checkbox-item"
+                            style="display: none; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
                             <div style="display: flex; align-items: center;">
-                                <input type="checkbox" id="providerXprime" name="providerSelect" value="xprime" disabled style="margin-right: 0.5rem; accent-color: var(--primary); opacity: 0.5;">
-                                <label for="providerXprime" style="font-size: 0.9rem; opacity: 0.5;">Xprime.tv (Offline)</label>
+                                <input type="checkbox" id="providerXprime" name="providerSelect" value="xprime" disabled
+                                    style="margin-right: 0.5rem; accent-color: var(--primary); opacity: 0.5;">
+                                <label for="providerXprime" style="font-size: 0.9rem; opacity: 0.5;">Xprime.tv
+                                    (Offline)</label>
                             </div>
                             <div style="display: flex; align-items: center; gap: 0.8rem;">
-                            <select id="qualityXprime" name="providerQuality" data-provider="xprime" class="provider-sort-select" disabled>
-                                <option value="all" selected>All Qualities</option>
-                            </select>
-                                <div class="codec-filters" style="display: flex; align-items: center; gap: 0.6rem; padding: 0.2rem 0.6rem; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 6px; opacity: 0.5;">
+                                <select id="qualityXprime" name="providerQuality" data-provider="xprime"
+                                    class="provider-sort-select" disabled>
+                                    <option value="all" selected>All Qualities</option>
+                                </select>
+                                <div class="codec-filters"
+                                    style="display: flex; align-items: center; gap: 0.6rem; padding: 0.2rem 0.6rem; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 6px; opacity: 0.5;">
                                     <div style="display: flex; align-items: center; gap: 0.3rem;">
-                                        <input type="checkbox" id="excludeDvXprime" name="excludeDv" data-provider="xprime" style="width: 14px; height: 14px; accent-color: #ff4444;" disabled>
-                                        <label for="excludeDvXprime" style="font-size: 0.75rem; color: var(--text-light); user-select: none; cursor: pointer;">No DV</label>
+                                        <input type="checkbox" id="excludeDvXprime" name="excludeDv"
+                                            data-provider="xprime"
+                                            style="width: 14px; height: 14px; accent-color: #ff4444;" disabled>
+                                        <label for="excludeDvXprime"
+                                            style="font-size: 0.75rem; color: var(--text-light); user-select: none; cursor: pointer;">No
+                                            DV</label>
                                     </div>
                                     <div style="display: flex; align-items: center; gap: 0.3rem;">
-                                        <input type="checkbox" id="excludeHdrXprime" name="excludeHdr" data-provider="xprime" style="width: 14px; height: 14px; accent-color: #ff4444;" disabled>
-                                        <label for="excludeHdrXprime" style="font-size: 0.75rem; color: var(--text-light); user-select: none; cursor: pointer;">No HDR</label>
+                                        <input type="checkbox" id="excludeHdrXprime" name="excludeHdr"
+                                            data-provider="xprime"
+                                            style="width: 14px; height: 14px; accent-color: #ff4444;" disabled>
+                                        <label for="excludeHdrXprime"
+                                            style="font-size: 0.75rem; color: var(--text-light); user-select: none; cursor: pointer;">No
+                                            HDR</label>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
-                        <div class="provider-info-note" style="margin-top: 0.75rem; margin-bottom: 0.75rem; padding: 0.5rem; font-size: 0.8rem;">
-                            <span class="info-icon">⏱️</span> 
-                            <span>Average fetch times shown above include a 3-second buffer. Enabling multiple providers will increase total loading time. For faster results, select only the providers you need.</span>
+                        <div class="provider-info-note"
+                            style="margin-top: 0.75rem; margin-bottom: 0.75rem; padding: 0.5rem; font-size: 0.8rem;">
+                            <span class="info-icon">⏱️</span>
+                            <span>Average fetch times shown above include a 3-second buffer. Enabling multiple providers
+                                will increase total loading time. For faster results, select only the providers you
+                                need.</span>
                         </div>
-                         <div style="margin-top: 1rem;">
-                            <button id="selectAllProvidersBtn" style="padding: 0.4rem 0.8rem; font-size: 0.8rem; background-color: rgba(0, 163, 255, 0.15); border: 1px solid rgba(0, 163, 255, 0.4); color: var(--primary); border-radius: 0.4rem; cursor: pointer; transition: all 0.2s ease; margin-right: 0.5rem;">Select All</button>
-                            <button id="deselectAllProvidersBtn" style="padding: 0.4rem 0.8rem; font-size: 0.8rem; background-color: rgba(255, 58, 58, 0.15); border: 1px solid rgba(255, 58, 58, 0.4); color: #ff3a3a; border-radius: 0.4rem; cursor: pointer; transition: all 0.2s ease;">Deselect All</button>
-                            <button id="applyProvidersBtn" style="padding: 0.4rem 0.8rem; font-size: 0.8rem; background-color: rgba(0, 193, 110, 0.15); border: 1px solid rgba(0, 193, 110, 0.4); color: var(--secondary); border-radius: 0.4rem; cursor: pointer; transition: all 0.2s ease; margin-left: 0.5rem; float: right;">Apply Selection</button>
+                        <div style="margin-top: 1rem;">
+                            <button id="selectAllProvidersBtn"
+                                style="padding: 0.4rem 0.8rem; font-size: 0.8rem; background-color: rgba(0, 163, 255, 0.15); border: 1px solid rgba(0, 163, 255, 0.4); color: var(--primary); border-radius: 0.4rem; cursor: pointer; transition: all 0.2s ease; margin-right: 0.5rem;">Select
+                                All</button>
+                            <button id="deselectAllProvidersBtn"
+                                style="padding: 0.4rem 0.8rem; font-size: 0.8rem; background-color: rgba(255, 58, 58, 0.15); border: 1px solid rgba(255, 58, 58, 0.4); color: #ff3a3a; border-radius: 0.4rem; cursor: pointer; transition: all 0.2s ease;">Deselect
+                                All</button>
+                            <button id="applyProvidersBtn"
+                                style="padding: 0.4rem 0.8rem; font-size: 0.8rem; background-color: rgba(0, 193, 110, 0.15); border: 1px solid rgba(0, 193, 110, 0.4); color: var(--secondary); border-radius: 0.4rem; cursor: pointer; transition: all 0.2s ease; margin-left: 0.5rem; float: right;">Apply
+                                Selection</button>
                         </div>
                     </div>
                 </div>
@@ -2054,14 +2292,22 @@
 
                 <!-- ScraperAPI Key Input - MOVED OUTSIDE of cookie-config -->
                 <div class="scraper-api-key-container full-width" style="margin-top: 1.5rem; display: none;">
-                    <div style="background-color: rgba(15, 15, 15, 0.7); border-radius: 0.6rem; padding: 1rem; border: 1px solid var(--border);">
-                        <label for="scraperApiKeyInput" style="display: block; font-size: 0.9rem; font-weight: 500; margin-bottom: 0.25rem;">ScraperAPI Key (Optional for Xprime):</label>
+                    <div
+                        style="background-color: rgba(15, 15, 15, 0.7); border-radius: 0.6rem; padding: 1rem; border: 1px solid var(--border);">
+                        <label for="scraperApiKeyInput"
+                            style="display: block; font-size: 0.9rem; font-weight: 500; margin-bottom: 0.25rem;">ScraperAPI
+                            Key (Optional for Xprime):</label>
                         <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
-                            <input type="text" id="scraperApiKeyInput" placeholder="Enter your ScraperAPI key" class="cookie-input" style="flex-grow: 1; min-width: 150px;">
-                            <button id="applyScraperApiKeyBtn" class="how-to-get-btn" style="flex-shrink: 0;">Apply Key</button>
-                            <button id="howToGetScraperApiKeyBtn" class="how-to-get-btn" style="flex-shrink: 0;">How to Get</button>
+                            <input type="text" id="scraperApiKeyInput" placeholder="Enter your ScraperAPI key"
+                                class="cookie-input" style="flex-grow: 1; min-width: 150px;">
+                            <button id="applyScraperApiKeyBtn" class="how-to-get-btn" style="flex-shrink: 0;">Apply
+                                Key</button>
+                            <button id="howToGetScraperApiKeyBtn" class="how-to-get-btn" style="flex-shrink: 0;">How to
+                                Get</button>
                         </div>
-                        <p style="font-size: 0.75rem; color: var(--text-light); margin-top: 0.25rem;">Xprime requires a ScraperAPI key on this public instance. Alternatively, self-host the addon for direct Xprime access. Leave blank if not using Xprime or if self-hosting.</p>
+                        <p style="font-size: 0.75rem; color: var(--text-light); margin-top: 0.25rem;">Xprime requires a
+                            ScraperAPI key on this public instance. Alternatively, self-host the addon for direct Xprime
+                            access. Leave blank if not using Xprime or if self-hosting.</p>
                     </div>
                 </div>
                 <!-- End ScraperAPI Key Input -->
@@ -2075,16 +2321,23 @@
                         </button>
                         <span class="recommended-tag">Extremely Recommended</span>
                     </div>
-                    
+
                     <div class="cookie-config" id="cookieConfigSection">
-                        <p>ShowBox fetches content from a cloud storage provider called FebBox. Each FebBox user gets 100GB/month of fast streaming before speeds are reduced.</p>
-                        <p><strong>Why use your own cookie?</strong> Without personalization, you'll share cookies with other addon users, which can exhaust the 100GB quota quickly and result in slow or failed streams. When not using a personal cookie, ShowBox streams are limited to sizes below 9GB.</p>
-                        <p style="font-size: 0.85rem; color: var(--text-light); margin-bottom: 1rem;"><strong>💡 Tip:</strong> If you constantly see "not a valid cookie" even with a correct cookie, use the <span style="color: #ffcc00;">Override & Set</span> button to bypass validation issues.</p>
-                        
+                        <p>ShowBox fetches content from a cloud storage provider called FebBox. Each FebBox user gets
+                            100GB/month of fast streaming before speeds are reduced.</p>
+                        <p><strong>Why use your own cookie?</strong> Without personalization, you'll share cookies with
+                            other addon users, which can exhaust the 100GB quota quickly and result in slow or failed
+                            streams. When not using a personal cookie, ShowBox streams are limited to sizes below 9GB.
+                        </p>
+                        <p style="font-size: 0.85rem; color: var(--text-light); margin-bottom: 1rem;"><strong>💡
+                                Tip:</strong> If you constantly see "not a valid cookie" even with a correct cookie, use
+                            the <span style="color: #ffcc00;">Override & Set</span> button to bypass validation issues.
+                        </p>
+
                         <div class="cookie-form">
                             <div class="cookie-input-container">
                                 <span id="cookieStatusIndicator" class="cookie-status-indicator"></span>
-                            <input type="text" id="cookieInput" placeholder="Enter your token" class="cookie-input">
+                                <input type="text" id="cookieInput" placeholder="Enter your token" class="cookie-input">
                                 <button id="checkCookieBtn" class="inline-check-btn">Check</button>
                             </div>
                             <!-- Server Region Selector -->
@@ -2102,18 +2355,25 @@
                                 <option value="SZ">China</option>
                             </select>
                             <div class="button-group">
-                            <button id="setCookieBtn" class="btn btn-secondary">Set Cookie</button>
-                            <button id="overrideCookieBtn" class="btn" style="background: rgba(255,204,0,0.2); border: 1px solid #ffcc00; color: #ffcc00;">Override & Set</button>
-                            <button id="howToGetBtn" class="how-to-get-btn">How to Get</button>
+                                <button id="setCookieBtn" class="btn btn-secondary">Set Cookie</button>
+                                <button id="overrideCookieBtn" class="btn"
+                                    style="background: rgba(255,204,0,0.2); border: 1px solid #ffcc00; color: #ffcc00;">Override
+                                    & Set</button>
+                                <button id="howToGetBtn" class="how-to-get-btn">How to Get</button>
                             </div>
                         </div>
-                        
-                        <p class="server-selection-note" style="margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-light);">
-                            <strong>Server Selection:</strong> Choose the server region closest to your physical location for best performance. Different regions may have different content availability and speed. If a region doesn't work well, try another one. <span style="color: #00c16e;">The system will automatically fall back to a US server if your selected region is unavailable.</span>
+
+                        <p class="server-selection-note"
+                            style="margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-light);">
+                            <strong>Server Selection:</strong> Choose the server region closest to your physical
+                            location for best performance. Different regions may have different content availability and
+                            speed. If a region doesn't work well, try another one. <span style="color: #00c16e;">The
+                                system will automatically fall back to a US server if your selected region is
+                                unavailable.</span>
                         </p>
 
                         <!-- ScraperAPI Key Input was here, MOVED OUT -->
-                        
+
                     </div> <!-- This is the closing div for id="cookieConfigSection" -->
                 </div> <!-- This is the closing div for class="cookie-config-container full-width" -->
                 <!-- End Cookie Configuration Section -->
@@ -2122,19 +2382,21 @@
                 <div id="personalizedManifest" class="personalized-manifest full-width" style="margin-top: 1.5rem;">
                     <div class="manifest-result" style="display:none;">
                         <h4>Your Personalized Addon</h4>
-                        <p class="manifest-note">This URL is unique to you and includes your cookie and server region. Keep it private.</p>
+                        <p class="manifest-note">This URL is unique to you and includes your cookie and server region.
+                            Keep it private.</p>
                         <div class="manifest-url-box">
                             <span id="personalManifestUrl"></span>
                         </div>
                         <div style="display: flex; margin-top: 0.75rem; gap: 0.5rem;">
-                            <a href="/configure" id="configureLink" class="copy-btn" style="flex: 1; display: flex; align-items: center; justify-content: center; text-decoration: none; color: inherit; cursor: pointer;">
+                            <a href="/configure" id="configureLink" class="copy-btn"
+                                style="flex: 1; display: flex; align-items: center; justify-content: center; text-decoration: none; color: inherit; cursor: pointer;">
                                 <span style="margin-right: 0.25rem;">⚙️</span> Configure Settings
                             </a>
                         </div>
                     </div>
                 </div>
                 <!-- End Personalized Manifest Section -->
-                
+
                 <div class="buttons">
                     <a href="#" id="installLink" class="btn btn-primary">Install Addon</a>
                     <button id="copyLink" class="btn btn-secondary">Copy Manifest</button>
@@ -2150,31 +2412,37 @@
                 </div>
             </div>
         </div>
-        
+
         <div class="catalog-container">
             <button class="close-catalog" id="closeCatalog">×</button>
-            
+
             <div class="catalog-card dc-universe-card">
                 <div class="catalog-logo dc-universe-logo">⚡</div>
                 <h3 class="catalog-title">DC Universe Catalog</h3>
-                <p class="catalog-desc">Explore the complete DC Universe with this catalog addon for Stremio. Discover movies, TV shows, and animated content from the world of DC Comics.</p>
-                <a href="https://addon-dc-cq85.onrender.com/configure" target="_blank" class="install-catalog-btn dc-universe-btn">Install Addon</a>
+                <p class="catalog-desc">Explore the complete DC Universe with this catalog addon for Stremio. Discover
+                    movies, TV shows, and animated content from the world of DC Comics.</p>
+                <a href="https://addon-dc-cq85.onrender.com/configure" target="_blank"
+                    class="install-catalog-btn dc-universe-btn">Install Addon</a>
             </div>
-            
+
             <div class="catalog-card star-wars-card">
                 <div class="catalog-logo star-wars-logo">✦</div>
                 <h3 class="catalog-title">Star Wars Universe</h3>
-                <p class="catalog-desc">Journey to a galaxy far, far away with this comprehensive Star Wars catalog addon. Includes movies, series, and animated shows from the Star Wars universe.</p>
-                <a href="https://addon-star-wars-u9e3.onrender.com/configure" target="_blank" class="install-catalog-btn star-wars-btn">Install Addon</a>
+                <p class="catalog-desc">Journey to a galaxy far, far away with this comprehensive Star Wars catalog
+                    addon. Includes movies, series, and animated shows from the Star Wars universe.</p>
+                <a href="https://addon-star-wars-u9e3.onrender.com/configure" target="_blank"
+                    class="install-catalog-btn star-wars-btn">Install Addon</a>
             </div>
-            
+
             <!-- New Nuvio App Promo -->
             <div class="catalog-card nuvio-app-card">
                 <div class="new-badge">Coming Soon</div>
                 <div class="catalog-logo nuvio-app-logo">📱</div>
                 <h3 class="catalog-title">Nuvio Streaming App</h3>
-                <p class="catalog-desc">Experience the power of Nuvio on your mobile device! Our upcoming iOS and Android app features more built-in providers and an enhanced streaming experience.</p>
-                <a href="https://github.com/tapframe/NuvioStreaming" target="_blank" class="install-catalog-btn nuvio-app-btn">Learn More</a>
+                <p class="catalog-desc">Experience the power of Nuvio on your mobile device! Our upcoming iOS and
+                    Android app features more built-in providers and an enhanced streaming experience.</p>
+                <a href="https://github.com/tapframe/NuvioStreaming" target="_blank"
+                    class="install-catalog-btn nuvio-app-btn">Learn More</a>
             </div>
         </div>
     </div>
@@ -2188,13 +2456,15 @@
             <button class="close-tutorial" id="closeTutorial">×</button>
         </div>
         <div class="video-container">
-            <iframe class="video-player" src="https://drive.google.com/file/d/1sP7AcxBRZWSgYT3rdOD5_gJsBODEkTSe/preview" allowfullscreen frameborder="0"></iframe>
+            <iframe class="video-player" src="https://drive.google.com/file/d/1sP7AcxBRZWSgYT3rdOD5_gJsBODEkTSe/preview"
+                allowfullscreen frameborder="0"></iframe>
         </div>
         <div class="tutorial-steps">
             <h3>Text Instructions:</h3>
             <div class="step">
                 <div class="step-number">1</div>
-                <div class="step-text">Log in to FebBox using your Google account at <a href="https://www.febbox.com" target="_blank">www.febbox.com</a></div>
+                <div class="step-text">Log in to FebBox using your Google account at <a href="https://www.febbox.com"
+                        target="_blank">www.febbox.com</a></div>
             </div>
             <div class="step">
                 <div class="step-number">2</div>
@@ -2214,13 +2484,16 @@
             </div>
             <div class="step">
                 <div class="step-number">6</div>
-                <div class="step-text">Copy the value of this cookie (it starts with 'ey' usually) and paste it into the cookie input field</div>
+                <div class="step-text">Copy the value of this cookie (it starts with 'ey' usually) and paste it into the
+                    cookie input field</div>
             </div>
         </div>
         <div class="tutorial-warning">
             <h3>Important Notice:</h3>
-            <p>As an independent developer, I want to make it clear that Nuvio Streams is just a scraper addon. Providers like ShowBox may disappear without notice for reasons beyond my control.</p>
-            <p>I'll do my best to maintain this addon, but can't guarantee all sources will always work. Using your own cookie is the best way to maximize reliability while sources are available.</p>
+            <p>As an independent developer, I want to make it clear that Nuvio Streams is just a scraper addon.
+                Providers like ShowBox may disappear without notice for reasons beyond my control.</p>
+            <p>I'll do my best to maintain this addon, but can't guarantee all sources will always work. Using your own
+                cookie is the best way to maximize reliability while sources are available.</p>
         </div>
     </div>
 
@@ -2234,31 +2507,44 @@
             <h3>Text Instructions:</h3>
             <div class="step">
                 <div class="step-number">1</div>
-                <div class="step-text">Go to <a href="https://www.scraperapi.com/" target="_blank" style="color: var(--primary);">www.scraperapi.com</a>.</div>
+                <div class="step-text">Go to <a href="https://www.scraperapi.com/" target="_blank"
+                        style="color: var(--primary);">www.scraperapi.com</a>.</div>
             </div>
             <div class="step">
                 <div class="step-number">2</div>
-                <div class="step-text">Click on "Sign Up" (usually in the top right corner) and create an account, for example, by using your Google account.</div>
+                <div class="step-text">Click on "Sign Up" (usually in the top right corner) and create an account, for
+                    example, by using your Google account.</div>
             </div>
             <div class="step">
                 <div class="step-number">3</div>
-                <div class="step-text">After signing up and logging in, find your API Key. It's typically displayed on your dashboard.</div>
+                <div class="step-text">After signing up and logging in, find your API Key. It's typically displayed on
+                    your dashboard.</div>
             </div>
             <div class="step">
                 <div class="step-number">4</div>
-                <div class="step-text">ScraperAPI provides a free plan that usually includes 1,000 API credits per month, which reset automatically.</div>
+                <div class="step-text">ScraperAPI provides a free plan that usually includes 1,000 API credits per
+                    month, which reset automatically.</div>
             </div>
             <div class="step">
                 <div class="step-number">5</div>
-                <div class="step-text">Copy this API Key and paste it into the "ScraperAPI Key" input field on the Nuvio Streams configuration page.</div>
+                <div class="step-text">Copy this API Key and paste it into the "ScraperAPI Key" input field on the Nuvio
+                    Streams configuration page.</div>
             </div>
         </div>
         <div class="tutorial-warning">
             <h3>Important Notice for Xprime:</h3>
-            <p>Using a ScraperAPI key is one way to access Xprime.tv streams on this public Nuvio Streams instance. This helps bypass potential blocking that Xprime might implement.</p>
-            <p>However, this is not a guaranteed long-term solution. Access through ScraperAPI can become unreliable if ScraperAPI itself is blocked by Xprime, if your free credits run out, or if ScraperAPI changes its service terms.</p>
-            <p><strong>For the most stable and reliable Xprime access, self-hosting this addon is strongly recommended.</strong> When self-hosting, you can configure your own proxy solutions or attempt direct access, bypassing the need for a third-party service like ScraperAPI for Xprime.</p>
-            <p style="margin-top: 10px; font-style: italic;"><strong>Disclaimer:</strong> This project is not associated with ScraperAPI in any way. The ScraperAPI service is utilized here solely as a technical means to facilitate the scraping of links, which is necessary for accessing content from certain providers on this public instance.</p>
+            <p>Using a ScraperAPI key is one way to access Xprime.tv streams on this public Nuvio Streams instance. This
+                helps bypass potential blocking that Xprime might implement.</p>
+            <p>However, this is not a guaranteed long-term solution. Access through ScraperAPI can become unreliable if
+                ScraperAPI itself is blocked by Xprime, if your free credits run out, or if ScraperAPI changes its
+                service terms.</p>
+            <p><strong>For the most stable and reliable Xprime access, self-hosting this addon is strongly
+                    recommended.</strong> When self-hosting, you can configure your own proxy solutions or attempt
+                direct access, bypassing the need for a third-party service like ScraperAPI for Xprime.</p>
+            <p style="margin-top: 10px; font-style: italic;"><strong>Disclaimer:</strong> This project is not associated
+                with ScraperAPI in any way. The ScraperAPI service is utilized here solely as a technical means to
+                facilitate the scraping of links, which is necessary for accessing content from certain providers on
+                this public instance.</p>
         </div>
     </div>
     <!-- END NEW: ScraperAPI Key Tutorial Panel -->
@@ -2274,7 +2560,7 @@
         // --- Default Manifest Setup ---
         const defaultManifestUrl = window.location.origin + '/manifest.json';
         const defaultInstallProtocolUrl = 'stremio://' + defaultManifestUrl.replace(/^https?:\/\//, '');
-        
+
         let currentManifestUrlToCopy = defaultManifestUrl;
         let currentInstallUrl = defaultInstallProtocolUrl;
 
@@ -2288,12 +2574,12 @@
                     'event_label': 'install_addon_clicked',
                     'install_type': currentInstallUrl === defaultInstallProtocolUrl ? 'default' : 'personalized'
                 });
-                
+
                 if (currentInstallUrl === defaultInstallProtocolUrl) {
                     toast.innerHTML = "Installing with default settings.<br>Note: ShowBox streams are limited to &lt;9GB. Use a personal cookie for full access to all formats (HDR/DV etc.).";
                     toast.classList.add('show');
                     // Keep toast longer for this important message
-                    setTimeout(() => { toast.classList.remove('show'); }, 6000); 
+                    setTimeout(() => { toast.classList.remove('show'); }, 6000);
                 }
                 // Allow default link behavior to proceed
             });
@@ -2303,11 +2589,11 @@
             copyLinkBtn.addEventListener('click', async () => {
                 // Analytics: Track manifest copy
                 gtag('event', 'manifest_copy', {
-                    'event_category': 'engagement', 
+                    'event_category': 'engagement',
                     'event_label': 'copy_manifest_clicked',
                     'manifest_type': currentManifestUrlToCopy === defaultManifestUrl ? 'default' : 'personalized'
                 });
-                
+
                 try {
                     await navigator.clipboard.writeText(currentManifestUrlToCopy);
                     if (currentManifestUrlToCopy === defaultManifestUrl) {
@@ -2328,25 +2614,25 @@
         }
 
         // --- UI Interaction for More Addons (unchanged) ---
-        const handleMoreAddonsClick = function() {
+        const handleMoreAddonsClick = function () {
             // Analytics: Track more addons exploration
             gtag('event', 'explore_catalog', {
                 'event_category': 'navigation',
                 'event_label': 'more_addons_clicked'
             });
-            
+
             if (cardsContainer) {
                 cardsContainer.classList.toggle('expanded');
             }
         };
 
-        const handleCloseCatalogClick = function() {
+        const handleCloseCatalogClick = function () {
             // Analytics: Track catalog closure
             gtag('event', 'close_catalog', {
                 'event_category': 'navigation',
                 'event_label': 'catalog_closed'
             });
-            
+
             if (cardsContainer) {
                 cardsContainer.classList.remove('expanded');
             }
@@ -2368,15 +2654,15 @@
                 if (moreAddonsBtn) moreAddonsBtn.style.display = 'inline-flex';
                 // For closeCatalog, CSS handles visibility based on .expanded, 
                 // so just ensure it's not explicitly set to 'none' from mobile view.
-                if (closeCatalog) closeCatalog.style.display = ''; 
-                
+                if (closeCatalog) closeCatalog.style.display = '';
+
                 // Add/Re-add desktop event listeners (ensuring no duplicates)
                 if (moreAddonsBtn) {
-                    moreAddonsBtn.removeEventListener('click', handleMoreAddonsClick); 
+                    moreAddonsBtn.removeEventListener('click', handleMoreAddonsClick);
                     moreAddonsBtn.addEventListener('click', handleMoreAddonsClick);
                 }
                 if (closeCatalog) {
-                    closeCatalog.removeEventListener('click', handleCloseCatalogClick); 
+                    closeCatalog.removeEventListener('click', handleCloseCatalogClick);
                     closeCatalog.addEventListener('click', handleCloseCatalogClick);
                 }
             }
@@ -2442,7 +2728,7 @@
         // Function to update cookie section based on ShowBox selection
         function updateCookieSectionState() {
             const isShowBoxSelected = showboxCheckbox && showboxCheckbox.checked;
-            
+
             if (cookieConfigContainer) {
                 if (!isShowBoxSelected) {
                     // If ShowBox is not selected, disable and collapse cookie section
@@ -2467,7 +2753,7 @@
                     checkCookieBtn.disabled = cookieInput.value.trim() === '';
                     // Only update region selector and set cookie button based on cookie validity
                     updateRegionSelectorState();
-                     // Also ensure quality dropdowns are updated based on provider selections
+                    // Also ensure quality dropdowns are updated based on provider selections
                     updateQualityDropdownStates(); // Changed call
                 }
             }
@@ -2521,7 +2807,7 @@
                     const providerCapitalized = providerValue.charAt(0).toUpperCase() + providerValue.slice(1);
                     const excludeDVCheckbox = document.getElementById(`excludeDv${providerCapitalized}`);
                     const excludeHDRCheckbox = document.getElementById(`excludeHdr${providerCapitalized}`);
-                    
+
                     if (excludeDVCheckbox || excludeHDRCheckbox) {
                         const excludePrefs = {};
                         if (excludeDVCheckbox && excludeDVCheckbox.checked) {
@@ -2530,7 +2816,7 @@
                         if (excludeHDRCheckbox && excludeHDRCheckbox.checked) {
                             excludePrefs.excludeHDR = true;
                         }
-                        
+
                         if (Object.keys(excludePrefs).length > 0) {
                             codecExcludePreferences[providerValue] = excludePrefs;
                             hasCodecExcludePreferences = true;
@@ -2593,7 +2879,7 @@
             if (pathParams.length > 0) {
                 pathString = pathParams.join('/') + '/';
             }
-            
+
             let queryString = '';
             if (queryParams.length > 0) {
                 queryString = '?' + queryParams.join('&');
@@ -2603,15 +2889,15 @@
             const newPathManifestURL = `${window.location.origin}/${pathString}manifest.json`;
             // Legacy URL (query-based format, for backward compatibility)
             const newQueryManifestURL = `${window.location.origin}/manifest.json${queryString}`;
-            
+
             // Generate a configuration URL that preserves all settings
             const configureUrl = `${window.location.origin}/${pathString}configure`;
-            
+
             // Set the URLs for use
             currentManifestUrlToCopy = newPathManifestURL; // Prefer Android-compatible URL for copying
             currentInstallUrl = `stremio://${newPathManifestURL.replace(/^https?:\/\//, '')}`;
             if (installLink) installLink.href = currentInstallUrl;
-            
+
             // Update the configure link if it exists
             const configureLink = document.getElementById('configureLink');
             if (configureLink) {
@@ -2632,7 +2918,7 @@
                 if (installLink) installLink.href = defaultInstallProtocolUrl;
                 toast.textContent = "Manifest reverted to default settings.";
             }
-            
+
             toast.classList.add('show');
             setTimeout(() => { toast.classList.remove('show'); }, 3000);
         }
@@ -2644,14 +2930,14 @@
                 const selectedProviders = Array.from(providerCheckboxes)
                     .filter(checkbox => checkbox.checked)
                     .map(checkbox => checkbox.value);
-                
+
                 gtag('event', 'provider_configuration', {
                     'event_category': 'configuration',
                     'event_label': 'apply_providers_clicked',
                     'provider_count': selectedProviders.length,
                     'selected_providers': selectedProviders.join(',')
                 });
-                
+
                 regeneratePersonalizedManifest();
             });
         }
@@ -2664,10 +2950,10 @@
                     'event_category': 'configuration',
                     'event_label': 'select_all_providers'
                 });
-                
+
                 providerCheckboxes.forEach(checkbox => checkbox.checked = true);
                 updateCookieSectionState(); // Update cookie section state
-                updateQualityDropdownStates(); 
+                updateQualityDropdownStates();
                 updateScraperApiKeyInputState(); // Update ScraperAPI input state
                 toast.textContent = "All providers selected. Click 'Apply Selection' to update.";
                 toast.classList.add('show');
@@ -2682,10 +2968,10 @@
                     'event_category': 'configuration',
                     'event_label': 'deselect_all_providers'
                 });
-                
+
                 providerCheckboxes.forEach(checkbox => checkbox.checked = false);
                 updateCookieSectionState(); // Update cookie section state
-                updateQualityDropdownStates(); 
+                updateQualityDropdownStates();
                 updateScraperApiKeyInputState(); // Update ScraperAPI input state
                 toast.textContent = "All providers deselected. Click 'Apply Selection' to update.";
                 toast.classList.add('show');
@@ -2716,7 +3002,7 @@
                 });
             }
         });
-        
+
         // Add event listener for ScraperAPI key input (on blur)
         if (scraperApiKeyInput) {
             scraperApiKeyInput.addEventListener('blur', regeneratePersonalizedManifest);
@@ -2737,7 +3023,7 @@
         // --- Debounce function ---
         function debounce(func, delay) {
             let timeout;
-            return function(...args) {
+            return function (...args) {
                 const context = this;
                 clearTimeout(timeout);
                 timeout = setTimeout(() => func.apply(context, args), delay);
@@ -2781,33 +3067,33 @@
                     console.warn('Server returned 429 Too Many Requests during cookie validation');
                     cookieStatusIndicator.className = 'cookie-status-indicator pending'; // Keep as pending to indicate special state
                     if (setCookieBtn) {
-                         setCookieBtn.disabled = false; // Enable the button despite the error
-                         setCookieBtn.style.opacity = '1';
-                         setCookieBtn.style.cursor = 'pointer';
+                        setCookieBtn.disabled = false; // Enable the button despite the error
+                        setCookieBtn.style.opacity = '1';
+                        setCookieBtn.style.cursor = 'pointer';
                     }
                     if (checkCookieBtn) checkCookieBtn.disabled = false; // Re-enable check button
-                    
+
                     // Show special message for rate limiting
                     toast.innerHTML = "Too many validation requests (429). <br><span style='color: #ffcc00;'>You can still apply this cookie without validation by clicking 'Set Cookie'.</span>";
                     toast.classList.add('show');
                     setTimeout(() => { toast.classList.remove('show'); }, 6000); // Longer timeout for this important message
-                    
+
                     // Add a visual indicator that validation was skipped but can proceed
                     cookieStatusIndicator.style.backgroundColor = '#ffcc00'; // Yellow warning color
-                    
+
                     // We return a special value to indicate rate limiting
                     return 'rate_limited';
                 }
-                
+
                 if (!response.ok) {
                     // Handle other HTTP errors (e.g., 500, 404)
                     const errorData = await response.json().catch(() => ({ message: 'Server error or invalid response' }));
                     console.error('Server error validating cookie:', response.status, errorData.message);
                     cookieStatusIndicator.className = 'cookie-status-indicator invalid';
                     if (setCookieBtn) {
-                         setCookieBtn.disabled = true;
-                         setCookieBtn.style.opacity = '0.6';
-                         setCookieBtn.style.cursor = 'not-allowed';
+                        setCookieBtn.disabled = true;
+                        setCookieBtn.style.opacity = '0.6';
+                        setCookieBtn.style.cursor = 'not-allowed';
                     }
                     if (checkCookieBtn) checkCookieBtn.disabled = false; // Re-enable check button
                     toast.textContent = "Not a valid token."; // Generic error message
@@ -2839,7 +3125,7 @@
                     }
                     if (checkCookieBtn) checkCookieBtn.disabled = false; // Re-enable check button
                     // Show generic message instead of result.message
-                    toast.textContent = "Not a valid token."; 
+                    toast.textContent = "Not a valid token.";
                     toast.classList.add('show');
                     setTimeout(() => { toast.classList.remove('show'); }, 4000);
                     updateRegionSelectorState(); // Update region selector state
@@ -2872,9 +3158,9 @@
                         checkCookieOnServer(cookieValue);
                     }
                 } else {
-                    cookieStatusIndicator.className = 'cookie-status-indicator'; 
+                    cookieStatusIndicator.className = 'cookie-status-indicator';
                     if (setCookieBtn) {
-                        setCookieBtn.disabled = true; 
+                        setCookieBtn.disabled = true;
                         setCookieBtn.style.opacity = '0.6';
                         setCookieBtn.style.cursor = 'not-allowed';
                     }
@@ -2902,7 +3188,7 @@
                         setCookieBtn.style.opacity = '0.6';
                         setCookieBtn.style.cursor = 'not-allowed';
                     }
-                    
+
                     // Also hide personalized manifest and revert main buttons to default
                     if (manifestResult) manifestResult.style.display = 'none';
                     currentManifestUrlToCopy = defaultManifestUrl;
@@ -2912,18 +3198,18 @@
                     if (!toast.textContent.startsWith("Cookie modified")) {
                         toast.textContent = "Cookie modified. Please 'Check' to re-validate.";
                         toast.classList.add('show');
-                        setTimeout(() => { 
+                        setTimeout(() => {
                             if (toast.textContent === "Cookie modified. Please 'Check' to re-validate.") {
-                                toast.classList.remove('show'); 
+                                toast.classList.remove('show');
                             }
                         }, 3500);
                     }
                 }
-                
+
                 // If input becomes empty, also reset Set Cookie button, indicator, and personalized manifest section
                 if (cookieValue === '') {
                     cookieStatusIndicator.className = 'cookie-status-indicator';
-                     if (setCookieBtn) {
+                    if (setCookieBtn) {
                         setCookieBtn.disabled = true;
                         setCookieBtn.style.opacity = '0.6';
                         setCookieBtn.style.cursor = 'not-allowed';
@@ -2937,10 +3223,10 @@
 
                 // Update check button state (debounced)
                 debouncedUpdateCheckButtonState();
-                
+
                 // Update region selector state
                 updateRegionSelectorState();
-            }); 
+            });
         }
 
         // --- Event listener for the new inline check button ---
@@ -2956,7 +3242,7 @@
                 }
             });
             // Initially disable if input is empty
-            checkCookieBtn.disabled = (cookieInput.value.trim() === ''); 
+            checkCookieBtn.disabled = (cookieInput.value.trim() === '');
         }
 
         // Add a listener for region changes
@@ -2964,19 +3250,19 @@
             regionSelector.addEventListener('change', () => {
                 const regionValue = regionSelector.value;
                 lastSelectedRegion = regionValue;
-                
+
                 // Reset any error styling on this option
                 const selectedOption = regionSelector.options[regionSelector.selectedIndex];
                 if (selectedOption) {
                     selectedOption.textContent = selectedOption.textContent.replace(/\s*\(Unavailable\)$/, '');
                     selectedOption.style.color = '';
                 }
-                
+
                 toast.textContent = `Region changed to ${regionValue}. Click 'Set Cookie' to apply.`;
                 toast.classList.add('show');
                 setTimeout(() => { toast.classList.remove('show'); }, 3000);
             });
-            
+
             // Initially set disabled state based on cookie existence
             regionSelector.disabled = true; // Default to disabled
         }
@@ -2989,7 +3275,7 @@
                     'event_category': 'configuration',
                     'event_label': 'set_cookie_clicked'
                 });
-                
+
                 const cookieValue = cookieInput.value.trim();
                 // const regionValue = regionSelector.value; // Not needed here, regeneratePersonalizedManifest will get it
                 // const scraperApiKeyValue = document.getElementById('scraperApiKeyInput').value.trim(); // Not needed here
@@ -2998,48 +3284,48 @@
                 if (cookieValue) {
                     // Check if we already have a rate-limited status (yellow indicator)
                     const isRateLimited = cookieStatusIndicator.style.backgroundColor === 'rgb(255, 204, 0)'; // #ffcc00
-                    
+
                     if (!isRateLimited) {
                         // Only validate if not already rate-limited
                         const validationResult = await checkCookieOnServer(cookieValue);
-                        
+
                         if (validationResult === false) {
-                            toast.innerHTML = "Cookie is invalid. Please check and try again.<br>" + 
+                            toast.innerHTML = "Cookie is invalid. Please check and try again.<br>" +
                                 "<button id='bypassValidationBtn' style='background: rgba(255,204,0,0.2); border: 1px solid #ffcc00; color: #ffcc00; padding: 5px 10px; border-radius: 4px; margin-top: 5px; cursor: pointer;'>" +
                                 "Apply Anyway (Override Validation)</button>";
-                            
+
                             if (!toast.classList.contains('show')) {
-                               toast.classList.add('show');
-                               
-                               // Add event listener to the bypass button
-                               setTimeout(() => {
-                                   const bypassBtn = document.getElementById('bypassValidationBtn');
-                                   if (bypassBtn) {
-                                       bypassBtn.addEventListener('click', async () => {
-                                           toast.classList.remove('show');
-                                           // Force the cookie to be treated as valid
-                                           cookieStatusIndicator.className = 'cookie-status-indicator pending';
-                                           cookieStatusIndicator.style.backgroundColor = '#ffcc00';
-                                           await regeneratePersonalizedManifest();
-                                           toast.innerHTML = "Cookie applied without validation. <span style='color: #ffcc00;'>Use at your own risk!</span>";
-                                           toast.classList.add('show');
-                                           setTimeout(() => { toast.classList.remove('show'); }, 4000);
-                                       });
-                                   }
-                               }, 10);
-                               
-                               setTimeout(() => { 
-                                   if (toast.innerHTML.includes('Cookie is invalid')) {
-                                       toast.classList.remove('show'); 
-                                   }
-                               }, 8000);
+                                toast.classList.add('show');
+
+                                // Add event listener to the bypass button
+                                setTimeout(() => {
+                                    const bypassBtn = document.getElementById('bypassValidationBtn');
+                                    if (bypassBtn) {
+                                        bypassBtn.addEventListener('click', async () => {
+                                            toast.classList.remove('show');
+                                            // Force the cookie to be treated as valid
+                                            cookieStatusIndicator.className = 'cookie-status-indicator pending';
+                                            cookieStatusIndicator.style.backgroundColor = '#ffcc00';
+                                            await regeneratePersonalizedManifest();
+                                            toast.innerHTML = "Cookie applied without validation. <span style='color: #ffcc00;'>Use at your own risk!</span>";
+                                            toast.classList.add('show');
+                                            setTimeout(() => { toast.classList.remove('show'); }, 4000);
+                                        });
+                                    }
+                                }, 10);
+
+                                setTimeout(() => {
+                                    if (toast.innerHTML.includes('Cookie is invalid')) {
+                                        toast.classList.remove('show');
+                                    }
+                                }, 8000);
                             }
-                            
+
                             // Explicitly call regeneratePersonalizedManifest to ensure UI updates if cookie becomes invalid
-                            await regeneratePersonalizedManifest(); 
-                            return; 
+                            await regeneratePersonalizedManifest();
+                            return;
                         }
-                        
+
                         // If validation returned rate_limited, we can proceed
                         if (validationResult !== true && validationResult !== 'rate_limited') {
                             // Some other validation issue occurred
@@ -3053,20 +3339,20 @@
                         setTimeout(() => { toast.classList.remove('show'); }, 4000);
                     }
                 } else {
-                     cookieStatusIndicator.className = 'cookie-status-indicator';
-                     toast.textContent = "Please enter your FebBox cookie.";
-                     toast.classList.add('show');
-                     setTimeout(() => { toast.classList.remove('show'); }, 3000);
-                     await regeneratePersonalizedManifest(); // Update manifest (will revert to default if no cookie)
-                     return;
+                    cookieStatusIndicator.className = 'cookie-status-indicator';
+                    toast.textContent = "Please enter your FebBox cookie.";
+                    toast.classList.add('show');
+                    setTimeout(() => { toast.classList.remove('show'); }, 3000);
+                    await regeneratePersonalizedManifest(); // Update manifest (will revert to default if no cookie)
+                    return;
                 }
-                
+
                 // All checks passed or cookie is now valid, regenerate the manifest with all settings
                 await regeneratePersonalizedManifest();
 
                 // Store the newly selected region for region status tracking (already done by regenerate)
                 // lastSelectedRegion = regionValue; // Not needed here
-                
+
                 // Restart region status checking
                 startRegionStatusCheck();
             });
@@ -3080,22 +3366,22 @@
                     'event_category': 'configuration',
                     'event_label': 'override_cookie_clicked'
                 });
-                
+
                 const cookieValue = cookieInput.value.trim();
-                
+
                 if (cookieValue) {
                     // Force the cookie to be treated as valid without validation
                     cookieStatusIndicator.className = 'cookie-status-indicator valid';
                     cookieStatusIndicator.style.backgroundColor = '#ffcc00';
-                    
+
                     // Generate manifest with the override cookie
                     await regeneratePersonalizedManifest();
-                    
+
                     // Show override confirmation message
                     toast.innerHTML = "Cookie applied without validation. <span style='color: #ffcc00;'>Invalid cookie may not work.</span>";
                     toast.classList.add('show');
                     setTimeout(() => { toast.classList.remove('show'); }, 4000);
-                    
+
                     // Restart region status checking
                     startRegionStatusCheck();
                 } else {
@@ -3110,7 +3396,7 @@
         const prefillFromUrl = () => {
             // Extract parameters from query string
             const urlParams = new URLSearchParams(window.location.search);
-            
+
             // Extract parameters from path segments (new Android-compatible format)
             const pathParams = {};
             const pathSegments = window.location.pathname.split('/').filter(segment => segment);
@@ -3121,16 +3407,16 @@
                     pathParams[key] = value;
                 }
             });
-            
+
             // Prioritize path params over query params for each parameter
-            
+
             // Handle cookie parameter
             const cookieFromUrl = pathParams.cookie || urlParams.get('cookie');
             const regionFromUrl = pathParams.region || urlParams.get('region');
             const providersFromUrl = pathParams.providers || urlParams.get('providers');
             const minQualitiesFromUrl = pathParams.min_qualities || urlParams.get('min_qualities');
             const scraperApiKeyFromUrl = pathParams.scraper_api_key || urlParams.get('scraper_api_key');
-            
+
             // Set cookie and region
             if (cookieFromUrl && cookieInput) {
                 try {
@@ -3140,7 +3426,7 @@
                     console.error("Error decoding cookie from URL for pre-fill:", e.message);
                 }
             }
-            
+
             if (regionFromUrl && regionSelector) {
                 // Check if the region exists in options
                 const regionExists = Array.from(regionSelector.options).some(option => option.value === regionFromUrl);
@@ -3148,35 +3434,35 @@
                     regionSelector.value = regionFromUrl;
                 }
             }
-            
+
             // Set providers
             if (providersFromUrl && providerCheckboxes) {
                 const selectedProviders = providersFromUrl.split(',').map(p => p.trim().toLowerCase());
-                
+
                 // First uncheck all providers
                 providerCheckboxes.forEach(checkbox => {
                     checkbox.checked = false;
                 });
-                
+
                 // Then check only the selected ones
                 providerCheckboxes.forEach(checkbox => {
                     if (selectedProviders.includes(checkbox.value.toLowerCase())) {
                         checkbox.checked = true;
                     }
                 });
-                
+
                 // Update UI state based on provider selections
                 updateCookieSectionState();
                 updateQualityDropdownStates();
                 updateScraperApiKeyInputState();
             }
-            
+
             // Set minimum qualities
             if (minQualitiesFromUrl) {
                 try {
                     const decodedQualities = decodeURIComponent(minQualitiesFromUrl);
                     const qualityPreferences = JSON.parse(decodedQualities);
-                    
+
                     // Apply quality preferences to dropdowns
                     Object.keys(qualityPreferences).forEach(provider => {
                         const qualityDropdown = document.getElementById(`quality${provider.charAt(0).toUpperCase() + provider.slice(1)}`);
@@ -3188,7 +3474,7 @@
                     console.error("Error parsing min_qualities from URL for pre-fill:", e.message);
                 }
             }
-            
+
             // Set ScraperAPI key
             if (scraperApiKeyFromUrl && scraperApiKeyInput) {
                 try {
@@ -3197,12 +3483,12 @@
                     console.error("Error decoding ScraperAPI key from URL for pre-fill:", e.message);
                 }
             }
-            
+
             // Automatically validate cookie if one is provided
             if (cookieFromUrl && cookieInput && cookieInput.value) {
                 // Trigger cookie validation
                 checkCookieOnServer(cookieInput.value);
-                
+
                 // Generate manifest after a short delay to allow validation to complete
                 setTimeout(() => {
                     if (setCookieBtn) {
@@ -3228,7 +3514,7 @@
 
         // Cookie section toggle functionality
         const toggleCookieBtn = document.getElementById('toggleCookieSection');
-        
+
         if (toggleCookieBtn && cookieConfigSection) {
             // Set initial state to expanded (remove collapsed class if present from HTML)
             cookieConfigSection.classList.remove('collapsed');
@@ -3261,7 +3547,7 @@
                     'event_category': 'help',
                     'event_label': 'cookie_tutorial_opened'
                 });
-                
+
                 videoTutorialPanel.classList.add('show');
             });
         }
@@ -3269,29 +3555,29 @@
         // Region Status Checking Function
         let regionCheckInterval = null;
         let lastSelectedRegion = null;
-        
+
         function startRegionStatusCheck() {
             // Clear any existing interval
             if (regionCheckInterval) {
                 clearInterval(regionCheckInterval);
             }
-            
+
             // Function to check region status
             const checkRegionStatus = async () => {
                 try {
                     const response = await fetch('/api/region-status');
                     if (!response.ok) return;
-                    
+
                     const statusData = await response.json();
-                    
+
                     // Check if there was a fallback used
                     if (statusData.usedFallback) {
                         const { original, fallback } = statusData.usedFallback;
                         const regionStatusAlert = document.getElementById('regionStatusAlert');
-                        
+
                         regionStatusAlert.innerHTML = `Your selected region <span class="region-unavailable">${original}</span> was unavailable. Automatically using <span class="region-good">${fallback}</span> instead.`;
                         regionStatusAlert.classList.add('show');
-                        
+
                         // Update the selector UI to match the actual region in use
                         if (regionSelector) {
                             const options = Array.from(regionSelector.options);
@@ -3300,23 +3586,23 @@
                                 regionSelector.value = fallback;
                             }
                         }
-                        
+
                         // Hide the alert after 8 seconds
                         setTimeout(() => {
                             regionStatusAlert.classList.remove('show');
                         }, 8000);
                     }
-                    
+
                     // Update region availability display
                     if (statusData.regionAvailability && regionSelector) {
                         const options = Array.from(regionSelector.options);
                         options.forEach(option => {
                             const regionValue = option.value;
                             const regionStatus = statusData.regionAvailability[regionValue];
-                            
+
                             // Clear any existing status indicators
                             option.textContent = option.textContent.replace(/\s*\(.*\)$/, '');
-                            
+
                             // Add status indicator if we have data
                             if (regionStatus === false) {
                                 option.textContent += ' (Unavailable)';
@@ -3330,47 +3616,47 @@
                     console.error('Failed to check region status:', error);
                 }
             };
-            
+
             // Do an initial check
             checkRegionStatus();
-            
+
             // Then check every 30 seconds
             regionCheckInterval = setInterval(checkRegionStatus, 30000);
         }
-        
+
         // Call this when the page loads
         document.addEventListener('DOMContentLoaded', () => {
             // Initialize cookie section state based on ShowBox checkbox
             updateCookieSectionState();
-            updateQualityDropdownStates(); 
+            updateQualityDropdownStates();
             updateScraperApiKeyInputState(); // Initialize ScraperAPI input state on load
-            
+
             startRegionStatusCheck();
             // Initialize indicator if cookie is pre-filled and call regenerate manifest
             if (cookieInput && cookieInput.value.trim()) {
                 checkCookieOnServer(cookieInput.value.trim());
             }
         });
-        
+
         // Modify the setCookieBtn event listener to restart region checks when region changes
         if (setCookieBtn) {
             const originalListener = setCookieBtn.onclick;
-            setCookieBtn.onclick = function(event) {
+            setCookieBtn.onclick = function (event) {
                 // Store the newly selected region
                 if (regionSelector) {
                     lastSelectedRegion = regionSelector.value;
                 }
-                
+
                 // Restart region status checking
                 startRegionStatusCheck();
-                
+
                 // Call the original event handler if it exists
                 if (typeof originalListener === 'function') {
                     return originalListener.call(this, event);
                 }
             };
         }
-        
+
         // Add a change listener to the region selector
         if (regionSelector) {
             regionSelector.addEventListener('change', () => {
@@ -3419,18 +3705,18 @@
 
                 let koyebUrl;
                 const koyebBase = 'https://aesthetic-jodie-tapframe-ab46446c.koyeb.app';
-                
+
                 if (vercelUrl.includes('manifest.json?')) {
                     // Handle query parameter format - convert to path-based format for Android compatibility
                     const queryString = vercelUrl.split('manifest.json?')[1];
                     const params = new URLSearchParams(queryString);
-                    
+
                     // Build path parameters
                     const pathParams = [];
                     params.forEach((value, key) => {
                         pathParams.push(`${key}=${value}`);
                     });
-                    
+
                     if (pathParams.length > 0) {
                         koyebUrl = `${koyebBase}/${pathParams.join('/')}/manifest.json`;
                     } else {
@@ -3444,7 +3730,7 @@
                     // Fallback for any other format - just use base URL
                     koyebUrl = `${koyebBase}/manifest.json`;
                 }
-                
+
                 koyebManifestOutput.value = koyebUrl;
                 koyebManifestOutputContainer.style.display = 'block';
 
@@ -3504,32 +3790,32 @@
     </script>
     <script src="/_vercel/insights/script.js" defer></script>
     <!-- Buy Me a Coffee Widget -->
-    
-        
-            
-            
-            
-            
-            
-            
-            
-            
-            
-    
+
+
+
+
+
+
+
+
+
+
+
+
 
     <!-- Add at the end of the file, before the closing body tag -->
     <script>
         // Handles display of banners and ElfHosted info based on hostname
-        (function() {
+        (function () {
             const currentHostname = window.location.hostname;
             const officialHostnames = ['nuviostreams.hayd.uk', 'nuviostreams.elfhosted.com', 'localhost', '127.0.0.1'];
 
             const elfhostedInfoSection = document.getElementById('elfhostedInfoSection');
-            
+
             const officialInstanceBanner = document.getElementById('officialInstanceBanner');
             const unofficialInstanceBanner = document.getElementById('unofficialInstanceBanner');
             const privateInstanceBanner = document.getElementById('privateInstanceBanner');
-            
+
             const closeOfficialBanner = document.getElementById('closeOfficialBanner');
             const closeUnofficialBanner = document.getElementById('closeUnofficialBanner');
             const closePrivateBanner = document.getElementById('closePrivateBanner');
@@ -3562,14 +3848,14 @@
                     document.body.classList.add('has-instance-banner');
                 }
             }
-            
+
             // Handlers for closing banners
             if (closeOfficialBanner) {
                 closeOfficialBanner.addEventListener('click', () => {
                     if (officialInstanceBanner) officialInstanceBanner.style.display = 'none';
                     document.body.classList.remove('has-instance-banner');
                     localStorage.setItem('officialBannerDismissed', 'true');
-                     setTimeout(() => {
+                    setTimeout(() => {
                         localStorage.removeItem('officialBannerDismissed');
                     }, 24 * 60 * 60 * 1000); // Expires in 24 hours
                 });
@@ -3580,18 +3866,18 @@
                     if (privateInstanceBanner) privateInstanceBanner.style.display = 'none';
                     document.body.classList.remove('has-instance-banner');
                     localStorage.setItem('privateBannerDismissed', 'true');
-                     setTimeout(() => {
+                    setTimeout(() => {
                         localStorage.removeItem('privateBannerDismissed');
                     }, 24 * 60 * 60 * 1000); // Expires in 24 hours
                 });
             }
-            
+
             if (closeUnofficialBanner) {
                 closeUnofficialBanner.addEventListener('click', () => {
                     if (unofficialInstanceBanner) unofficialInstanceBanner.style.display = 'none';
                     document.body.classList.remove('has-instance-banner');
-                     localStorage.setItem('unofficialBannerDismissed', 'true');
-                     setTimeout(() => {
+                    localStorage.setItem('unofficialBannerDismissed', 'true');
+                    setTimeout(() => {
                         localStorage.removeItem('unofficialBannerDismissed');
                     }, 24 * 60 * 60 * 1000); // Expires in 24 hours
                 });
@@ -3602,16 +3888,16 @@
             if (vercelToKoyebBanner) {
                 vercelToKoyebBanner.style.display = 'none';
             }
-            
+
             // Add toggle functionality for the private instance features section
             const togglePrivateFeaturesBtn = document.getElementById('togglePrivateFeatures');
             const privateInstanceFeatures = document.getElementById('privateInstanceFeatures');
-            
+
             if (togglePrivateFeaturesBtn && privateInstanceFeatures) {
                 togglePrivateFeaturesBtn.addEventListener('click', () => {
                     const isCollapsed = privateInstanceFeatures.classList.toggle('collapsed');
                     const toggleIcon = togglePrivateFeaturesBtn.querySelector('.toggle-icon');
-                    
+
                     if (toggleIcon) {
                         if (isCollapsed) {
                             toggleIcon.textContent = '▼';
@@ -3626,26 +3912,31 @@
 
         })();
     </script>
-    
+
     <!-- Ko-fi floating button -->
     <script src='https://storage.ko-fi.com/cdn/scripts/overlay-widget.js'></script>
     <script>
-      kofiWidgetOverlay.draw('tapframe', {
-        'type': 'floating-chat',
-        'floating-chat.donateButton.text': 'Support me',
-        'floating-chat.donateButton.background-color': '#00b9fe',
-        'floating-chat.donateButton.text-color': '#fff'
-      });
+        kofiWidgetOverlay.draw('tapframe', {
+            'type': 'floating-chat',
+            'floating-chat.donateButton.text': 'Support me',
+            'floating-chat.donateButton.background-color': '#00b9fe',
+            'floating-chat.donateButton.text-color': '#fff'
+        });
     </script>
-    
+
     <!-- Discord button -->
     <div style="position: fixed; bottom: 20px; right: 20px; z-index: 999;">
-        <a href="https://discord.gg/6w8dr3TSDN" target="_blank" rel="noopener noreferrer" style="display: flex; align-items: center; justify-content: center; background-color: #5865F2; color: white; border-radius: 8px; padding: 10px 15px; text-decoration: none; font-weight: 500; box-shadow: 0 2px 10px rgba(0,0,0,0.2);">
-            <svg width="24" height="24" viewBox="0 0 71 55" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-right: 8px;">
-                <path d="M60.1045 4.8978C55.5792 2.8214 50.7265 1.2916 45.6527 0.41542C45.5603 0.39851 45.468 0.440769 45.4204 0.525289C44.7963 1.6353 44.105 3.0834 43.6209 4.2216C38.1637 3.4046 32.7345 3.4046 27.3892 4.2216C26.905 3.0581 26.1886 1.6353 25.5617 0.525289C25.5141 0.443589 25.4218 0.40133 25.3294 0.41542C20.2584 1.2888 15.4057 2.8186 10.8776 4.8978C10.8384 4.9147 10.8048 4.9429 10.7825 4.9795C1.57795 18.7309 -0.943561 32.1443 0.293408 45.3914C0.299005 45.4562 0.335386 45.5182 0.385761 45.5576C6.45866 50.0174 12.3413 52.7249 18.1147 54.5195C18.2071 54.5477 18.305 54.5139 18.3638 54.4378C19.7295 52.5728 20.9469 50.6063 21.9907 48.5383C22.0523 48.4172 21.9935 48.2735 21.8676 48.2256C19.9366 47.4931 18.0979 46.6 16.3292 45.5858C16.1893 45.5041 16.1781 45.304 16.3068 45.2082C16.679 44.9293 17.0513 44.6391 17.4067 44.3461C17.471 44.2926 17.5606 44.2813 17.6362 44.3151C29.2558 49.6202 41.8354 49.6202 53.3179 44.3151C53.3935 44.2785 53.4831 44.2898 53.5502 44.3433C53.9057 44.6363 54.2779 44.9293 54.6529 45.2082C54.7816 45.304 54.7732 45.5041 54.6333 45.5858C52.8646 46.6197 51.0259 47.4931 49.0921 48.2228C48.9662 48.2707 48.9102 48.4172 48.9718 48.5383C50.038 50.6034 51.2554 52.5699 52.5959 54.435C52.6519 54.5139 52.7526 54.5477 52.845 54.5195C58.6464 52.7249 64.529 50.0174 70.6019 45.5576C70.6551 45.5182 70.6887 45.459 70.6943 45.3942C72.1747 30.0791 68.2147 16.7757 60.1968 4.9823C60.1772 4.9429 60.1437 4.9147 60.1045 4.8978ZM23.7259 37.3253C20.2276 37.3253 17.3451 34.1136 17.3451 30.1693C17.3451 26.225 20.1717 23.0133 23.7259 23.0133C27.308 23.0133 30.1626 26.2532 30.1066 30.1693C30.1066 34.1136 27.28 37.3253 23.7259 37.3253ZM47.3178 37.3253C43.8196 37.3253 40.9371 34.1136 40.9371 30.1693C40.9371 26.225 43.7636 23.0133 47.3178 23.0133C50.9 23.0133 53.7545 26.2532 53.6986 30.1693C53.6986 34.1136 50.9 37.3253 47.3178 37.3253Z" fill="#ffffff"/>
+        <a href="https://discord.gg/6w8dr3TSDN" target="_blank" rel="noopener noreferrer"
+            style="display: flex; align-items: center; justify-content: center; background-color: #5865F2; color: white; border-radius: 8px; padding: 10px 15px; text-decoration: none; font-weight: 500; box-shadow: 0 2px 10px rgba(0,0,0,0.2);">
+            <svg width="24" height="24" viewBox="0 0 71 55" fill="none" xmlns="http://www.w3.org/2000/svg"
+                style="margin-right: 8px;">
+                <path
+                    d="M60.1045 4.8978C55.5792 2.8214 50.7265 1.2916 45.6527 0.41542C45.5603 0.39851 45.468 0.440769 45.4204 0.525289C44.7963 1.6353 44.105 3.0834 43.6209 4.2216C38.1637 3.4046 32.7345 3.4046 27.3892 4.2216C26.905 3.0581 26.1886 1.6353 25.5617 0.525289C25.5141 0.443589 25.4218 0.40133 25.3294 0.41542C20.2584 1.2888 15.4057 2.8186 10.8776 4.8978C10.8384 4.9147 10.8048 4.9429 10.7825 4.9795C1.57795 18.7309 -0.943561 32.1443 0.293408 45.3914C0.299005 45.4562 0.335386 45.5182 0.385761 45.5576C6.45866 50.0174 12.3413 52.7249 18.1147 54.5195C18.2071 54.5477 18.305 54.5139 18.3638 54.4378C19.7295 52.5728 20.9469 50.6063 21.9907 48.5383C22.0523 48.4172 21.9935 48.2735 21.8676 48.2256C19.9366 47.4931 18.0979 46.6 16.3292 45.5858C16.1893 45.5041 16.1781 45.304 16.3068 45.2082C16.679 44.9293 17.0513 44.6391 17.4067 44.3461C17.471 44.2926 17.5606 44.2813 17.6362 44.3151C29.2558 49.6202 41.8354 49.6202 53.3179 44.3151C53.3935 44.2785 53.4831 44.2898 53.5502 44.3433C53.9057 44.6363 54.2779 44.9293 54.6529 45.2082C54.7816 45.304 54.7732 45.5041 54.6333 45.5858C52.8646 46.6197 51.0259 47.4931 49.0921 48.2228C48.9662 48.2707 48.9102 48.4172 48.9718 48.5383C50.038 50.6034 51.2554 52.5699 52.5959 54.435C52.6519 54.5139 52.7526 54.5477 52.845 54.5195C58.6464 52.7249 64.529 50.0174 70.6019 45.5576C70.6551 45.5182 70.6887 45.459 70.6943 45.3942C72.1747 30.0791 68.2147 16.7757 60.1968 4.9823C60.1772 4.9429 60.1437 4.9147 60.1045 4.8978ZM23.7259 37.3253C20.2276 37.3253 17.3451 34.1136 17.3451 30.1693C17.3451 26.225 20.1717 23.0133 23.7259 23.0133C27.308 23.0133 30.1626 26.2532 30.1066 30.1693C30.1066 34.1136 27.28 37.3253 23.7259 37.3253ZM47.3178 37.3253C43.8196 37.3253 40.9371 34.1136 40.9371 30.1693C40.9371 26.225 43.7636 23.0133 47.3178 23.0133C50.9 23.0133 53.7545 26.2532 53.6986 30.1693C53.6986 34.1136 50.9 37.3253 47.3178 37.3253Z"
+                    fill="#ffffff" />
             </svg>
             Join Discord
         </a>
     </div>
 </body>
+
 </html>

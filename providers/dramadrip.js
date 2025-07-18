@@ -531,6 +531,71 @@ async function getDramaDripStreams(tmdbId, mediaType, seasonNum, episodeNum) {
             const title = mediaType === 'tv' ? tmdbData.name : tmdbData.title;
             const year = mediaType === 'tv' ? (tmdbData.first_air_date || '').substring(0, 4) : (tmdbData.release_date || '').substring(0, 4);
 
+            // --- ASIAN CONTENT FILTERING ---
+            const asianCountries = [
+                'JP', 'KR', 'CN', 'TH', 'TW', 'HK', 'SG', 'MY', 'ID', 'PH', 
+                'VN', 'IN', 'BD', 'LK', 'NP', 'BT', 'MM', 'KH', 'LA', 'BN',
+                'MN', 'KZ', 'UZ', 'KG', 'TJ', 'TM', 'AF', 'PK', 'MV', 'MO'
+            ];
+            
+            const asianLanguages = [
+                'ja', 'ko', 'zh', 'th', 'hi', 'ta', 'te', 'bn', 'ur', 'vi', 
+                'id', 'ms', 'tl', 'my', 'km', 'lo', 'si', 'ne', 'dz', 'mn'
+            ];
+            
+            // Primary indicators (most reliable)
+            const originCountries = tmdbData.origin_country || [];
+            const productionCountries = tmdbData.production_countries?.map(c => c.iso_3166_1) || [];
+            const allCountries = [...new Set([...originCountries, ...productionCountries])];
+            const originalLanguage = tmdbData.original_language;
+            
+            // Check primary indicators first
+            const isPrimaryAsianCountry = allCountries.some(country => asianCountries.includes(country));
+            const isPrimaryAsianLanguage = asianLanguages.includes(originalLanguage);
+            
+            // Secondary indicator (less reliable - only use if primary indicators are inconclusive)
+            const spokenLanguages = tmdbData.spoken_languages?.map(l => l.iso_639_1) || [];
+            const hasAsianSpokenLanguage = spokenLanguages.some(lang => asianLanguages.includes(lang));
+            
+            // Strict filtering logic:
+            // 1. If primary country is non-Asian (US, GB, etc.), reject even if has Asian spoken languages
+            // 2. Only accept if primary country OR primary language is Asian
+            // 3. Use spoken languages only if no clear primary indicators exist
+            
+            const nonAsianMajorCountries = ['US', 'GB', 'CA', 'AU', 'FR', 'DE', 'IT', 'ES', 'RU', 'BR', 'MX'];
+            const isPrimaryNonAsian = allCountries.some(country => nonAsianMajorCountries.includes(country));
+            
+            let isAsianContent = false;
+            let reason = '';
+            
+            if (isPrimaryNonAsian && !isPrimaryAsianCountry) {
+                // Definitely non-Asian (e.g., US movie with some Chinese dialogue)
+                isAsianContent = false;
+                reason = `Primary non-Asian country detected (${allCountries.join(', ')})`;
+            } else if (isPrimaryAsianCountry) {
+                // Definitely Asian by country
+                isAsianContent = true;
+                reason = `Asian production country (${allCountries.join(', ')})`;
+            } else if (isPrimaryAsianLanguage) {
+                // Definitely Asian by original language
+                isAsianContent = true;
+                reason = `Asian original language (${originalLanguage})`;
+            } else if (allCountries.length === 0 && hasAsianSpokenLanguage && !originalLanguage) {
+                // Fallback: no country/original language data, but has Asian spoken language
+                isAsianContent = true;
+                reason = `Asian spoken language fallback (${spokenLanguages.join(', ')})`;
+            } else {
+                isAsianContent = false;
+                reason = `No clear Asian indicators (Countries: ${allCountries.join(', ') || 'None'}, Original: ${originalLanguage || 'None'})`;
+            }
+            
+            if (!isAsianContent) {
+                console.log(`[DramaDrip] Skipping non-Asian content: "${title}" - ${reason}`);
+                await saveToCache(cacheKey, []); // Cache empty result
+                return [];
+            }
+            
+            console.log(`[DramaDrip] ✓ Asian content detected: "${title}" - ${reason}`);
             console.log(`[DramaDrip] Searching for: "${title}" (${year})`);
             const searchResults = await searchDramaDrip(title);
             if (searchResults.length === 0) throw new Error(`No search results found for "${title}"`);
