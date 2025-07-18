@@ -681,7 +681,7 @@ const _searchAndExtractShowboxUrl = async (searchTerm, originalTmdbTitle, mediaY
     const mediaTypeString = tmdbType === 'movie' ? 'movie' : 'tv';
 
     // Add a cache version to invalidate previous incorrect cached results
-    const CACHE_VERSION = "v10"; // Increment this whenever the search algorithm significantly changes
+    const CACHE_VERSION = "v11"; // Increment this whenever the search algorithm significantly changes
 
     // Create a proper hash for the cache key to avoid filename issues with special characters
     const cacheKeyData = `${CACHE_VERSION}_${tmdbType}_${originalTmdbTitle}_${mediaYear || 'noYear'}`;
@@ -2050,13 +2050,31 @@ const getStreamsFromTmdbId = async (tmdbType, tmdbId, seasonNum = null, episodeN
     const showboxUrl = tmdbInfo.showboxUrl;
     const mediaYear = tmdbInfo.year; // Year from TMDB
 
-    // Then, get FebBox link from ShowBox
-    const showboxScraper = new ShowBoxScraper(regionPreference, userCookie, userScraperApiKey);
-    const febboxShareInfos = await showboxScraper.extractFebboxShareLinks(showboxUrl);
-    if (!febboxShareInfos || febboxShareInfos.length === 0) {
-        console.log(`No FebBox share links found for ${showboxUrl}`);
-        console.timeEnd(mainTimerLabel);
-        return [];
+    // Check if we have cached FebBox share links to avoid redundant ShowBox requests
+    let febboxShareInfos = tmdbInfo.febboxShareInfos;
+    
+    if (!febboxShareInfos) {
+        // Only make ShowBox request if FebBox links are not cached
+        console.log(`No cached FebBox links found, extracting from ShowBox: ${showboxUrl}`);
+        const showboxScraper = new ShowBoxScraper(regionPreference, userCookie, userScraperApiKey);
+        febboxShareInfos = await showboxScraper.extractFebboxShareLinks(showboxUrl);
+        
+        if (!febboxShareInfos || febboxShareInfos.length === 0) {
+            console.log(`No FebBox share links found for ${showboxUrl}`);
+            console.timeEnd(mainTimerLabel);
+            return [];
+        }
+        
+        // Update cache with FebBox share links to avoid future ShowBox requests
+        if (process.env.DISABLE_CACHE !== 'true') {
+            const updatedTmdbInfo = { ...tmdbInfo, febboxShareInfos };
+            const urlCacheSubDir = 'showbox_final_url';
+            const urlCacheKey = `v3_${tmdbType}_${tmdbId}.json`;
+            await saveToCache(urlCacheKey, updatedTmdbInfo, urlCacheSubDir);
+            console.log(`[Final URL Cache] UPDATED with FebBox links for ${tmdbType}/${tmdbId}`);
+        }
+    } else {
+        console.log(`[Final URL Cache] Using cached FebBox links, skipping ShowBox request for ${showboxUrl}`);
     }
 
     // MODIFIED: Process FebBox share links in parallel
