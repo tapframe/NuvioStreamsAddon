@@ -693,11 +693,21 @@ const _searchAndExtractShowboxUrl = async (searchTerm, originalTmdbTitle, mediaY
 
     // Check if DISABLE_CACHE is set to 'true'
     if (process.env.DISABLE_CACHE !== 'true') {
-        const cachedBestUrl = await getFromCache(searchTermKey, cacheSubDir);
-        if (cachedBestUrl) {
-            console.log(`  CACHE HIT for ShowBox search best match URL (${originalTmdbTitle} ${mediaYear || ''}): ${cachedBestUrl}`);
-            if (cachedBestUrl === 'NO_MATCH_FOUND') return { url: null, score: -1 };
-            return { url: cachedBestUrl, score: 10 }; // Assume a good score for a cached valid URL
+        const cachedResult = await getFromCache(searchTermKey, cacheSubDir);
+        if (cachedResult) {
+            // Handle both old string format and new object format
+            if (typeof cachedResult === 'string') {
+                console.log(`  CACHE HIT for ShowBox search best match URL (${originalTmdbTitle} ${mediaYear || ''}): ${cachedResult}`);
+                if (cachedResult === 'NO_MATCH_FOUND') return { url: null, score: -1 };
+                return { url: cachedResult, score: 10 };
+            } else if (cachedResult.result === 'NO_MATCH_FOUND') {
+                 // For stream searches, always retry immediately - content availability can change anytime
+                 console.log(`  CACHE HIT: Previously no match found for ${originalTmdbTitle} ${mediaYear || ''}, but retrying immediately for fresh content.`);
+                 // Continue to search logic below to retry immediately
+            } else {
+                console.log(`  CACHE HIT for ShowBox search best match URL (${originalTmdbTitle} ${mediaYear || ''}): ${cachedResult}`);
+                return { url: cachedResult, score: 10 };
+            }
         }
     } else {
         console.log(`  Cache disabled, skipping cache check for ShowBox search.`);
@@ -1099,7 +1109,7 @@ const _searchAndExtractShowboxUrl = async (searchTerm, originalTmdbTitle, mediaY
     // This block will now be reached if the initial search found nothing, or if AI rejected the candidate.
     console.log(`  No suitable match found on ShowBox search for: ${originalTmdbTitle} (${mediaYear || 'N/A'})`);
     if (process.env.DISABLE_CACHE !== 'true') {
-        await saveToCache(searchTermKey, 'NO_MATCH_FOUND', cacheSubDir);
+        await saveToCache(searchTermKey, { result: 'NO_MATCH_FOUND', timestamp: Date.now() }, cacheSubDir);
     }
     return { url: null, score: -1 };
 };
@@ -1116,11 +1126,13 @@ const getShowboxUrlFromTmdbInfo = async (tmdbType, tmdbId, regionPreference = nu
         const cachedResult = await getFromCache(urlCacheKey, urlCacheSubDir);
         if (cachedResult) {
             if (cachedResult.showboxUrl === 'NO_URL_FOUND') {
-                console.log(`  [Final URL Cache] HIT: Previously determined no URL found for ${tmdbType}/${tmdbId}.`);
-                return null;
+                // For stream searches, always retry immediately - content availability can change anytime
+                console.log(`  [Final URL Cache] HIT: Previously no URL found for ${tmdbType}/${tmdbId}, but retrying immediately for fresh content.`);
+                // Continue to search logic below to retry immediately
+            } else {
+                console.log(`  [Final URL Cache] HIT: Found cached ShowBox result for ${tmdbType}/${tmdbId}.`);
+                return cachedResult;
             }
-            console.log(`  [Final URL Cache] HIT: Found cached ShowBox result for ${tmdbType}/${tmdbId}.`);
-            return cachedResult;
         }
     }
 
@@ -1330,7 +1342,7 @@ const getShowboxUrlFromTmdbInfo = async (tmdbType, tmdbId, regionPreference = nu
             await saveToCache(urlCacheKey, finalResult, urlCacheSubDir);
         } else {
             console.log(`  [Final URL Cache] SAVING 'NO_URL_FOUND' for ${tmdbType}/${tmdbId}.`);
-            await saveToCache(urlCacheKey, { showboxUrl: 'NO_URL_FOUND' }, urlCacheSubDir);
+            await saveToCache(urlCacheKey, { showboxUrl: 'NO_URL_FOUND', timestamp: Date.now() }, urlCacheSubDir);
         }
     }
 
