@@ -735,6 +735,129 @@ async function validateVideoUrl(url, timeout = 10000) {
     }
 }
 
+// Parallel URL validation for multiple URLs
+async function validateUrlsParallel(urls, timeout = 10000) {
+    if (!urls || urls.length === 0) return [];
+    
+    console.log(`[MoviesMod] Validating ${urls.length} URLs in parallel...`);
+    
+    const validationPromises = urls.map(async (url) => {
+        try {
+            const response = await axios.head(url, {
+                timeout,
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                    'Range': 'bytes=0-1'
+                }
+            });
+
+            const isValid = response.status >= 200 && response.status < 400;
+            return { url, isValid, status: response.status };
+        } catch (error) {
+            return { url, isValid: false, error: error.message };
+        }
+    });
+
+    const results = await Promise.allSettled(validationPromises);
+    const validationResults = results.map(r => 
+        r.status === 'fulfilled' ? r.value : { url: 'unknown', isValid: false, error: 'Promise rejected' }
+    );
+
+    const validCount = validationResults.filter(r => r.isValid).length;
+    console.log(`[MoviesMod] ✓ Parallel validation complete: ${validCount}/${urls.length} URLs valid`);
+    
+    return validationResults;
+}
+
+// Parallel episode processing for TV shows
+async function processEpisodesParallel(finalFilePageLinks, episodeNum = null) {
+    if (!finalFilePageLinks || finalFilePageLinks.length === 0) return [];
+    
+    console.log(`[MoviesMod] Processing ${finalFilePageLinks.length} episode links in parallel...`);
+    
+    const episodePromises = finalFilePageLinks.map(async (link) => {
+        try {
+            // Extract episode information from server name
+            const serverName = link.server.toLowerCase();
+            let extractedEpisodeNum = null;
+            
+            // Try multiple episode patterns
+            const episodePatterns = [
+                /episode\s+(\d+)/i,
+                /ep\s+(\d+)/i,
+                /e(\d+)/i,
+                /\b(\d+)\b/
+            ];
+            
+            for (const pattern of episodePatterns) {
+                const match = serverName.match(pattern);
+                if (match) {
+                    extractedEpisodeNum = parseInt(match[1], 10);
+                    break;
+                }
+            }
+            
+            return {
+                ...link,
+                episodeInfo: {
+                    episode: extractedEpisodeNum,
+                    originalServer: link.server
+                }
+            };
+        } catch (error) {
+            return {
+                ...link,
+                episodeInfo: {
+                    episode: null,
+                    originalServer: link.server,
+                    error: error.message
+                }
+            };
+        }
+    });
+    
+    const processedLinks = await Promise.all(episodePromises);
+    
+    // Filter for specific episode if requested
+    if (episodeNum !== null) {
+        const filteredLinks = processedLinks.filter(link => 
+            link.episodeInfo?.episode === episodeNum
+        );
+        console.log(`[MoviesMod] ✓ Parallel episode processing: Found ${filteredLinks.length} matches for episode ${episodeNum}`);
+        return filteredLinks;
+    }
+    
+    console.log(`[MoviesMod] ✓ Parallel episode processing complete: ${processedLinks.length} episodes processed`);
+    return processedLinks;
+}
+
+// Parallel SID link resolution for multiple SID links
+async function resolveSIDLinksParallel(sidUrls) {
+    if (!sidUrls || sidUrls.length === 0) return [];
+    
+    console.log(`[MoviesMod] Resolving ${sidUrls.length} SID links in parallel...`);
+    
+    const sidPromises = sidUrls.map(async (sidUrl) => {
+        try {
+            const resolvedUrl = await resolveTechUnblockedLink(sidUrl);
+            return { originalUrl: sidUrl, resolvedUrl, success: !!resolvedUrl };
+        } catch (error) {
+            console.log(`[MoviesMod] ✗ SID resolution failed for ${sidUrl}: ${error.message}`);
+            return { originalUrl: sidUrl, resolvedUrl: null, success: false, error: error.message };
+        }
+    });
+    
+    const results = await Promise.allSettled(sidPromises);
+    const resolvedResults = results.map(r => 
+        r.status === 'fulfilled' ? r.value : { originalUrl: 'unknown', resolvedUrl: null, success: false, error: 'Promise rejected' }
+    );
+    
+    const successCount = resolvedResults.filter(r => r.success).length;
+    console.log(`[MoviesMod] ✓ Parallel SID resolution complete: ${successCount}/${sidUrls.length} SID links resolved`);
+    
+    return resolvedResults;
+}
+
 // Main function to get streams for TMDB content
 async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeNum = null) {
     try {
@@ -923,11 +1046,12 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
         const qualityProcessingPromises = resolvedQualities.map(async (qualityInfo) => {
             const { quality, finalFilePageLinks } = qualityInfo;
 
+            // Use parallel episode processing for TV shows
             let targetLinks = finalFilePageLinks;
             if ((mediaType === 'tv' || mediaType === 'series') && episodeNum !== null) {
-                targetLinks = finalFilePageLinks.filter(fl => fl.server.toLowerCase().includes(`episode ${episodeNum}`) || fl.server.toLowerCase().includes(`ep ${episodeNum}`) || fl.server.toLowerCase().includes(`e${episodeNum}`));
+                targetLinks = await processEpisodesParallel(finalFilePageLinks, episodeNum);
                 if (targetLinks.length === 0) {
-                    console.log(`[MoviesMod] No episode ${episodeNum} found for ${quality}`);
+                    console.log(`[MoviesMod] No episode ${episodeNum} found for ${quality} after parallel processing`);
                     return [];
                 }
             }
@@ -1018,11 +1142,12 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
 
                         if (!downloadOptions || downloadOptions.length === 0) return null;
 
-                        // Try each download method in order of priority until we find a working one
-                        let selectedResult = null;
-                        for (const option of downloadOptions) {
+                        // Try all download methods in parallel (racing approach)
+                        console.log(`[MoviesMod] Racing ${downloadOptions.length} download methods for ${quality}...`);
+                        
+                        const methodPromises = downloadOptions.map(async (option) => {
                             try {
-                                console.log(`[MoviesMod] Trying ${option.title} for ${quality}...`);
+                                console.log(`[MoviesMod] Racing ${option.title} for ${quality}...`);
                                 let finalDownloadUrl = null;
 
                                 if (option.type === 'resume') {
@@ -1037,18 +1162,40 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
                                     // Validate the URL before using it
                                     const isValid = await validateVideoUrl(finalDownloadUrl);
                                     if (isValid) {
-                                        selectedResult = { url: finalDownloadUrl, method: option.title };
-                                        console.log(`[MoviesMod] ✓ Successfully resolved ${quality} using ${option.title}`);
-                                        break; // Found working URL, stop trying other methods
+                                        console.log(`[MoviesMod] ✓ ${option.title} won the race for ${quality}`);
+                                        return { 
+                                            url: finalDownloadUrl, 
+                                            method: option.title, 
+                                            priority: option.priority || 999,
+                                            success: true 
+                                        };
                                     } else {
-                                        console.log(`[MoviesMod] ✗ ${option.title} returned invalid/broken URL, trying next method...`);
+                                        console.log(`[MoviesMod] ✗ ${option.title} returned invalid URL in race`);
+                                        return { success: false, method: option.title, error: 'Invalid URL' };
                                     }
                                 } else {
-                                    console.log(`[MoviesMod] ✗ ${option.title} failed to resolve URL, trying next method...`);
+                                    console.log(`[MoviesMod] ✗ ${option.title} failed to resolve URL in race`);
+                                    return { success: false, method: option.title, error: 'No URL resolved' };
                                 }
                             } catch (error) {
-                                console.log(`[MoviesMod] ✗ ${option.title} threw error: ${error.message}, trying next method...`);
+                                console.log(`[MoviesMod] ✗ ${option.title} threw error in race: ${error.message}`);
+                                return { success: false, method: option.title, error: error.message };
                             }
+                        });
+
+                        // Race all methods, get first successful one with highest priority
+                        const results = await Promise.allSettled(methodPromises);
+                        const successful = results
+                            .filter(r => r.status === 'fulfilled' && r.value.success)
+                            .map(r => r.value)
+                            .sort((a, b) => a.priority - b.priority); // Prefer higher priority (lower number)
+
+                        let selectedResult = null;
+                        if (successful.length > 0) {
+                            selectedResult = successful[0];
+                            console.log(`[MoviesMod] ✓ Parallel race winner: ${selectedResult.method} for ${quality}`);
+                        } else {
+                            console.log(`[MoviesMod] ✗ All ${downloadOptions.length} methods failed in parallel race for ${quality}`);
                         }
 
                         if (!selectedResult) {
