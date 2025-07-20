@@ -709,8 +709,18 @@ async function resolveVideoSeedLink(videoSeedUrl) {
     }
 }
 
+// Environment variable to control URL validation
+const URL_VALIDATION_ENABLED = process.env.DISABLE_URL_VALIDATION !== 'true';
+console.log(`[MoviesMod] URL validation is ${URL_VALIDATION_ENABLED ? 'enabled' : 'disabled'}.`);
+
 // Validate if a video URL is working (not 404 or broken)
 async function validateVideoUrl(url, timeout = 10000) {
+    // Skip validation if disabled via environment variable
+    if (!URL_VALIDATION_ENABLED) {
+        console.log(`[MoviesMod] URL validation disabled, skipping validation for: ${url.substring(0, 100)}...`);
+        return true;
+    }
+
     try {
         console.log(`[MoviesMod] Validating URL: ${url.substring(0, 100)}...`);
         const response = await axios.head(url, {
@@ -864,7 +874,7 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
         console.log(`[MoviesMod] Fetching streams for TMDB ${mediaType}/${tmdbId}${seasonNum ? `, S${seasonNum}E${episodeNum}` : ''}`);
 
         // Define a cache key based on the media type and ID. For series, cache per season.
-        const cacheKey = `moviesmod_final_v11_${tmdbId}_${mediaType}${seasonNum ? `_s${seasonNum}` : ''}`;
+        const cacheKey = `moviesmod_final_v12_${tmdbId}_${mediaType}${seasonNum ? `_s${seasonNum}` : ''}`;
         let resolvedQualities = await getFromCache(cacheKey);
 
         // Ensure resolvedQualities is properly structured
@@ -963,7 +973,7 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
                         const finalLinks = await resolveIntermediateLink(link.url, selectedResult.url, link.quality);
                         if (!finalLinks || finalLinks.length === 0) return null;
 
-                        // Resolve all the way to final driveseed file page URLs (window.replace URLs) for caching
+                        // Resolve to driveseed redirect URLs (intermediate step) for caching
                         const driveseedPromises = finalLinks.map(async (targetLink) => {
                             try {
                                 let currentUrl = targetLink.url;
@@ -977,27 +987,8 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
 
                                 // Only process if it's a driveseed URL
                                 if (currentUrl && currentUrl.includes('driveseed.org')) {
-                                    // Now resolve the driveseed redirect URL to get the final file page URL
-                                    const response = await axios.get(currentUrl, {
-                                        headers: {
-                                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                                            'Referer': 'https://links.modpro.blog/',
-                                        }
-                                    });
-
-                                    // Check for JavaScript redirect (window.location.replace)
-                                    const redirectMatch = response.data.match(/window\.location\.replace\("([^"]+)"\)/);
-
-                                    if (redirectMatch && redirectMatch[1]) {
-                                        const finalPath = redirectMatch[1];
-                                        const finalFilePageUrl = `https://driveseed.org${finalPath}`;
-                                        console.log(`[MoviesMod] Caching final file page URL for ${targetLink.server}: ${finalFilePageUrl}`);
-                                        return { ...targetLink, finalFilePageUrl: finalFilePageUrl };
-                                    } else {
-                                        // If no redirect, the current URL might already be the file page
-                                        console.log(`[MoviesMod] No redirect found for ${targetLink.server}, using current URL: ${currentUrl}`);
-                                        return { ...targetLink, finalFilePageUrl: currentUrl };
-                                    }
+                                    console.log(`[MoviesMod] Caching driveseed redirect URL for ${targetLink.server}: ${currentUrl}`);
+                                    return { ...targetLink, driveseedRedirectUrl: currentUrl };
                                 }
                                 return null;
                             } catch (error) {
@@ -1006,9 +997,9 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
                             }
                         });
 
-                        const finalFilePageLinks = (await Promise.all(driveseedPromises)).filter(Boolean);
-                        if (finalFilePageLinks.length > 0) {
-                            return { quality: link.quality, finalFilePageLinks: finalFilePageLinks };
+                        const driveseedRedirectLinks = (await Promise.all(driveseedPromises)).filter(Boolean);
+                        if (driveseedRedirectLinks.length > 0) {
+                            return { quality: link.quality, driveseedRedirectLinks: driveseedRedirectLinks };
                         }
                         return null;
                     } catch (error) {
@@ -1023,7 +1014,7 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
             }
 
             if (resolvedQualities.length > 0) {
-                console.log(`[MoviesMod] Caching ${resolvedQualities.length} qualities with resolved final file page URLs for key: ${cacheKey}`);
+                console.log(`[MoviesMod] Caching ${resolvedQualities.length} qualities with resolved driveseed redirect URLs for key: ${cacheKey}`);
             }
             await saveToCache(cacheKey, resolvedQualities);
         }
@@ -1039,17 +1030,17 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
             return [];
         }
 
-        console.log(`[MoviesMod] Processing ${resolvedQualities.length} qualities with cached final file page URLs to get final streams.`);
+        console.log(`[MoviesMod] Processing ${resolvedQualities.length} qualities with cached driveseed redirect URLs to get final streams.`);
         const streams = [];
         const processedFileNames = new Set();
 
         const qualityProcessingPromises = resolvedQualities.map(async (qualityInfo) => {
-            const { quality, finalFilePageLinks } = qualityInfo;
+            const { quality, driveseedRedirectLinks } = qualityInfo;
 
             // Use parallel episode processing for TV shows
-            let targetLinks = finalFilePageLinks;
+            let targetLinks = driveseedRedirectLinks;
             if ((mediaType === 'tv' || mediaType === 'series') && episodeNum !== null) {
-                targetLinks = await processEpisodesParallel(finalFilePageLinks, episodeNum);
+                targetLinks = await processEpisodesParallel(driveseedRedirectLinks, episodeNum);
                 if (targetLinks.length === 0) {
                     console.log(`[MoviesMod] No episode ${episodeNum} found for ${quality} after parallel processing`);
                     return [];
@@ -1058,20 +1049,40 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
 
             const finalStreamPromises = targetLinks.map(async (targetLink) => {
                 try {
-                    const { finalFilePageUrl } = targetLink;
-                    if (!finalFilePageUrl) return null;
+                    const { driveseedRedirectUrl } = targetLink;
+                    if (!driveseedRedirectUrl) return null;
 
-                    // Process the cached final file page URL directly
-                    if (finalFilePageUrl.includes('driveseed.org')) {
-                        // Load the cached file page directly
-                        const response = await axios.get(finalFilePageUrl, {
+                    // Process the cached driveseed redirect URL
+                    if (driveseedRedirectUrl.includes('driveseed.org')) {
+                        // First, resolve the driveseed redirect URL to get the final file page URL
+                        const response = await axios.get(driveseedRedirectUrl, {
                             headers: {
                                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
                                 'Referer': 'https://links.modpro.blog/',
                             }
                         });
 
-                        const $ = cheerio.load(response.data);
+                        // Check for JavaScript redirect (window.location.replace)
+                        const redirectMatch = response.data.match(/window\.location\.replace\("([^"]+)"\)/);
+
+                        let finalFilePageUrl = driveseedRedirectUrl;
+                        if (redirectMatch && redirectMatch[1]) {
+                            const finalPath = redirectMatch[1];
+                            finalFilePageUrl = `https://driveseed.org${finalPath}`;
+                            console.log(`[MoviesMod] Resolved redirect to final file page: ${finalFilePageUrl}`);
+                            
+                            // Load the final file page
+                            const finalResponse = await axios.get(finalFilePageUrl, {
+                                headers: {
+                                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                                    'Referer': driveseedRedirectUrl,
+                                }
+                            });
+                            
+                            var $ = cheerio.load(finalResponse.data);
+                        } else {
+                            var $ = cheerio.load(response.data);
+                        }
 
                         // Extract file size and name information
                         let driveseedSize = 'Unknown';

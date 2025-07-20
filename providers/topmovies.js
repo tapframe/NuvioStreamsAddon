@@ -410,8 +410,18 @@ async function tryResumeCloud($) {
     }
 }
 
+// Environment variable to control URL validation
+const URL_VALIDATION_ENABLED = process.env.DISABLE_URL_VALIDATION !== 'true';
+console.log(`[TopMovies] URL validation is ${URL_VALIDATION_ENABLED ? 'enabled' : 'disabled'}.`);
+
 // Validate if a video URL is working (not 404 or broken)
 async function validateVideoUrl(url, timeout = 10000) {
+    // Skip validation if disabled via environment variable
+    if (!URL_VALIDATION_ENABLED) {
+        console.log(`[TopMovies] URL validation disabled, skipping validation for: ${url.substring(0, 100)}...`);
+        return true;
+    }
+
     try {
         console.log(`[TopMovies] Validating URL: ${url.substring(0, 100)}...`);
         const response = await axios.head(url, {
@@ -585,7 +595,7 @@ async function getTopMoviesStreams(tmdbId, mediaType = 'movie', season = null, e
   console.log(`[TopMovies] Attempting to fetch streams for TMDB ID: ${tmdbId}`);
 
   try {
-    const cacheKey = `topmovies_final_v11_${tmdbId}`;
+    const cacheKey = `topmovies_final_v12_${tmdbId}`;
     
     // 1. Check cache for intermediate links
     let cachedLinks = await getFromCache(cacheKey);
@@ -645,23 +655,8 @@ async function getTopMoviesStreams(tmdbId, mediaType = 'movie', season = null, e
                 
                 if (!driveleechUrl) return null;
 
-                // Now resolve the driveleech redirect URL to get the final file page URL
-                const response = await axiosInstance.get(driveleechUrl, { maxRedirects: 10 });
-                const $ = cheerio.load(response.data);
-
-                // Check for JavaScript redirect (window.location.replace)
-                const scriptContent = $('script').html();
-                const redirectMatch = scriptContent && scriptContent.match(/window\.location\.replace\("([^"]+)"\)/);
-
-                if (redirectMatch && redirectMatch[1]) {
-                    const finalFilePageUrl = new URL(redirectMatch[1], 'https://driveleech.net/').href;
-                    console.log(`[TopMovies] Caching final file page URL: ${finalFilePageUrl}`);
-                    return { ...qualityLink, finalFilePageUrl: finalFilePageUrl };
-                } else {
-                    // If no redirect, the current URL might already be the file page
-                    console.log(`[TopMovies] No redirect found, using current URL: ${driveleechUrl}`);
-                    return { ...qualityLink, finalFilePageUrl: driveleechUrl };
-                }
+                console.log(`[TopMovies] Caching driveleech redirect URL: ${driveleechUrl}`);
+                return { ...qualityLink, driveleechRedirectUrl: driveleechUrl };
             } catch (error) {
                 console.error(`[TopMovies] Error resolving ${qualityLink.quality}: ${error.message}`);
                 return null;
@@ -681,14 +676,27 @@ async function getTopMoviesStreams(tmdbId, mediaType = 'movie', season = null, e
         return [];
     }
 
-    // 6. Process cached final file page URLs to get streaming links
+    // 6. Process cached driveleech redirect URLs to get streaming links
     const streamPromises = cachedLinks.map(async (cachedLink) => {
       try {
-        console.log(`[TopMovies] Processing cached file page: ${cachedLink.quality}`);
+        console.log(`[TopMovies] Processing cached driveleech redirect: ${cachedLink.quality}`);
         
-        // Load the cached file page directly
-        const response = await axiosInstance.get(cachedLink.finalFilePageUrl, { maxRedirects: 10 });
-        const $ = cheerio.load(response.data);
+        // First, resolve the driveleech redirect URL to get the final file page URL
+        const response = await axiosInstance.get(cachedLink.driveleechRedirectUrl, { maxRedirects: 10 });
+        let $ = cheerio.load(response.data);
+
+        // Check for JavaScript redirect (window.location.replace)
+        const scriptContent = $('script').html();
+        const redirectMatch = scriptContent && scriptContent.match(/window\.location\.replace\("([^"]+)"\)/);
+
+        if (redirectMatch && redirectMatch[1]) {
+            const finalFilePageUrl = new URL(redirectMatch[1], 'https://driveleech.net/').href;
+            console.log(`[TopMovies] Resolved redirect to final file page: ${finalFilePageUrl}`);
+            
+            // Load the final file page
+            const finalResponse = await axiosInstance.get(finalFilePageUrl, { maxRedirects: 10 });
+            $ = cheerio.load(finalResponse.data);
+        }
 
         // Extract file size and title information
         let sizeInfo = 'Unknown';

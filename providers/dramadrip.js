@@ -437,8 +437,18 @@ async function resolveDriveseedLink(driveseedUrl) {
     }
 }
 
+// Environment variable to control URL validation
+const URL_VALIDATION_ENABLED = process.env.DISABLE_URL_VALIDATION !== 'true';
+console.log(`[DramaDrip] URL validation is ${URL_VALIDATION_ENABLED ? 'enabled' : 'disabled'}.`);
+
 // Validate if a video URL is working (not 404 or broken)
 async function validateVideoUrl(url, timeout = 10000) {
+    // Skip validation if disabled via environment variable
+    if (!URL_VALIDATION_ENABLED) {
+        console.log(`[DramaDrip] URL validation disabled, skipping validation for: ${url.substring(0, 100)}...`);
+        return true;
+    }
+
     try {
         console.log(`[DramaDrip] Validating URL: ${url.substring(0, 100)}...`);
         const response = await axios.head(url, {
@@ -513,7 +523,7 @@ async function resolveFinalLink(downloadOption) {
 async function getDramaDripStreams(tmdbId, mediaType, seasonNum, episodeNum) {
 
     try {
-        const cacheKey = `dramadrip_final_v12_${tmdbId}_${mediaType}${seasonNum ? `_s${seasonNum}e${episodeNum}` : ''}`;
+        const cacheKey = `dramadrip_final_v13_${tmdbId}_${mediaType}${seasonNum ? `_s${seasonNum}e${episodeNum}` : ''}`;
         
         // 1. Check cache for resolved intermediate links
         let cachedLinks = await getFromCache(cacheKey);
@@ -660,7 +670,7 @@ async function getDramaDripStreams(tmdbId, mediaType, seasonNum, episodeNum) {
 
             if (qualitiesToResolve.length === 0) return [];
 
-            // 3. Resolve all the way to final driveseed file page URLs (window.replace URLs) for caching
+            // 3. Resolve to driveseed redirect URLs (intermediate step) for caching
             const resolutionPromises = qualitiesToResolve.map(async (quality) => {
                 try {
                     const intermediateResult = await resolveCinemaKitOrModproLink(quality.url, selectedResult.url);
@@ -686,27 +696,8 @@ async function getDramaDripStreams(tmdbId, mediaType, seasonNum, episodeNum) {
 
                     if (!targetUrl || !targetUrl.includes('driveseed.org')) return null;
 
-                    // Now resolve the driveseed redirect URL to get the final file page URL
-                    const response = await axios.get(targetUrl, {
-                        headers: {
-                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                            'Referer': 'https://links.modpro.blog/',
-                        }
-                    });
-
-                    // Check for JavaScript redirect (window.location.replace)
-                    const redirectMatch = response.data.match(/window\.location\.replace\("([^"]+)"\)/);
-
-                    if (redirectMatch && redirectMatch[1]) {
-                        const finalPath = redirectMatch[1];
-                        const finalFilePageUrl = `https://driveseed.org${finalPath}`;
-                        console.log(`[DramaDrip] Caching final file page URL for ${quality.quality}: ${finalFilePageUrl}`);
-                        return { ...quality, finalFilePageUrl: finalFilePageUrl };
-                    } else {
-                        // If no redirect, the current URL might already be the file page
-                        console.log(`[DramaDrip] No redirect found for ${quality.quality}, using current URL: ${targetUrl}`);
-                        return { ...quality, finalFilePageUrl: targetUrl };
-                    }
+                    console.log(`[DramaDrip] Caching driveseed redirect URL for ${quality.quality}: ${targetUrl}`);
+                    return { ...quality, driveseedRedirectUrl: targetUrl };
                 } catch (error) {
                     console.error(`[DramaDrip] Error resolving quality ${quality.quality}: ${error.message}`);
                     return null;
@@ -717,33 +708,88 @@ async function getDramaDripStreams(tmdbId, mediaType, seasonNum, episodeNum) {
 
             // 4. Save to cache
             if (cachedLinks.length > 0) {
-                console.log(`[DramaDrip] Caching ${cachedLinks.length} resolved final file page URLs for key: ${cacheKey}`);
+                console.log(`[DramaDrip] Caching ${cachedLinks.length} resolved driveseed redirect URLs for key: ${cacheKey}`);
                 await saveToCache(cacheKey, cachedLinks);
             }
         }
 
         if (!cachedLinks || cachedLinks.length === 0) {
-            console.log('[DramaDrip] No final file page URLs found after scraping/cache check.');
+            console.log('[DramaDrip] No driveseed redirect URLs found after scraping/cache check.');
             return [];
         }
 
-        // 5. Process cached final file page URLs to get final streams
-        console.log(`[DramaDrip] Processing ${cachedLinks.length} cached final file page URLs to get final streams.`);
+        // 5. Process cached driveseed redirect URLs to get final streams
+        console.log(`[DramaDrip] Processing ${cachedLinks.length} cached driveseed redirect URLs to get final streams.`);
         const streamPromises = cachedLinks.map(async (linkInfo) => {
             try {
-                const { finalFilePageUrl } = linkInfo;
-                if (!finalFilePageUrl) return null;
+                const { driveseedRedirectUrl } = linkInfo;
+                if (!driveseedRedirectUrl) return null;
 
-                const downloadInfo = await resolveDriveseedLink(finalFilePageUrl);
+                // First, resolve the driveseed redirect URL to get the final file page URL
+                const response = await axios.get(driveseedRedirectUrl, {
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                        'Referer': 'https://links.modpro.blog/',
+                    }
+                });
+
+                let finalData = response.data;
+                let finalFilePageUrl = driveseedRedirectUrl;
+                
+                // Check for JavaScript redirect (window.location.replace)
+                const redirectMatch = response.data.match(/window\.location\.replace\("([^"]+)"\)/);
+                if (redirectMatch && redirectMatch[1]) {
+                    const finalPath = redirectMatch[1];
+                    finalFilePageUrl = `https://driveseed.org${finalPath}`;
+                    console.log(`[DramaDrip] Resolved redirect to final file page: ${finalFilePageUrl}`);
+                    
+                    // Load the final file page
+                    const finalResponse = await axios.get(finalFilePageUrl, {
+                        headers: { 'Referer': driveseedRedirectUrl }
+                    });
+                    finalData = finalResponse.data;
+                }
+                
+                const $ = cheerio.load(finalData);
+                const downloadOptions = [];
+                let title = null;
+                let size = null;
+
+                // Extract title and size from the final page
+                const nameElement = $('li.list-group-item:contains("Name :")');
+                if (nameElement.length > 0) {
+                    title = nameElement.text().replace('Name :', '').trim();
+                }
+                const sizeElement = $('li.list-group-item:contains("Size :")');
+                if (sizeElement.length > 0) {
+                    size = sizeElement.text().replace('Size :', '').trim();
+                }
+
+                $('a:contains("Instant Download"), a:contains("Resume Cloud"), a:contains("Resume Worker Bot")').each((i, el) => {
+                    const button = $(el);
+                    const buttonTitle = button.text().trim();
+                    let type = 'unknown';
+                    if (buttonTitle.includes('Instant')) type = 'instant';
+                    if (buttonTitle.includes('Resume Cloud')) type = 'resume';
+                    if (buttonTitle.includes('Worker Bot')) type = 'worker';
+
+                    let url = button.attr('href');
+                    if (type === 'resume' && url && !url.startsWith('http')) {
+                        url = `https://driveseed.org${url}`;
+                    }
+                    if(url) downloadOptions.push({ title: buttonTitle, type, url });
+                });
+
+                const downloadInfo = { downloadOptions, title, size };
                 if (!downloadInfo || !downloadInfo.downloadOptions) return null;
 
-                const { downloadOptions, title: fileTitle, size: fileSize } = downloadInfo;
+                const { downloadOptions: availableOptions, title: fileTitle, size: fileSize } = downloadInfo;
 
                 // Try each download method in order until we find a working one
                 const preferredOrder = ['resume', 'worker', 'instant'];
                 for (const type of preferredOrder) {
                     try {
-                        const method = downloadOptions.find(opt => opt.type === type);
+                        const method = availableOptions.find(opt => opt.type === type);
                         if (method) {
                             console.log(`[DramaDrip] Trying ${method.title} for ${linkInfo.quality}...`);
                             const finalLink = await resolveFinalLink(method);

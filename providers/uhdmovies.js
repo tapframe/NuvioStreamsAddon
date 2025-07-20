@@ -637,8 +637,18 @@ async function tryResumeCloud($) {
   }
 }
 
+// Environment variable to control URL validation
+const URL_VALIDATION_ENABLED = process.env.DISABLE_URL_VALIDATION !== 'true';
+console.log(`[UHDMovies] URL validation is ${URL_VALIDATION_ENABLED ? 'enabled' : 'disabled'}.`);
+
 // Validate if a video URL is working (not 404 or broken)
 async function validateVideoUrl(url, timeout = 10000) {
+  // Skip validation if disabled via environment variable
+  if (!URL_VALIDATION_ENABLED) {
+    console.log(`[UHDMovies] URL validation disabled, skipping validation for: ${url.substring(0, 100)}...`);
+    return true;
+  }
+
   try {
     console.log(`[UHDMovies] Validating URL: ${url.substring(0, 100)}...`);
     const response = await axiosInstance.head(url, {
@@ -988,7 +998,7 @@ async function resolveSidToDriveleech(sidUrl) {
 async function getUHDMoviesStreams(tmdbId, mediaType = 'movie', season = null, episode = null) {
   console.log(`[UHDMovies] Attempting to fetch streams for TMDB ID: ${tmdbId}, Type: ${mediaType}${mediaType === 'tv' ? `, S:${season}E:${episode}` : ''}`);
 
-  const cacheKey = `uhd_final_v11_${tmdbId}_${mediaType}${season ? `_s${season}e${episode}` : ''}`;
+  const cacheKey = `uhd_final_v12_${tmdbId}_${mediaType}${season ? `_s${season}e${episode}` : ''}`;
 
   try {
     // 1. Check cache first
@@ -1078,8 +1088,8 @@ async function getUHDMoviesStreams(tmdbId, mediaType = 'movie', season = null, e
         return [];
       }
 
-      // 6. Resolve all SID links to final driveleech file page URLs (window.replace URLs)
-      console.log(`[UHDMovies] Resolving ${downloadInfo.links.length} SID link(s) to final file page URLs...`);
+      // 6. Resolve all SID links to driveleech redirect URLs (intermediate step)
+      console.log(`[UHDMovies] Resolving ${downloadInfo.links.length} SID link(s) to driveleech redirect URLs...`);
       const resolutionPromises = downloadInfo.links.map(async (linkInfo) => {
         try {
           let driveleechUrl = null;
@@ -1093,23 +1103,8 @@ async function getUHDMoviesStreams(tmdbId, mediaType = 'movie', season = null, e
 
           if (!driveleechUrl) return null;
 
-          // Now resolve the driveleech redirect URL to get the final file page URL
-          const response = await axiosInstance.get(driveleechUrl, { maxRedirects: 10 });
-          const $ = cheerio.load(response.data);
-
-          // Check for JavaScript redirect (window.location.replace)
-          const scriptContent = $('script').html();
-          const redirectMatch = scriptContent && scriptContent.match(/window\.location\.replace\("([^"]+)"\)/);
-
-          if (redirectMatch && redirectMatch[1]) {
-            const finalFilePageUrl = new URL(redirectMatch[1], 'https://driveleech.net/').href;
-            console.log(`[UHDMovies] Caching final file page URL for ${linkInfo.quality}: ${finalFilePageUrl}`);
-            return { ...linkInfo, finalFilePageUrl: finalFilePageUrl };
-          } else {
-            // If no redirect, the current URL might already be the file page
-            console.log(`[UHDMovies] No redirect found for ${linkInfo.quality}, using current URL: ${driveleechUrl}`);
-            return { ...linkInfo, finalFilePageUrl: driveleechUrl };
-          }
+          console.log(`[UHDMovies] Caching driveleech redirect URL for ${linkInfo.quality}: ${driveleechUrl}`);
+          return { ...linkInfo, driveleechRedirectUrl: driveleechUrl };
         } catch (error) {
           console.error(`[UHDMovies] Error resolving ${linkInfo.quality}: ${error.message}`);
           return null;
@@ -1118,12 +1113,12 @@ async function getUHDMoviesStreams(tmdbId, mediaType = 'movie', season = null, e
 
       cachedLinks = (await Promise.all(resolutionPromises)).filter(Boolean);
 
-      // 7. Save the successfully resolved final file page URLs to the cache
+      // 7. Save the successfully resolved driveleech redirect URLs to the cache
       if (cachedLinks.length > 0) {
-        console.log(`[UHDMovies] Caching ${cachedLinks.length} resolved final file page URLs for key: ${cacheKey}`);
+        console.log(`[UHDMovies] Caching ${cachedLinks.length} resolved driveleech redirect URLs for key: ${cacheKey}`);
         await saveToCache(cacheKey, cachedLinks);
       } else {
-        console.log(`[UHDMovies] No final file page URLs could be resolved. Not caching to allow retrying later.`);
+        console.log(`[UHDMovies] No driveleech redirect URLs could be resolved. Not caching to allow retrying later.`);
         return [];
       }
     }
@@ -1133,13 +1128,27 @@ async function getUHDMoviesStreams(tmdbId, mediaType = 'movie', season = null, e
       return [];
     }
 
-    // 8. Process all cached final file page URLs to get streaming links
-    console.log(`[UHDMovies] Processing ${cachedLinks.length} cached final file page URL(s) to get streaming links.`);
+    // 8. Process all cached driveleech redirect URLs to get streaming links
+    console.log(`[UHDMovies] Processing ${cachedLinks.length} cached driveleech redirect URL(s) to get streaming links.`);
     const streamPromises = cachedLinks.map(async (linkInfo) => {
       try {
-        // Load the cached file page directly
-        const response = await axiosInstance.get(linkInfo.finalFilePageUrl, { maxRedirects: 10 });
-        const $ = cheerio.load(response.data);
+        // First, resolve the driveleech redirect URL to get the final file page URL
+        const response = await axiosInstance.get(linkInfo.driveleechRedirectUrl, { maxRedirects: 10 });
+        let $ = cheerio.load(response.data);
+
+        // Check for JavaScript redirect (window.location.replace)
+        const scriptContent = $('script').html();
+        const redirectMatch = scriptContent && scriptContent.match(/window\.location\.replace\("([^"]+)"\)/);
+
+        let finalFilePageUrl = linkInfo.driveleechRedirectUrl;
+        if (redirectMatch && redirectMatch[1]) {
+          finalFilePageUrl = new URL(redirectMatch[1], 'https://driveleech.net/').href;
+          console.log(`[UHDMovies] Resolved redirect to final file page: ${finalFilePageUrl}`);
+
+          // Load the final file page
+          const finalResponse = await axiosInstance.get(finalFilePageUrl, { maxRedirects: 10 });
+          $ = cheerio.load(finalResponse.data);
+        }
 
         // Extract file size and name information
         let sizeInfo = 'Unknown';
@@ -1200,7 +1209,7 @@ async function getUHDMoviesStreams(tmdbId, mediaType = 'movie', season = null, e
 
         return null;
       } catch (error) {
-        console.error(`[UHDMovies] Error processing cached file page ${linkInfo.finalFilePageUrl}: ${error.message}`);
+        console.error(`[UHDMovies] Error processing cached driveleech redirect ${linkInfo.driveleechRedirectUrl}: ${error.message}`);
         return null;
       }
     });
