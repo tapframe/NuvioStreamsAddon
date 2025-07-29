@@ -681,7 +681,7 @@ const _searchAndExtractShowboxUrl = async (searchTerm, originalTmdbTitle, mediaY
     const mediaTypeString = tmdbType === 'movie' ? 'movie' : 'tv';
 
     // Add a cache version to invalidate previous incorrect cached results
-    const CACHE_VERSION = "v11"; // Increment this whenever the search algorithm significantly changes
+    const CACHE_VERSION = "v12"; // Increment this whenever the search algorithm significantly changes
 
     // Create a proper hash for the cache key to avoid filename issues with special characters
     const cacheKeyData = `${CACHE_VERSION}_${tmdbType}_${originalTmdbTitle}_${mediaYear || 'noYear'}`;
@@ -980,15 +980,28 @@ const _searchAndExtractShowboxUrl = async (searchTerm, originalTmdbTitle, mediaY
                 let wordMatchCount = 0;
                 for (const tmdbWord of tmdbWords) {
                     if (tmdbWord.length <= 2) continue; // Skip very short words
-                    if (itemWords.some(itemWord => itemWord.includes(tmdbWord) || tmdbWord.includes(itemWord))) {
+                    // More strict word matching - require exact word matches or very close matches
+                    if (itemWords.some(itemWord => {
+                        // Exact match
+                        if (itemWord === tmdbWord) return true;
+                        // Allow for very close matches (like plurals or slight variations)
+                        if (tmdbWord.length > 3 && itemWord.length > 3) {
+                            return (itemWord.includes(tmdbWord) && itemWord.length - tmdbWord.length <= 2) ||
+                                   (tmdbWord.includes(itemWord) && tmdbWord.length - itemWord.length <= 2);
+                        }
+                        return false;
+                    })) {
                         wordMatchCount++;
                     }
                 }
 
-                // Add score based on percentage of words matched
-                if (tmdbWords.length > 0) {
+                // Add score based on percentage of words matched, but require at least some match
+                if (tmdbWords.length > 0 && wordMatchCount > 0) {
                     const wordMatchPercent = wordMatchCount / tmdbWords.length;
                     score += wordMatchPercent * 5; // Up to 5 points for word matches
+                } else if (tmdbWords.length > 1 && wordMatchCount === 0) {
+                    // Heavy penalty for multi-word titles with no word matches
+                    score -= 10;
                 }
 
                 // YEAR MATCHING - now much more important
@@ -1064,8 +1077,8 @@ const _searchAndExtractShowboxUrl = async (searchTerm, originalTmdbTitle, mediaY
             strategyResults[strategy.description] = { success: false, score: 0 };
         }
 
-        // LOWERED THRESHOLD: If we found a good enough match (score > 20 instead of 25), stop searching
-        if (bestResult.score > 20 && bestResult.isCorrectType) {
+        // INCREASED THRESHOLD: Require higher confidence for matches to avoid false positives
+        if (bestResult.score > 35 && bestResult.isCorrectType) {
             console.log(`  Found good match with score ${bestResult.score.toFixed(1)} using strategy "${bestResult.strategy}", stopping search`);
             break;
         }
@@ -1087,11 +1100,11 @@ const _searchAndExtractShowboxUrl = async (searchTerm, originalTmdbTitle, mediaY
     if (bestResult.url) {
         let useResult = false;
 
-        // Use score-based confidence for validation
-        if (bestResult.score >= 25 && bestResult.isCorrectType) {
+        // Use score-based confidence for validation - increased threshold to prevent false positives
+        if (bestResult.score >= 40 && bestResult.isCorrectType) {
             useResult = true;
         } else {
-            console.log(`  Low confidence match (Score: ${bestResult.score.toFixed(1)}). Discarding.`);
+            console.log(`  Low confidence match (Score: ${bestResult.score.toFixed(1)}). Discarding - requires score >= 40.`);
             useResult = false;
         }
 
