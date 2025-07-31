@@ -162,6 +162,10 @@ console.log(`[addon.js] SoaperTV provider fetching enabled: ${ENABLE_SOAPERTV_PR
 const ENABLE_DRAMADRIP_PROVIDER = process.env.ENABLE_DRAMADRIP_PROVIDER !== 'false'; // Defaults to true if not set or not 'false'
 console.log(`[addon.js] DramaDrip provider fetching enabled: ${ENABLE_DRAMADRIP_PROVIDER}`);
 
+// NEW: Read environment variable for MoviesDrive
+const ENABLE_MOVIESDRIVE_PROVIDER = process.env.ENABLE_MOVIESDRIVE_PROVIDER !== 'false'; // Defaults to true if not set or not 'false'
+console.log(`[addon.js] MoviesDrive provider fetching enabled: ${ENABLE_MOVIESDRIVE_PROVIDER}`);
+
 // External provider service configuration
 const USE_EXTERNAL_PROVIDERS = process.env.USE_EXTERNAL_PROVIDERS === 'true';
 const EXTERNAL_UHDMOVIES_URL = USE_EXTERNAL_PROVIDERS ? process.env.EXTERNAL_UHDMOVIES_URL : null;
@@ -199,6 +203,7 @@ const { getMoviesModStreams } = require('./providers/moviesmod.js'); // NEW: Imp
 const { getTopMoviesStreams } = require('./providers/topmovies.js'); // NEW: Import from topmovies.js
 const { getDramaDripStreams } = require('./providers/dramadrip.js'); // NEW: Import from dramadrip.js
 const { getAnimePaheStreams } = require('./providers/animepahe.js'); // NEW: Import from animepahe.js
+const { getMoviesDriveStreams } = require('./providers/moviesdrive.js'); // NEW: Import from moviesdrive.js
 const axios = require('axios'); // For external provider requests
 
 // Helper function to make requests to external provider services
@@ -1657,6 +1662,48 @@ builder.defineStreamHandler(async (args) => {
                 console.error(`[AnimePahe] Error fetching streams:`, err.message);
                 return [];
             }
+        },
+
+        // MoviesDrive provider with cache integration
+        moviesdrive: async () => {
+            if (!ENABLE_MOVIESDRIVE_PROVIDER) {
+                console.log('[MoviesDrive] Skipping fetch: Disabled by environment variable.');
+                return [];
+            }
+            if (!shouldFetch('moviesdrive')) {
+                console.log('[MoviesDrive] Skipping fetch: Not selected by user.');
+                return [];
+            }
+            
+            // Try to get cached streams first
+            const cachedStreams = await getStreamFromCache('moviesdrive', tmdbTypeFromId, tmdbId, seasonNum, episodeNum);
+            if (cachedStreams) {
+                console.log(`[MoviesDrive] Using ${cachedStreams.length} streams from cache.`);
+                return cachedStreams.map(stream => ({ ...stream, provider: 'MoviesDrive' }));
+            }
+            
+            // No cache or expired, fetch fresh
+            try {
+                console.log(`[MoviesDrive] Fetching new streams...`);
+                const streams = await getMoviesDriveStreams(tmdbId, tmdbTypeFromId, seasonNum, episodeNum);
+                
+                if (streams && streams.length > 0) {
+                    console.log(`[MoviesDrive] Successfully fetched ${streams.length} streams.`);
+                    // Save to cache
+                    await saveStreamToCache('moviesdrive', tmdbTypeFromId, tmdbId, streams, 'ok', seasonNum, episodeNum);
+                    return streams.map(stream => ({ ...stream, provider: 'MoviesDrive' }));
+                } else {
+                    console.log(`[MoviesDrive] No streams returned.`);
+                    // Save empty result
+                    await saveStreamToCache('moviesdrive', tmdbTypeFromId, tmdbId, [], 'failed', seasonNum, episodeNum);
+                    return [];
+                }
+            } catch (err) {
+                console.error(`[MoviesDrive] Error fetching streams:`, err.message);
+                // Save error status to cache
+                await saveStreamToCache('moviesdrive', tmdbTypeFromId, tmdbId, [], 'failed', seasonNum, episodeNum);
+                return [];
+            }
         }
     };
 
@@ -1679,7 +1726,8 @@ builder.defineStreamHandler(async (args) => {
             timeProvider('MoviesMod', providerFetchFunctions.moviesmod()),
             timeProvider('TopMovies', providerFetchFunctions.topmovies()),
             timeProvider('DramaDrip', providerFetchFunctions.dramadrip()),
-            timeProvider('AnimePahe', providerFetchFunctions.animepahe())
+            timeProvider('AnimePahe', providerFetchFunctions.animepahe()),
+            timeProvider('MoviesDrive', providerFetchFunctions.moviesdrive())
         ]);
         
         // Process results into streamsByProvider object
@@ -1697,7 +1745,8 @@ builder.defineStreamHandler(async (args) => {
             'MoviesMod': ENABLE_MOVIESMOD_PROVIDER && shouldFetch('moviesmod') ? applyAllStreamFilters(providerResults[10], 'MoviesMod', minQualitiesPreferences.moviesmod, excludeCodecsPreferences.moviesmod) : [], // NEW: Add MoviesMod provider
             'TopMovies': ENABLE_TOPMOVIES_PROVIDER && shouldFetch('topmovies') ? applyAllStreamFilters(providerResults[11], 'TopMovies', minQualitiesPreferences.topmovies, excludeCodecsPreferences.topmovies) : [], 
             'DramaDrip': ENABLE_DRAMADRIP_PROVIDER && shouldFetch('dramadrip') ? applyAllStreamFilters(providerResults[12], 'DramaDrip', minQualitiesPreferences.dramadrip, excludeCodecsPreferences.dramadrip) : [],
-            'AnimePahe': ENABLE_ANIMEPAHE_PROVIDER && shouldFetch('animepahe') ? applyAllStreamFilters(providerResults[13], 'AnimePahe', minQualitiesPreferences.animepahe, excludeCodecsPreferences.animepahe) : []
+            'AnimePahe': ENABLE_ANIMEPAHE_PROVIDER && shouldFetch('animepahe') ? applyAllStreamFilters(providerResults[13], 'AnimePahe', minQualitiesPreferences.animepahe, excludeCodecsPreferences.animepahe) : [],
+            'MoviesDrive': ENABLE_MOVIESDRIVE_PROVIDER && shouldFetch('moviesdrive') ? applyAllStreamFilters(providerResults[14], 'MoviesDrive', minQualitiesPreferences.moviesdrive, excludeCodecsPreferences.moviesdrive) : []
         };
 
         // Sort streams for each provider by quality, then size
@@ -1717,7 +1766,7 @@ builder.defineStreamHandler(async (args) => {
 
         // Combine streams in the preferred provider order
         combinedRawStreams = [];
-        const providerOrder = ['ShowBox', 'UHDMovies', 'MoviesMod', 'TopMovies', 'DramaDrip', 'Hianime', 'Xprime.tv', 'HollyMovieHD', 'Soaper TV', 'VidZee', 'MP4Hydra', 'Cuevana', 'VidSrc', 'AnimePahe'];
+        const providerOrder = ['ShowBox', 'UHDMovies', 'MoviesMod', 'TopMovies', 'DramaDrip', 'MoviesDrive', 'Hianime', 'Xprime.tv', 'HollyMovieHD', 'Soaper TV', 'VidZee', 'MP4Hydra', 'Cuevana', 'VidSrc', 'AnimePahe'];
         providerOrder.forEach(providerKey => {
             if (streamsByProvider[providerKey] && streamsByProvider[providerKey].length > 0) {
                 combinedRawStreams.push(...streamsByProvider[providerKey]);
@@ -1759,6 +1808,20 @@ builder.defineStreamHandler(async (args) => {
             return {
                 name: stream.name,    // Use the name from the provider, e.g., "TopMovies - 1080p"
                 title: stream.title,  // Use the title from the provider, e.g., "Filename.mkv\nSize"
+                url: stream.url,
+                type: 'url',
+                availability: 2,
+                behaviorHints: {
+                    notWebReady: true
+                }
+            };
+        }
+
+        // --- NEW: Special handling for MoviesDrive to use its pre-formatted titles ---
+        if (stream.provider === 'MoviesDrive') {
+            return {
+                name: stream.name,    // Use the name from the provider, e.g., "MoviesDrive (Pixeldrain) - 2160p"
+                title: stream.title,  // Use the title from the provider, e.g., "Title\nSize\nFilename"
                 url: stream.url,
                 type: 'url',
                 availability: 2,
@@ -1842,6 +1905,8 @@ builder.defineStreamHandler(async (args) => {
             providerDisplayName = 'DramaDrip';
         } else if (stream.provider === 'AnimePahe') {
             providerDisplayName = 'AnimePahe';
+        } else if (stream.provider === 'MoviesDrive') {
+            providerDisplayName = 'MoviesDrive';
         }
 
         let nameDisplay;
@@ -1901,6 +1966,10 @@ builder.defineStreamHandler(async (args) => {
             nameDisplay = stream.title || `${providerDisplayName} - ${stream.quality || 'Auto'}`;
             // If stream.title already includes providerDisplayName, we can simplify:
             // nameDisplay = stream.title; 
+        } else if (stream.provider === 'MoviesDrive') {
+            // For MoviesDrive, use the enhanced stream title that comes from the provider
+            // which includes detailed quality, source, and size information
+            nameDisplay = stream.name || `${providerDisplayName} - ${stream.quality || 'UNK'}`;
         } else { // For other providers (ShowBox, Xprime, etc.)
             const qualityLabel = stream.quality || 'UNK';
             if (flagEmoji) {
