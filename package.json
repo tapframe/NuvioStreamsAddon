@@ -18,6 +18,7 @@
     "form-data": "^4.0.3",
     "hls-parser": "^0.13.5",
     "ioredis": "^5.6.1",
+    "jsdom": "^26.1.0",
     "node-fetch": "^2.7.0",
     "p-limit": "^6.2.0",
     "puppeteer": "^24.11.0",
