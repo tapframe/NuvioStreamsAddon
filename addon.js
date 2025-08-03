@@ -452,11 +452,21 @@ async function sendAnalyticsEvent(eventName, eventParams) {
 
     try {
         const { default: fetchFunction } = await import('node-fetch');
-        // Fire-and-forget: we don't need to wait for the response
+        // Use a proper timeout and catch any network errors to prevent crashes
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+        
+        // Fire-and-forget with proper error handling
         fetchFunction(`https://www.google-analytics.com/mp/collect?measurement_id=${GA_MEASUREMENT_ID}&api_secret=${GA_API_SECRET}`, {
             method: 'POST',
             body: JSON.stringify(analyticsData),
+            signal: controller.signal
+        }).catch(err => {
+            console.warn(`[Analytics] Network error sending event: ${err.message}`);
+        }).finally(() => {
+            clearTimeout(timeout);
         });
+        
         console.log(`[Analytics] Sent event: ${eventName} for "${eventParams.content_title || 'N/A'}"`);
     } catch (error) {
         console.warn(`[Analytics] Failed to send event: ${error.message}`);
