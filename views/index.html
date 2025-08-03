@@ -1717,6 +1717,11 @@
             /* Red-orange gradient for MoviesMod */
         }
 
+        .moviesdrive-icon {
+            background: linear-gradient(135deg, #4a90e2, #357abd);
+            /* Blue gradient for MoviesDrive */
+        }
+
         .topmovies-icon {
             background: linear-gradient(135deg, #00d2ff, #3a7bd5);
             /* Blue gradient for TopMovies */
@@ -1920,6 +1925,11 @@
                         <div class="provider-icon moviesmod-icon">🍿</div>
                         <div class="provider-name">MoviesMod</div>
                         <span class="provider-detail">Multi-Source</span>
+                    </div>
+                    <div class="provider-item">
+                        <div class="provider-icon moviesdrive-icon">🚗</div>
+                        <div class="provider-name">MoviesDrive</div>
+                        <span class="provider-detail">4K</span>
                     </div>
                 </div>
 
@@ -2153,6 +2163,45 @@
                                 <option value="720p">720p+</option>
                                 <option value="1080p">1080p+</option>
                             </select>
+                        </div>
+
+                        <div class="provider-checkbox-item"
+                            style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
+                            <div style="display: flex; align-items: center;">
+                                <input type="checkbox" id="providerMoviesdrive" name="providerSelect" value="moviesdrive"
+                                    checked="" style="margin-right: 0.5rem; accent-color: var(--primary);">
+                                <label for="providerMoviesdrive" style="font-size: 0.9rem;">MoviesDrive <span
+                                        style="font-size: 0.75rem; color: var(--text-light);">(~7s)</span> <span
+                                        style="font-size: 0.75rem; color: var(--text-light);">High Quality</span></label>
+                            </div>
+                            <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+                                <select id="qualityMoviesdrive" name="providerQuality" data-provider="moviesdrive"
+                                    class="provider-sort-select">
+                                    <option value="all">All</option>
+                                    <option value="720p">720p+</option>
+                                    <option value="1080p">1080p+</option>
+                                    <option value="4k">4K+</option>
+                                </select>
+                                <div class="codec-filters"
+                                    style="display: flex; align-items: center; gap: 0.6rem; padding: 0.2rem 0.6rem; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 6px;">
+                                    <div style="display: flex; align-items: center; gap: 0.3rem;">
+                                        <input type="checkbox" id="excludeDvMoviesdrive" name="excludeDv"
+                                            data-provider="moviesdrive"
+                                            style="width: 14px; height: 14px; accent-color: #ff4444;">
+                                        <label for="excludeDvMoviesdrive"
+                                            style="font-size: 0.75rem; color: var(--text-light); user-select: none; cursor: pointer;">No
+                                            DV</label>
+                                    </div>
+                                    <div style="display: flex; align-items: center; gap: 0.3rem;">
+                                        <input type="checkbox" id="excludeHdrMoviesdrive" name="excludeHdr"
+                                            data-provider="moviesdrive"
+                                            style="width: 14px; height: 14px; accent-color: #ff4444;">
+                                        <label for="excludeHdrMoviesdrive"
+                                            style="font-size: 0.75rem; color: var(--text-light); user-select: none; cursor: pointer;">No
+                                            HDR</label>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         <h2

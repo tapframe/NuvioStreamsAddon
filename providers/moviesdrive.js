@@ -780,7 +780,9 @@ function constructSearchQuery(metadata, mediaType, season = null, episode = null
     }
 
     let query = title;
-    if (year) {
+    
+    // Only add year for movies, not for TV series
+    if (year && mediaType === 'movie') {
         query += ` ${year}`;
     }
 
@@ -796,7 +798,7 @@ function constructSearchQuery(metadata, mediaType, season = null, episode = null
 
 // Helper function to convert MoviesDrive links to Stremio format
 function convertToStremioFormat(links, mediaType) {
-    return links.map(link => {
+    const stremioStreams = links.map(link => {
         // Extract quality from various sources
         let quality = 'Unknown';
         if (link.quality && link.quality !== 'Unknown') {
@@ -836,6 +838,19 @@ function convertToStremioFormat(links, mediaType) {
             fileName: link.fileName || undefined
         };
     });
+
+    // Remove duplicates based on exact same URL
+    const uniqueStreams = [];
+    const seenUrls = new Set();
+    
+    for (const stream of stremioStreams) {
+        if (!seenUrls.has(stream.url)) {
+            seenUrls.add(stream.url);
+            uniqueStreams.push(stream);
+        }
+    }
+    
+    return uniqueStreams;
 }
 
 // Main function to get streams from MoviesDrive
