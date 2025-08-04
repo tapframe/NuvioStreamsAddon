@@ -166,6 +166,10 @@ console.log(`[addon.js] DramaDrip provider fetching enabled: ${ENABLE_DRAMADRIP_
 const ENABLE_MOVIESDRIVE_PROVIDER = process.env.ENABLE_MOVIESDRIVE_PROVIDER !== 'false'; // Defaults to true if not set or not 'false'
 console.log(`[addon.js] MoviesDrive provider fetching enabled: ${ENABLE_MOVIESDRIVE_PROVIDER}`);
 
+// NEW: Read environment variable for 4KHDHub
+const ENABLE_4KHDHUB_PROVIDER = process.env.ENABLE_4KHDHUB_PROVIDER !== 'false'; // Defaults to true if not set or not 'false'
+console.log(`[addon.js] 4KHDHub provider fetching enabled: ${ENABLE_4KHDHUB_PROVIDER}`);
+
 // External provider service configuration
 const USE_EXTERNAL_PROVIDERS = process.env.USE_EXTERNAL_PROVIDERS === 'true';
 const EXTERNAL_UHDMOVIES_URL = USE_EXTERNAL_PROVIDERS ? process.env.EXTERNAL_UHDMOVIES_URL : null;
@@ -204,6 +208,7 @@ const { getTopMoviesStreams } = require('./providers/topmovies.js'); // NEW: Imp
 const { getDramaDripStreams } = require('./providers/dramadrip.js'); // NEW: Import from dramadrip.js
 const { getAnimePaheStreams } = require('./providers/animepahe.js'); // NEW: Import from animepahe.js
 const { getMoviesDriveStreams } = require('./providers/moviesdrive.js'); // NEW: Import from moviesdrive.js
+const { get4KHDHubStreams } = require('./providers/4khdhub.js'); // NEW: Import from 4khdhub.js
 const axios = require('axios'); // For external provider requests
 
 // Helper function to make requests to external provider services
@@ -1714,6 +1719,48 @@ builder.defineStreamHandler(async (args) => {
                 await saveStreamToCache('moviesdrive', tmdbTypeFromId, tmdbId, [], 'failed', seasonNum, episodeNum);
                 return [];
             }
+        },
+
+        // 4KHDHub provider with cache integration
+        '4khdhub': async () => {
+            if (!ENABLE_4KHDHUB_PROVIDER) {
+                console.log('[4KHDHub] Skipping fetch: Disabled by environment variable.');
+                return [];
+            }
+            if (!shouldFetch('4khdhub')) {
+                console.log('[4KHDHub] Skipping fetch: Not selected by user.');
+                return [];
+            }
+            
+            // Try to get cached streams first
+            const cachedStreams = await getStreamFromCache('4khdhub', tmdbTypeFromId, tmdbId, seasonNum, episodeNum);
+            if (cachedStreams) {
+                console.log(`[4KHDHub] Using ${cachedStreams.length} streams from cache.`);
+                return cachedStreams.map(stream => ({ ...stream, provider: '4KHDHub' }));
+            }
+            
+            // No cache or expired, fetch fresh
+            try {
+                console.log(`[4KHDHub] Fetching new streams...`);
+                const streams = await get4KHDHubStreams(tmdbId, tmdbTypeFromId, seasonNum, episodeNum);
+                
+                if (streams && streams.length > 0) {
+                    console.log(`[4KHDHub] Successfully fetched ${streams.length} streams.`);
+                    // Save to cache
+                    await saveStreamToCache('4khdhub', tmdbTypeFromId, tmdbId, streams, 'ok', seasonNum, episodeNum);
+                    return streams.map(stream => ({ ...stream, provider: '4KHDHub' }));
+                } else {
+                    console.log(`[4KHDHub] No streams returned.`);
+                    // Save empty result
+                    await saveStreamToCache('4khdhub', tmdbTypeFromId, tmdbId, [], 'failed', seasonNum, episodeNum);
+                    return [];
+                }
+            } catch (err) {
+                console.error(`[4KHDHub] Error fetching streams:`, err.message);
+                // Save error status to cache
+                await saveStreamToCache('4khdhub', tmdbTypeFromId, tmdbId, [], 'failed', seasonNum, episodeNum);
+                return [];
+            }
         }
     };
 
@@ -1737,7 +1784,8 @@ builder.defineStreamHandler(async (args) => {
             timeProvider('TopMovies', providerFetchFunctions.topmovies()),
             timeProvider('DramaDrip', providerFetchFunctions.dramadrip()),
             timeProvider('AnimePahe', providerFetchFunctions.animepahe()),
-            timeProvider('MoviesDrive', providerFetchFunctions.moviesdrive())
+            timeProvider('MoviesDrive', providerFetchFunctions.moviesdrive()),
+            timeProvider('4KHDHub', providerFetchFunctions['4khdhub']())
         ]);
         
         // Process results into streamsByProvider object
@@ -1756,7 +1804,8 @@ builder.defineStreamHandler(async (args) => {
             'TopMovies': ENABLE_TOPMOVIES_PROVIDER && shouldFetch('topmovies') ? applyAllStreamFilters(providerResults[11], 'TopMovies', minQualitiesPreferences.topmovies, excludeCodecsPreferences.topmovies) : [], 
             'DramaDrip': ENABLE_DRAMADRIP_PROVIDER && shouldFetch('dramadrip') ? applyAllStreamFilters(providerResults[12], 'DramaDrip', minQualitiesPreferences.dramadrip, excludeCodecsPreferences.dramadrip) : [],
             'AnimePahe': ENABLE_ANIMEPAHE_PROVIDER && shouldFetch('animepahe') ? applyAllStreamFilters(providerResults[13], 'AnimePahe', minQualitiesPreferences.animepahe, excludeCodecsPreferences.animepahe) : [],
-            'MoviesDrive': ENABLE_MOVIESDRIVE_PROVIDER && shouldFetch('moviesdrive') ? applyAllStreamFilters(providerResults[14], 'MoviesDrive', minQualitiesPreferences.moviesdrive, excludeCodecsPreferences.moviesdrive) : []
+            'MoviesDrive': ENABLE_MOVIESDRIVE_PROVIDER && shouldFetch('moviesdrive') ? applyAllStreamFilters(providerResults[14], 'MoviesDrive', minQualitiesPreferences.moviesdrive, excludeCodecsPreferences.moviesdrive) : [],
+            '4KHDHub': ENABLE_4KHDHUB_PROVIDER && shouldFetch('4khdhub') ? applyAllStreamFilters(providerResults[15], '4KHDHub', minQualitiesPreferences['4khdhub'], excludeCodecsPreferences['4khdhub']) : []
         };
 
         // Sort streams for each provider by quality, then size
@@ -1776,7 +1825,7 @@ builder.defineStreamHandler(async (args) => {
 
         // Combine streams in the preferred provider order
         combinedRawStreams = [];
-        const providerOrder = ['ShowBox', 'UHDMovies', 'MoviesMod', 'TopMovies', 'DramaDrip', 'MoviesDrive', 'Hianime', 'Xprime.tv', 'HollyMovieHD', 'Soaper TV', 'VidZee', 'MP4Hydra', 'Cuevana', 'VidSrc', 'AnimePahe'];
+        const providerOrder = ['ShowBox', 'UHDMovies', 'MoviesMod', 'TopMovies', 'DramaDrip', 'MoviesDrive', '4KHDHub', 'Hianime', 'Xprime.tv', 'HollyMovieHD', 'Soaper TV', 'VidZee', 'MP4Hydra', 'Cuevana', 'VidSrc', 'AnimePahe'];
         providerOrder.forEach(providerKey => {
             if (streamsByProvider[providerKey] && streamsByProvider[providerKey].length > 0) {
                 combinedRawStreams.push(...streamsByProvider[providerKey]);
@@ -1917,6 +1966,8 @@ builder.defineStreamHandler(async (args) => {
             providerDisplayName = 'AnimePahe';
         } else if (stream.provider === 'MoviesDrive') {
             providerDisplayName = 'MoviesDrive';
+        } else if (stream.provider === '4KHDHub') {
+            providerDisplayName = '4KHDHub';
         }
 
         let nameDisplay;
@@ -1979,6 +2030,9 @@ builder.defineStreamHandler(async (args) => {
         } else if (stream.provider === 'MoviesDrive') {
             // For MoviesDrive, use the enhanced stream title that comes from the provider
             // which includes detailed quality, source, and size information
+            nameDisplay = stream.name || `${providerDisplayName} - ${stream.quality || 'UNK'}`;
+        } else if (stream.provider === '4KHDHub') {
+            // For 4KHDHub, use the detailed name from provider that includes server details
             nameDisplay = stream.name || `${providerDisplayName} - ${stream.quality || 'UNK'}`;
         } else { // For other providers (ShowBox, Xprime, etc.)
             const qualityLabel = stream.quality || 'UNK';
