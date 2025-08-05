@@ -2,10 +2,59 @@ const https = require('https');
 const http = require('http');
 const { URL } = require('url');
 const { JSDOM } = require('jsdom');
+const fs = require('fs').promises;
+const path = require('path');
+const RedisCache = require('../utils/redisCache');
 
 // Configuration
 const DOMAINS_URL = 'https://raw.githubusercontent.com/phisher98/TVVVV/refs/heads/main/domains.json';
 let cachedDomains = null;
+
+// --- Caching Configuration ---
+const CACHE_ENABLED = process.env.DISABLE_CACHE !== 'true';
+console.log(`[4KHDHub] Internal cache is ${CACHE_ENABLED ? 'enabled' : 'disabled'}.`);
+const CACHE_DIR = process.env.VERCEL ? path.join('/tmp', '.4khdhub_cache') : path.join(__dirname, '.cache', '4khdhub');
+
+// Initialize Redis cache
+const redisCache = new RedisCache('4KHDHub');
+
+// --- Caching Helper Functions ---
+const ensureCacheDir = async () => {
+  if (!CACHE_ENABLED) return;
+  try {
+    await fs.mkdir(CACHE_DIR, { recursive: true });
+  } catch (error) {
+    if (error.code !== 'EEXIST') {
+      console.error(`[4KHDHub Cache] Error creating cache directory: ${error.message}`);
+    }
+  }
+};
+
+const getFromCache = async (key) => {
+  if (!CACHE_ENABLED) return null;
+
+  // Try Redis cache first, then fallback to file system
+  const cachedData = await redisCache.getFromCache(key, '', CACHE_DIR);
+  if (cachedData) {
+    return cachedData.data || cachedData; // Support both new format (data field) and legacy format
+  }
+
+  return null;
+};
+
+const saveToCache = async (key, data) => {
+  if (!CACHE_ENABLED) return;
+
+  const cacheData = {
+    data: data
+  };
+
+  // Save to both Redis and file system
+  await redisCache.saveToCache(key, cacheData, '', CACHE_DIR);
+};
+
+// Initialize cache directory on startup
+ensureCacheDir();
 
 // Utility functions
 function base64Decode(str) {
@@ -1234,64 +1283,123 @@ async function get4KHDHubStreams(tmdbId, type, season = null, episode = null) {
     try {
         console.log(`[4KHDHub] Starting search for TMDB ID: ${tmdbId}, Type: ${type}${season ? `, Season: ${season}` : ''}${episode ? `, Episode: ${episode}` : ''}`);
         
-        // Map type to TMDB API format
-        const tmdbType = type === 'series' ? 'tv' : type;
+        // Create cache key for resolved file hosting URLs
+        const cacheKey = `4khdhub_resolved_urls_v1_${tmdbId}_${type}${season ? `_s${season}e${episode}` : ''}`;
         
-        // Get TMDB details to get the actual title
-        const tmdbDetails = await getTMDBDetails(tmdbId, tmdbType);
-        if (!tmdbDetails || !tmdbDetails.title) {
-            console.log(`[4KHDHub] Could not fetch TMDB details for ID: ${tmdbId}`);
-            return [];
-        }
+        let streamingLinks = [];
         
-        console.log(`[4KHDHub] TMDB Details: ${tmdbDetails.title} (${tmdbDetails.year || 'N/A'})`);
-        
-        // Search using the actual title
-        const searchQuery = tmdbDetails.title;
-        const searchResults = await searchContent(searchQuery);
-        console.log(`[4KHDHub] Found ${searchResults.length} search results`);
-        
-        if (searchResults.length === 0) {
-            return [];
-        }
-        
-        // Find the best matching result using title similarity
-        const bestMatch = findBestMatch(searchResults, tmdbDetails.title);
-        if (!bestMatch) {
-            console.log(`[4KHDHub] No suitable match found for: ${tmdbDetails.title}`);
-            return [];
-        }
-        
-        console.log(`[4KHDHub] Using best match: ${bestMatch.title}`);
-        
-        const content = await loadContent(bestMatch.url);
-        
-        let downloadLinks = [];
-        
-        if (type === 'movie') {
-            downloadLinks = content.downloadLinks || [];
-        } else if ((type === 'series' || type === 'tv') && season && episode) {
-            console.log(`[4KHDHub] Looking for Season ${season}, Episode ${episode}`);
-            console.log(`[4KHDHub] Available episodes:`, content.episodes?.map(ep => `S${ep.season}E${ep.episode} (${ep.downloadLinks?.length || 0} links)`));
-            
-            const targetEpisode = content.episodes?.find(ep => 
-                ep.season === parseInt(season) && ep.episode === parseInt(episode)
-            );
-            
-            if (targetEpisode) {
-                console.log(`[4KHDHub] Found target episode S${targetEpisode.season}E${targetEpisode.episode} with ${targetEpisode.downloadLinks?.length || 0} links`);
-                downloadLinks = targetEpisode.downloadLinks || [];
+        // 1. Check cache for resolved file hosting URLs first
+        let cachedResolvedUrls = await getFromCache(cacheKey);
+        if (cachedResolvedUrls && cachedResolvedUrls.length > 0) {
+            console.log(`[4KHDHub] Cache HIT for ${cacheKey}. Using ${cachedResolvedUrls.length} cached resolved URLs.`);
+            // Process cached resolved URLs directly to final streaming links
+            console.log(`[4KHDHub] Processing ${cachedResolvedUrls.length} cached resolved URLs to get streaming links.`);
+            streamingLinks = await extractStreamingLinks(cachedResolvedUrls);
+        } else {
+            if (cachedResolvedUrls && cachedResolvedUrls.length === 0) {
+                console.log(`[4KHDHub] Cache contains empty data for ${cacheKey}. Refetching from source.`);
             } else {
-                console.log(`[4KHDHub] Target episode S${season}E${episode} not found`);
+                console.log(`[4KHDHub] Cache MISS for ${cacheKey}. Fetching from source.`);
             }
+            
+            // Map type to TMDB API format
+            const tmdbType = type === 'series' ? 'tv' : type;
+            
+            // Get TMDB details to get the actual title
+            const tmdbDetails = await getTMDBDetails(tmdbId, tmdbType);
+            if (!tmdbDetails || !tmdbDetails.title) {
+                console.log(`[4KHDHub] Could not fetch TMDB details for ID: ${tmdbId}`);
+                return [];
+            }
+            
+            console.log(`[4KHDHub] TMDB Details: ${tmdbDetails.title} (${tmdbDetails.year || 'N/A'})`);
+            
+            // Search using the actual title
+            const searchQuery = tmdbDetails.title;
+            const searchResults = await searchContent(searchQuery);
+            console.log(`[4KHDHub] Found ${searchResults.length} search results`);
+            
+            if (searchResults.length === 0) {
+                return [];
+            }
+            
+            // Find the best matching result using title similarity
+            const bestMatch = findBestMatch(searchResults, tmdbDetails.title);
+            if (!bestMatch) {
+                console.log(`[4KHDHub] No suitable match found for: ${tmdbDetails.title}`);
+                return [];
+            }
+            
+            console.log(`[4KHDHub] Using best match: ${bestMatch.title}`);
+            
+            const content = await loadContent(bestMatch.url);
+            
+            let downloadLinks = [];
+            
+            if (type === 'movie') {
+                downloadLinks = content.downloadLinks || [];
+            } else if ((type === 'series' || type === 'tv') && season && episode) {
+                console.log(`[4KHDHub] Looking for Season ${season}, Episode ${episode}`);
+                console.log(`[4KHDHub] Available episodes:`, content.episodes?.map(ep => `S${ep.season}E${ep.episode} (${ep.downloadLinks?.length || 0} links)`));
+                
+                const targetEpisode = content.episodes?.find(ep => 
+                    ep.season === parseInt(season) && ep.episode === parseInt(episode)
+                );
+                
+                if (targetEpisode) {
+                    console.log(`[4KHDHub] Found target episode S${targetEpisode.season}E${targetEpisode.episode} with ${targetEpisode.downloadLinks?.length || 0} links`);
+                    downloadLinks = targetEpisode.downloadLinks || [];
+                } else {
+                    console.log(`[4KHDHub] Target episode S${season}E${episode} not found`);
+                }
+            }
+            
+            if (downloadLinks.length === 0) {
+                console.log(`[4KHDHub] No download links found`);
+                return [];
+            }
+            
+            // Resolve redirect URLs to actual file hosting URLs
+            console.log(`[4KHDHub] Resolving ${downloadLinks.length} redirect URLs to file hosting URLs...`);
+            const resolvedUrls = [];
+            
+            for (let i = 0; i < downloadLinks.length; i++) {
+                const link = downloadLinks[i];
+                console.log(`[4KHDHub] Resolving link ${i + 1}/${downloadLinks.length}: ${link}`);
+                
+                try {
+                    if (link.toLowerCase().includes('id=')) {
+                        // This is a redirect URL, resolve it
+                        const resolvedUrl = await getRedirectLinks(link);
+                        if (resolvedUrl && resolvedUrl.trim()) {
+                            console.log(`[4KHDHub] Link ${i + 1} resolved to: ${resolvedUrl}`);
+                            resolvedUrls.push(resolvedUrl);
+                        } else {
+                            console.log(`[4KHDHub] Link ${i + 1} resolution failed or returned empty`);
+                        }
+                    } else {
+                        // Direct URL, use as-is
+                        console.log(`[4KHDHub] Link ${i + 1} is direct URL: ${link}`);
+                        resolvedUrls.push(link);
+                    }
+                } catch (error) {
+                    console.error(`[4KHDHub] Error resolving link ${i + 1} (${link}):`, error.message);
+                }
+            }
+            
+            if (resolvedUrls.length === 0) {
+                console.log(`[4KHDHub] No URLs resolved successfully`);
+                return [];
+            }
+            
+            // Cache the resolved file hosting URLs
+            console.log(`[4KHDHub] Caching ${resolvedUrls.length} resolved URLs for key: ${cacheKey}`);
+            await saveToCache(cacheKey, resolvedUrls);
+            
+            // Process resolved URLs to get final streaming links
+            console.log(`[4KHDHub] Processing ${resolvedUrls.length} resolved URLs to get streaming links.`);
+            streamingLinks = await extractStreamingLinks(resolvedUrls);
         }
-        
-        if (downloadLinks.length === 0) {
-            console.log(`[4KHDHub] No download links found`);
-            return [];
-        }
-        
-        const streamingLinks = await extractStreamingLinks(downloadLinks);
         
         // Filter out suspicious AMP/redirect URLs
         const filteredLinks = streamingLinks.filter(link => {
