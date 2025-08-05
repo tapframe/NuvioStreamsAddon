@@ -82,38 +82,92 @@ function validateUrl(url) {
 function makeRequest(url, options = {}) {
     return new Promise((resolve, reject) => {
         const urlObj = new URL(url);
-        const protocol = urlObj.protocol === 'https:' ? https : http;
+        const isHttps = urlObj.protocol === 'https:';
+        const httpModule = isHttps ? https : http;
         
         const requestOptions = {
             hostname: urlObj.hostname,
-            port: urlObj.port,
+            port: urlObj.port || (isHttps ? 443 : 80),
             path: urlObj.pathname + urlObj.search,
             method: options.method || 'GET',
             headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
                 ...options.headers
-            }
+            },
+            timeout: 30000
         };
-
-        if (options.allowRedirects === false) {
-            requestOptions.followRedirect = false;
-        }
-
-        const req = protocol.request(requestOptions, (res) => {
+        
+        const req = httpModule.request(requestOptions, (res) => {
+            if (options.allowRedirects === false && (res.statusCode === 301 || res.statusCode === 302 || res.statusCode === 303 || res.statusCode === 307 || res.statusCode === 308)) {
+                resolve({ statusCode: res.statusCode, headers: res.headers });
+                return;
+            }
+            
             let data = '';
             res.on('data', chunk => data += chunk);
             res.on('end', () => {
-                resolve({
-                    statusCode: res.statusCode,
-                    headers: res.headers,
-                    body: data,
-                    document: options.parseHTML ? new JSDOM(data).window.document : null
-                });
+                if (options.parseHTML && data) {
+                    const dom = new JSDOM(data);
+                    resolve({ document: dom.window.document, body: data, statusCode: res.statusCode, headers: res.headers });
+                } else {
+                    resolve({ body: data, statusCode: res.statusCode, headers: res.headers });
+                }
             });
         });
-
+        
         req.on('error', reject);
+        req.on('timeout', () => reject(new Error('Request timeout')));
         req.end();
+    });
+}
+
+function getFilenameFromUrl(url) {
+    return new Promise((resolve) => {
+        try {
+            const urlObj = new URL(url);
+            const isHttps = urlObj.protocol === 'https:';
+            const httpModule = isHttps ? https : http;
+            
+            const requestOptions = {
+                hostname: urlObj.hostname,
+                port: urlObj.port || (isHttps ? 443 : 80),
+                path: urlObj.pathname + urlObj.search,
+                method: 'HEAD',
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                },
+                timeout: 10000
+            };
+            
+            const req = httpModule.request(requestOptions, (res) => {
+                const contentDisposition = res.headers['content-disposition'];
+                let filename = null;
+                
+                if (contentDisposition) {
+                    const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/i);
+                    if (filenameMatch && filenameMatch[1]) {
+                        filename = filenameMatch[1].replace(/["']/g, '');
+                    }
+                }
+                
+                if (!filename) {
+                    // Extract from URL path
+                    const pathParts = urlObj.pathname.split('/');
+                    filename = pathParts[pathParts.length - 1];
+                    if (filename && filename.includes('.')) {
+                        filename = filename.replace(/\.[^.]+$/, ''); // Remove extension
+                    }
+                }
+                
+                resolve(filename || null);
+            });
+            
+            req.on('error', () => resolve(null));
+            req.on('timeout', () => resolve(null));
+            req.end();
+        } catch (error) {
+            resolve(null);
+        }
     });
 }
 
@@ -383,10 +437,12 @@ function extractHubCloudLinks(url, referer) {
             const quality = getIndexQuality(header);
             const headerDetails = cleanTitle(header);
             
-            console.log(`[4KHDHub] Extracted info - Size: ${size}, Header: ${header}, Quality: ${quality}`);
+            console.log(`[4KHDHub] Extracted info - Size: ${size}, Header: ${header}, Quality: ${quality}, HeaderDetails: ${headerDetails}`);
             
             // Extract just the quality for clean naming
             const qualityLabel = quality ? ` - ${quality}p` : '';
+            
+            // We'll build the title format later after getting actual filename from HEAD request
             
             // Find download buttons
             const downloadButtons = document.querySelectorAll('div.card-body h2 a.btn');
@@ -426,18 +482,68 @@ function extractHubCloudLinks(url, referer) {
                     
                     if (text.includes('FSL Server')) {
                         console.log(`[4KHDHub] Button ${index + 1} is FSL Server`);
-                        resolve({
-                            name: `4KHDHub - FSL Server${qualityLabel}`,
-                            url: link,
-                            quality: quality
-                        });
+                        // Get actual filename from HEAD request
+                        getFilenameFromUrl(link)
+                            .then(actualFilename => {
+                                const displayFilename = actualFilename || headerDetails || 'Unknown';
+                                const titleParts = [];
+                                if (displayFilename) titleParts.push(displayFilename);
+                                if (size) titleParts.push(size);
+                                const finalTitle = titleParts.join('\n');
+                                
+                                resolve({
+                                    name: `4KHDHub - FSL Server${qualityLabel}`,
+                                    title: finalTitle,
+                                    url: link,
+                                    quality: quality
+                                });
+                            })
+                            .catch(() => {
+                                const displayFilename = headerDetails || 'Unknown';
+                                const titleParts = [];
+                                if (displayFilename) titleParts.push(displayFilename);
+                                if (size) titleParts.push(size);
+                                const finalTitle = titleParts.join('\n');
+                                
+                                resolve({
+                                    name: `4KHDHub - FSL Server${qualityLabel}`,
+                                    title: finalTitle,
+                                    url: link,
+                                    quality: quality
+                                });
+                            });
                     } else if (text.includes('Download File')) {
                         console.log(`[4KHDHub] Button ${index + 1} is Download File`);
-                        resolve({
-                            name: `4KHDHub - HubCloud${qualityLabel}`,
-                            url: link,
-                            quality: quality
-                        });
+                        // Get actual filename from HEAD request
+                        getFilenameFromUrl(link)
+                            .then(actualFilename => {
+                                const displayFilename = actualFilename || headerDetails || 'Unknown';
+                                const titleParts = [];
+                                if (displayFilename) titleParts.push(displayFilename);
+                                if (size) titleParts.push(size);
+                                const finalTitle = titleParts.join('\n');
+                                
+                                resolve({
+                                    name: `4KHDHub - HubCloud${qualityLabel}`,
+                                    title: finalTitle,
+                                    url: link,
+                                    quality: quality
+                                });
+                            })
+                            .catch(() => {
+                                const displayFilename = headerDetails || 'Unknown';
+                                const titleParts = [];
+                                if (displayFilename) titleParts.push(displayFilename);
+                                if (size) titleParts.push(size);
+                                const finalTitle = titleParts.join('\n');
+                                
+                                resolve({
+                                    name: `4KHDHub - HubCloud${qualityLabel}`,
+                                    title: finalTitle,
+                                    url: link,
+                                    quality: quality
+                                });
+                            });
                     } else if (text.includes('BuzzServer')) {
                         console.log(`[4KHDHub] Button ${index + 1} is BuzzServer, following redirect...`);
                         // Handle BuzzServer redirect
@@ -450,11 +556,37 @@ function extractHubCloudLinks(url, referer) {
                             const redirectUrl = response.headers['hx-redirect'] || response.headers['location'];
                             if (redirectUrl) {
                                 console.log(`[4KHDHub] BuzzServer redirect found: ${redirectUrl}`);
-                                resolve({
-                                    name: `4KHDHub - BuzzServer${qualityLabel}`,
-                                    url: buttonBaseUrl + redirectUrl,
-                                    quality: quality
-                                });
+                                const finalUrl = buttonBaseUrl + redirectUrl;
+                                // Get actual filename from HEAD request
+                                getFilenameFromUrl(finalUrl)
+                                    .then(actualFilename => {
+                                        const displayFilename = actualFilename || headerDetails || 'Unknown';
+                                        const titleParts = [];
+                                        if (displayFilename) titleParts.push(displayFilename);
+                                        if (size) titleParts.push(size);
+                                        const finalTitle = titleParts.join('\n');
+                                        
+                                        resolve({
+                                            name: `4KHDHub - BuzzServer${qualityLabel}`,
+                                            title: finalTitle,
+                                            url: finalUrl,
+                                            quality: quality
+                                        });
+                                    })
+                                    .catch(() => {
+                                        const displayFilename = headerDetails || 'Unknown';
+                                        const titleParts = [];
+                                        if (displayFilename) titleParts.push(displayFilename);
+                                        if (size) titleParts.push(size);
+                                        const finalTitle = titleParts.join('\n');
+                                        
+                                        resolve({
+                                            name: `4KHDHub - BuzzServer${qualityLabel}`,
+                                            title: finalTitle,
+                                            url: finalUrl,
+                                            quality: quality
+                                        });
+                                    });
                             } else {
                                 console.log(`[4KHDHub] BuzzServer redirect not found`);
                                 resolve(null);
@@ -466,18 +598,68 @@ function extractHubCloudLinks(url, referer) {
                         });
                     } else if (link.includes('pixeldra')) {
                         console.log(`[4KHDHub] Button ${index + 1} is Pixeldrain`);
-                        resolve({
-                            name: `4KHDHub - Pixeldrain${qualityLabel}`,
-                            url: link,
-                            quality: quality
-                        });
+                        // Get actual filename from HEAD request
+                        getFilenameFromUrl(link)
+                            .then(actualFilename => {
+                                const displayFilename = actualFilename || headerDetails || 'Unknown';
+                                const titleParts = [];
+                                if (displayFilename) titleParts.push(displayFilename);
+                                if (size) titleParts.push(size);
+                                const finalTitle = titleParts.join('\n');
+                                
+                                resolve({
+                                    name: `4KHDHub - Pixeldrain${qualityLabel}`,
+                                    title: finalTitle,
+                                    url: link,
+                                    quality: quality
+                                });
+                            })
+                            .catch(() => {
+                                const displayFilename = headerDetails || 'Unknown';
+                                const titleParts = [];
+                                if (displayFilename) titleParts.push(displayFilename);
+                                if (size) titleParts.push(size);
+                                const finalTitle = titleParts.join('\n');
+                                
+                                resolve({
+                                    name: `4KHDHub - Pixeldrain${qualityLabel}`,
+                                    title: finalTitle,
+                                    url: link,
+                                    quality: quality
+                                });
+                            });
                     } else if (text.includes('S3 Server')) {
                         console.log(`[4KHDHub] Button ${index + 1} is S3 Server`);
-                        resolve({
-                            name: `4KHDHub - S3 Server${qualityLabel}`,
-                            url: link,
-                            quality: quality
-                        });
+                        // Get actual filename from HEAD request
+                        getFilenameFromUrl(link)
+                            .then(actualFilename => {
+                                const displayFilename = actualFilename || headerDetails || 'Unknown';
+                                const titleParts = [];
+                                if (displayFilename) titleParts.push(displayFilename);
+                                if (size) titleParts.push(size);
+                                const finalTitle = titleParts.join('\n');
+                                
+                                resolve({
+                                    name: `4KHDHub - S3 Server${qualityLabel}`,
+                                    title: finalTitle,
+                                    url: link,
+                                    quality: quality
+                                });
+                            })
+                            .catch(() => {
+                                const displayFilename = headerDetails || 'Unknown';
+                                const titleParts = [];
+                                if (displayFilename) titleParts.push(displayFilename);
+                                if (size) titleParts.push(size);
+                                const finalTitle = titleParts.join('\n');
+                                
+                                resolve({
+                                    name: `4KHDHub - S3 Server${qualityLabel}`,
+                                    title: finalTitle,
+                                    url: link,
+                                    quality: quality
+                                });
+                            });
                     } else if (text.includes('10Gbps')) {
                         console.log(`[4KHDHub] Button ${index + 1} is 10Gbps server, following redirects...`);
                         // Handle 10Gbps server with multiple redirects
@@ -501,11 +683,37 @@ function extractHubCloudLinks(url, referer) {
                                     const finalLink = redirectUrl.split('link=')[1];
                                     if (finalLink) {
                                         console.log(`[4KHDHub] 10Gbps final link: ${finalLink}`);
-                                        return {
-                                            name: `4KHDHub - 10Gbps Server${qualityLabel}`,
-                                            url: decodeURIComponent(finalLink),
-                                            quality: quality
-                                        };
+                                        const decodedUrl = decodeURIComponent(finalLink);
+                                        // Get actual filename from HEAD request
+                                        return getFilenameFromUrl(decodedUrl)
+                                            .then(actualFilename => {
+                                                const displayFilename = actualFilename || headerDetails || 'Unknown';
+                                                const titleParts = [];
+                                                if (displayFilename) titleParts.push(displayFilename);
+                                                if (size) titleParts.push(size);
+                                                const finalTitle = titleParts.join('\n');
+                                                
+                                                return {
+                                                    name: `4KHDHub - 10Gbps Server${qualityLabel}`,
+                                                    title: finalTitle,
+                                                    url: decodedUrl,
+                                                    quality: quality
+                                                };
+                                            })
+                                            .catch(() => {
+                                                const displayFilename = headerDetails || 'Unknown';
+                                                const titleParts = [];
+                                                if (displayFilename) titleParts.push(displayFilename);
+                                                if (size) titleParts.push(size);
+                                                const finalTitle = titleParts.join('\n');
+                                                
+                                                return {
+                                                    name: `4KHDHub - 10Gbps Server${qualityLabel}`,
+                                                    title: finalTitle,
+                                                    url: decodedUrl,
+                                                    quality: quality
+                                                };
+                                            });
                                     }
                                     throw new Error('Final link not found');
                                 } else {
@@ -526,12 +734,36 @@ function extractHubCloudLinks(url, referer) {
                             });
                     } else {
                         console.log(`[4KHDHub] Button ${index + 1} is generic link`);
-                        // Generic link
-                        resolve({
-                            name: `4KHDHub - HubCloud${qualityLabel}`,
-                            url: link,
-                            quality: quality
-                        });
+                        // Generic link - Get actual filename from HEAD request
+                        getFilenameFromUrl(link)
+                            .then(actualFilename => {
+                                const displayFilename = actualFilename || headerDetails || 'Unknown';
+                                const titleParts = [];
+                                if (displayFilename) titleParts.push(displayFilename);
+                                if (size) titleParts.push(size);
+                                const finalTitle = titleParts.join('\n');
+                                
+                                resolve({
+                                    name: `4KHDHub - HubCloud${qualityLabel}`,
+                                    title: finalTitle,
+                                    url: link,
+                                    quality: quality
+                                });
+                            })
+                            .catch(() => {
+                                const displayFilename = headerDetails || 'Unknown';
+                                const titleParts = [];
+                                if (displayFilename) titleParts.push(displayFilename);
+                                if (size) titleParts.push(size);
+                                const finalTitle = titleParts.join('\n');
+                                
+                                resolve({
+                                    name: `4KHDHub - HubCloud${qualityLabel}`,
+                                    title: finalTitle,
+                                    url: link,
+                                    quality: quality
+                                });
+                            });
                     }
                 });
             });
@@ -777,6 +1009,22 @@ function extractHubDriveLinks(url, referer) {
             
             console.log(`[4KHDHub] Got HubDrive page, looking for download button...`);
             
+            // Extract filename and size information
+            const size = document.querySelector('i#size')?.textContent || '';
+            const header = document.querySelector('div.card-header')?.textContent || '';
+            const quality = getIndexQuality(header);
+            const headerDetails = cleanTitle(header);
+            
+            console.log(`[4KHDHub] HubDrive extracted info - Size: ${size}, Header: ${header}, Quality: ${quality}, HeaderDetails: ${headerDetails}`);
+            
+            // Extract filename from header for title display
+            let filename = headerDetails || header || 'Unknown';
+            // Clean up the filename by removing common prefixes and file extensions
+            filename = filename.replace(/^4kHDHub\.com\s*[-_]?\s*/i, '')
+                              .replace(/\.[a-z0-9]{2,4}$/i, '')
+                              .replace(/[._]/g, ' ')
+                              .trim();
+            
             // Use the exact selector from Kotlin code
             const downloadBtn = document.querySelector('.btn.btn-primary.btn-user.btn-success1.m-1');
             
@@ -809,7 +1057,7 @@ function extractHubDriveLinks(url, referer) {
                 }
                 
                 console.log(`[4KHDHub] Found HubDrive download link: ${href}`);
-                return processHubDriveLink(href, referer);
+                return processHubDriveLink(href, referer, filename, size, quality);
             }
             
             const href = downloadBtn.getAttribute('href');
@@ -818,7 +1066,7 @@ function extractHubDriveLinks(url, referer) {
             }
             
             console.log(`[4KHDHub] Found HubDrive download link: ${href}`);
-            return processHubDriveLink(href, referer);
+            return processHubDriveLink(href, referer, filename, size, quality);
         })
         .catch(error => {
             console.error(`[4KHDHub] Error extracting HubDrive links for ${url}:`, error.message);
@@ -826,7 +1074,7 @@ function extractHubDriveLinks(url, referer) {
         });
 }
 
-function processHubDriveLink(href, referer) {
+function processHubDriveLink(href, referer, filename = 'Unknown', size = '', quality = 1080) {
     // Check if it's a HubCloud link
     if (href.toLowerCase().includes('hubcloud')) {
         console.log('[4KHDHub] HubDrive link redirects to HubCloud, processing...');
@@ -834,11 +1082,44 @@ function processHubDriveLink(href, referer) {
     } else {
         console.log('[4KHDHub] HubDrive direct link found');
         // Direct link or other extractor
-        return Promise.resolve([{
-            name: '4KHDHub - HubDrive - 1080p',
-            url: href,
-            quality: 1080
-        }]);
+        const qualityLabel = quality ? ` - ${quality}p` : '';
+        
+        // Build labelExtras like the original extractor
+        const labelExtras = [];
+        if (filename && filename !== 'Unknown') labelExtras.push(`[${filename}]`);
+        if (size) labelExtras.push(`[${size}]`);
+        const labelExtra = labelExtras.join('');
+        
+        // Get actual filename from HEAD request
+        return getFilenameFromUrl(href)
+            .then(actualFilename => {
+                const displayFilename = actualFilename || filename || 'Unknown';
+                const titleParts = [];
+                if (displayFilename) titleParts.push(displayFilename);
+                if (size) titleParts.push(size);
+                const finalTitle = titleParts.join('\n');
+                
+                return [{
+                    name: `4KHDHub - HubDrive${qualityLabel}`,
+                    title: finalTitle,
+                    url: href,
+                    quality: quality
+                }];
+            })
+            .catch(() => {
+                const displayFilename = filename || 'Unknown';
+                const titleParts = [];
+                if (displayFilename) titleParts.push(displayFilename);
+                if (size) titleParts.push(size);
+                const finalTitle = titleParts.join('\n');
+                
+                return [{
+                    name: `4KHDHub - HubDrive${qualityLabel}`,
+                    title: finalTitle,
+                    url: href,
+                    quality: quality
+                }];
+            });
     }
 }
 
@@ -874,11 +1155,46 @@ function processExtractorLink(link, resolve, linkNumber) {
         // Try to extract any direct streaming URLs from the link
         if (link.includes('http') && (link.includes('.mp4') || link.includes('.mkv') || link.includes('.avi'))) {
             console.log(`[4KHDHub] Link ${linkNumber} appears to be a direct video link`);
-            resolve([{
-                name: '4KHDHub Direct Link',
-                url: link,
-                quality: 1080
-            }]);
+            // Extract filename from URL
+            const urlParts = link.split('/');
+            const filename = urlParts[urlParts.length - 1].replace(/\.[^/.]+$/, '').replace(/[._]/g, ' ');
+            
+            // Build labelExtras like the original extractor
+            const labelExtras = [];
+            if (filename) labelExtras.push(`[${filename}]`);
+            labelExtras.push('[Direct Link]');
+            const labelExtra = labelExtras.join('');
+            
+            // Get actual filename from HEAD request
+            getFilenameFromUrl(link)
+                .then(actualFilename => {
+                    const displayFilename = actualFilename || filename || 'Unknown';
+                    const titleParts = [];
+                    if (displayFilename) titleParts.push(displayFilename);
+                    titleParts.push('[Direct Link]');
+                    const finalTitle = titleParts.join('\n');
+                    
+                    resolve([{
+                        name: '4KHDHub Direct Link',
+                        title: finalTitle,
+                        url: link,
+                        quality: 1080
+                    }]);
+                })
+                .catch(() => {
+                    const displayFilename = filename || 'Unknown';
+                    const titleParts = [];
+                    if (displayFilename) titleParts.push(displayFilename);
+                    titleParts.push('[Direct Link]');
+                    const finalTitle = titleParts.join('\n');
+                    
+                    resolve([{
+                        name: '4KHDHub Direct Link',
+                        title: finalTitle,
+                        url: link,
+                        quality: 1080
+                    }]);
+                });
         } else {
             resolve(null);
         }
@@ -1029,7 +1345,7 @@ async function get4KHDHubStreams(tmdbId, type, season = null, episode = null) {
         // Convert to Stremio format
         const streams = validatedLinks.map(link => ({
             name: link.name, // Don't add prefix since it's already included
-            title: link.name,
+            title: link.title || link.name,
             url: link.url,
             quality: `${link.quality}p`,
             behaviorHints: {

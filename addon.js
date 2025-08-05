@@ -1899,6 +1899,8 @@ builder.defineStreamHandler(async (args) => {
             displayTitle = cleanFileName; // Use the cleaned filename as the main title
         } else if (stream.provider === 'UHDMovies' && stream.fullTitle) {
             displayTitle = stream.fullTitle;
+        } else if (stream.provider === '4KHDHub' && stream.title) {
+            displayTitle = stream.title; // Use the enhanced title that includes filename and size
         } else if (tmdbTypeFromId === 'tv' && seasonNum !== null && episodeNum !== null && movieOrSeriesTitle) {
             displayTitle = `${movieOrSeriesTitle} S${String(seasonNum).padStart(2, '0')}E${String(episodeNum).padStart(2, '0')}`;
         } else if (movieOrSeriesTitle) {
