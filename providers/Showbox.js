@@ -2244,42 +2244,30 @@ const processShowWithSeasonsEpisodes = async (febboxUrl, showboxTitle, seasonNum
     const streamsForThisCall = []; // Initialize local array to store streams for this call
     let selectedEpisode = null; // Ensure selectedEpisode is declared here
 
-    // Cache for the main FebBox page
-    const cacheSubDirMain = 'febbox_page_html';
-    const urlHash = crypto.createHash('md5').update(febboxUrl).digest('hex');
-    const cacheKeyMain = `${urlHash}.html`;
+    // Always fetch fresh main FebBox page (no caching)
+    const fetchMainPageTimer = `processShowWithSeasonsEpisodes_fetchMainPage_s${seasonNum}`;
+    console.time(fetchMainPageTimer);
 
-    // Try to get the main page from cache first
-    let contentHtml = await getFromCache(cacheKeyMain, cacheSubDirMain);
+    const cookieForRequest = await getCookieForRequest(regionPreference, userCookie);
 
-    if (!contentHtml) {
-        // If not cached, fetch the HTML content
-        const fetchMainPageTimer = `processShowWithSeasonsEpisodes_fetchMainPage_s${seasonNum}`;
-        console.time(fetchMainPageTimer);
+    let finalFebboxUrl = febboxUrl;
+    let axiosConfigMainPage = {
+        headers: { 'Cookie': `ui=${cookieForRequest}` },
+        timeout: 20000
+    };
 
-        const cookieForRequest = await getCookieForRequest(regionPreference, userCookie);
+    console.log(`Fetching fresh main FebBox page ${febboxUrl} directly (cache bypassed)`);
 
-        let finalFebboxUrl = febboxUrl;
-        let axiosConfigMainPage = {
-            headers: { 'Cookie': `ui=${cookieForRequest}` },
-            timeout: 20000
-        };
-
-        console.log(`Fetching main FebBox page ${febboxUrl} directly`);
-
-        try {
-            const response = await axios.get(finalFebboxUrl, axiosConfigMainPage);
-            contentHtml = response.data;
-            if (typeof contentHtml === 'string' && contentHtml.length > 0) {
-                await saveToCache(cacheKeyMain, contentHtml, cacheSubDirMain);
-            }
-            console.timeEnd(fetchMainPageTimer);
-        } catch (error) {
-            console.log(`Failed to fetch HTML content from ${febboxUrl}: ${error.message}`);
-            console.timeEnd(fetchMainPageTimer);
-            console.timeEnd(processTimerLabel);
-            return;
-        }
+    let contentHtml;
+    try {
+        const response = await axios.get(finalFebboxUrl, axiosConfigMainPage);
+        contentHtml = response.data;
+        console.timeEnd(fetchMainPageTimer);
+    } catch (error) {
+        console.log(`Failed to fetch HTML content from ${febboxUrl}: ${error.message}`);
+        console.timeEnd(fetchMainPageTimer);
+        console.timeEnd(processTimerLabel);
+        return;
     }
 
     if (!contentHtml) {
@@ -2476,120 +2464,90 @@ const processShowWithSeasonsEpisodes = async (febboxUrl, showboxTitle, seasonNum
 
     console.log(`Selected season folder: ${selectedFolder.name} (ID: ${selectedFolder.id})`);
 
-    // Cache for season folder content
-    const cacheSubDirFolderHtml = 'febbox_season_folders';
-    const cacheSubDirFolderParsed = 'febbox_parsed_season_folders';
-    const cacheKeyFolderHtml = `share-${shareKey}_folder-${selectedFolder.id}.html`;
-    const cacheKeyFolderParsed = `share-${shareKey}_folder-${selectedFolder.id}_parsed.json`;
-
+    // Always fetch fresh season folder content (no caching)
     let folderHtml = null;
     let episodeDetails = []; // Declare episodeDetails here, initialized as an empty array
     let episodeFids = []; // Declare episodeFids here, initialized as an empty array
 
-    const cachedParsedEpisodeList = await getFromCache(cacheKeyFolderParsed, cacheSubDirFolderParsed);
-    if (cachedParsedEpisodeList && Array.isArray(cachedParsedEpisodeList)) {
-        console.log(`  CACHE HIT for parsed episode list: Season ${seasonNum}, Folder ${selectedFolder.id}`);
-        episodeDetails.push(...cachedParsedEpisodeList); // Populate if cache hit
-    } else {
-        // Parsed list not in cache, so we need to process HTML
-        // console.log(`  CACHE MISS for parsed episode list: Season ${seasonNum}, Folder ${selectedFolder.id}`);
-        folderHtml = await getFromCache(cacheKeyFolderHtml, cacheSubDirFolderHtml); // Assign to the higher-scoped folderHtml
+    // Always fetch fresh folder content (cache bypassed)
+    console.log(`  Fetching fresh folder content for Season ${seasonNum}, Folder ${selectedFolder.id} (cache bypassed)`);
+    const fetchFolderTimer = `processShowWithSeasonsEpisodes_fetchFolder_s${seasonNum}_id${selectedFolder.id}`;
+    console.time(fetchFolderTimer);
+    try {
+        const targetFolderListUrl = `${FEBBOX_FILE_SHARE_LIST_URL}?share_key=${shareKey}&parent_id=${selectedFolder.id}&is_html=1&pwd=`;
 
-        if (!folderHtml) {
-            const fetchFolderTimer = `processShowWithSeasonsEpisodes_fetchFolder_s${seasonNum}_id${selectedFolder.id}`;
-            console.time(fetchFolderTimer);
-            try {
-                const targetFolderListUrl = `${FEBBOX_FILE_SHARE_LIST_URL}?share_key=${shareKey}&parent_id=${selectedFolder.id}&is_html=1&pwd=`;
+        const cookieForRequestFolder = await getCookieForRequest(regionPreference, userCookie);
+        let finalFolderUrl = targetFolderListUrl;
+        let axiosConfigFolder = {
+            headers: {
+                'Cookie': `ui=${cookieForRequestFolder}`,
+                'Referer': febboxUrl,
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            timeout: 20000
+        };
 
-                const cookieForRequestFolder = await getCookieForRequest(regionPreference, userCookie); // Simplified cookie call
-                let finalFolderUrl = targetFolderListUrl;
-                let axiosConfigFolder = {
-                    headers: {
-                        'Cookie': `ui=${cookieForRequestFolder}`,
-                        'Referer': febboxUrl,
-                        'X-Requested-With': 'XMLHttpRequest'
-                    },
-                    timeout: 20000
-                };
+        console.log(`Fetching fresh FebBox folder ${targetFolderListUrl} directly (cache bypassed)`);
 
-                console.log(`Fetching FebBox folder ${targetFolderListUrl} directly`);
+        const folderResponse = await axios.get(finalFolderUrl, axiosConfigFolder);
+        console.log(`  FebBox folder list response status: ${folderResponse.status}`);
+        console.log(`  FebBox folder list response content-type: ${folderResponse.headers['content-type']}`);
+        // Log the beginning of the data to inspect its structure
+        const responseDataPreview = (typeof folderResponse.data === 'string')
+            ? folderResponse.data.substring(0, 500)
+            : JSON.stringify(folderResponse.data).substring(0, 500);
+        console.log(`  FebBox folder list response data (preview): ${responseDataPreview}`);
 
-                const folderResponse = await axios.get(finalFolderUrl, axiosConfigFolder);
-                console.log(`  FebBox folder list response status: ${folderResponse.status}`);
-                console.log(`  FebBox folder list response content-type: ${folderResponse.headers['content-type']}`);
-                // Log the beginning of the data to inspect its structure
-                const responseDataPreview = (typeof folderResponse.data === 'string')
-                    ? folderResponse.data.substring(0, 500)
-                    : JSON.stringify(folderResponse.data).substring(0, 500);
-                console.log(`  FebBox folder list response data (preview): ${responseDataPreview}`);
-
-                if (folderResponse.data && typeof folderResponse.data === 'object' && folderResponse.data.html) {
-                    folderHtml = folderResponse.data.html;
-                    console.log(`    Successfully extracted HTML from FebBox folder list JSON response.`);
-                } else if (typeof folderResponse.data === 'string') {
-                    folderHtml = folderResponse.data;
-                    console.log(`    Received direct HTML string from FebBox folder list response.`);
-                } else {
-                    console.log(`    Invalid or unexpected response format from FebBox folder API for ${selectedFolder.id}. Data: ${JSON.stringify(folderResponse.data)}`);
-                    // folderHtml remains null
-                }
-
-                if (folderHtml && folderHtml.trim().length > 0) { // Also check if html is not just whitespace
-                    await saveToCache(cacheKeyFolderHtml, folderHtml, cacheSubDirFolderHtml);
-                    console.log(`    Cached FebBox folder HTML for ${selectedFolder.id}`);
-                } else {
-                    console.log(`    Folder HTML from FebBox was empty or null for ${selectedFolder.id}. Not caching.`);
-                    folderHtml = null; // Ensure it's explicitly null if empty
-                }
-                console.timeEnd(fetchFolderTimer);
-            } catch (error) {
-                console.error(`  ERROR fetching FebBox folder content for ${selectedFolder.id}: ${error.message}`);
-                if (error.response) {
-                    console.error(`    FebBox Error Status: ${error.response.status}`);
-                    console.error(`    FebBox Error Data: ${JSON.stringify(error.response.data)}`);
-                }
-                // console.timeEnd(fetchFolderTimer); // fetchFolderTimer might not be defined if cache hit for HTML but miss for parsed
-                console.timeEnd(processTimerLabel); // End outer timer
-                return streamsForThisCall; // Return empty streams array if fetching folder content fails
-            }
+        if (folderResponse.data && typeof folderResponse.data === 'object' && folderResponse.data.html) {
+            folderHtml = folderResponse.data.html;
+            console.log(`    Successfully extracted HTML from FebBox folder list JSON response.`);
+        } else if (typeof folderResponse.data === 'string') {
+            folderHtml = folderResponse.data;
+            console.log(`    Received direct HTML string from FebBox folder list response.`);
+        } else {
+            console.log(`    Invalid or unexpected response format from FebBox folder API for ${selectedFolder.id}. Data: ${JSON.stringify(folderResponse.data)}`);
+            // folderHtml remains null
         }
+
+        console.timeEnd(fetchFolderTimer);
+    } catch (error) {
+        console.error(`  ERROR fetching FebBox folder content for ${selectedFolder.id}: ${error.message}`);
+        if (error.response) {
+            console.error(`    FebBox Error Status: ${error.response.status}`);
+            console.error(`    FebBox Error Data: ${JSON.stringify(error.response.data)}`);
+        }
+        console.timeEnd(fetchFolderTimer);
+        console.timeEnd(processTimerLabel);
+        return streamsForThisCall;
     }
 
-    // If episodeDetails is populated from cache, folderHtml might be null. That's okay.
-    // If episodeDetails is still empty, we must have folderHtml to parse.
-    if (episodeDetails.length === 0) { // Only proceed if we didn't get data from parsed cache
-        if (!folderHtml) { // If still no folderHtml (e.g. HTML cache miss and fetch fail), then error out
-            console.log(`No folder HTML content available (and no cached parsed list) for folder ${selectedFolder.id}`);
-            console.timeEnd(processTimerLabel);
-            return streamsForThisCall;
+    // Always parse fresh folder HTML (no caching)
+    if (!folderHtml) {
+        console.log(`No folder HTML content available for folder ${selectedFolder.id}`);
+        console.timeEnd(processTimerLabel);
+        return streamsForThisCall;
+    }
+
+    // Parse the fresh folderHtml
+    const $folder = cheerio.load(folderHtml);
+    $folder('div.file').each((index, element) => {
+        const feEl = $folder(element);
+        const dataId = feEl.attr('data-id');
+        if (!dataId || !/^\d+$/.test(dataId) || feEl.hasClass('open_dir')) {
+            return;
         }
 
-        // Parse the folderHtml since we didn't have a cached parsed list
-        const $folder = cheerio.load(folderHtml);
-        $folder('div.file').each((index, element) => {
-            const feEl = $folder(element);
-            const dataId = feEl.attr('data-id');
-            if (!dataId || !/^\d+$/.test(dataId) || feEl.hasClass('open_dir')) {
-                return;
-            }
+        const fileNameEl = feEl.find('p.file_name');
+        const fileName = fileNameEl.length ? fileNameEl.text().trim() : `File_${dataId}`;
 
-            const fileNameEl = feEl.find('p.file_name');
-            const fileName = fileNameEl.length ? fileNameEl.text().trim() : `File_${dataId}`;
-
-            episodeDetails.push({
-                fid: dataId,
-                name: fileName,
-                episodeNum: getEpisodeNumberFromName(fileName)
-            });
+        episodeDetails.push({
+            fid: dataId,
+            name: fileName,
+            episodeNum: getEpisodeNumberFromName(fileName)
         });
+    });
 
-        // After parsing, save the extracted episodeDetails to its cache
-        // This will also save an empty array if parsing yields no episodes, preventing re-parsing of empty folders
-        await saveToCache(cacheKeyFolderParsed, episodeDetails, cacheSubDirFolderParsed);
-        if (episodeDetails.length > 0) {
-            // console.log(`  SAVED PARSED episode list to cache: Season ${seasonNum}, Folder ${selectedFolder.id}`);
-        }
-    }
+    console.log(`  Parsed ${episodeDetails.length} episodes from fresh folder data for Season ${seasonNum}, Folder ${selectedFolder.id}`);
 
     // Sort episodes by their number (whether from cache or freshly parsed)
     // Ensure episodeDetails is sorted if populated
@@ -2650,7 +2608,7 @@ const processShowWithSeasonsEpisodes = async (febboxUrl, showboxTitle, seasonNum
                     const episodeDetail = episodeDetails.find(ep => ep.fid === fid);
                     const episodeName = episodeDetail ? episodeDetail.name : '';
 
-                    const streamTitle = `${showboxTitle} - S${seasonNum}${episodeNum && selectedEpisode && fid === selectedEpisode.fid ? `E${episodeNum}` : (episodeDetail ? `E${episodeDetail.episodeNum}` : '')} - ${episodeName} - ${source.label}`;
+                    const streamTitle = `${episodeName} - ${source.label}`;
                     streamsForThisCall.push({ // MODIFIED: Push to streamsForThisCall
                         title: streamTitle,
                         url: source.url,

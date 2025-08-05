@@ -1894,7 +1894,9 @@ builder.defineStreamHandler(async (args) => {
         
         let displayTitle;
         
-        if (stream.provider === 'UHDMovies' && stream.fileName) {
+        if (stream.provider === 'ShowBox' && stream.title) {
+            displayTitle = stream.title; // Use the raw filename from ShowBox
+        } else if (stream.provider === 'UHDMovies' && stream.fileName) {
             const cleanFileName = stream.fileName.replace(/\.[^/.]+$/, "").replace(/[._]/g, ' ');
             displayTitle = cleanFileName; // Use the cleaned filename as the main title
         } else if (stream.provider === 'UHDMovies' && stream.fullTitle) {
