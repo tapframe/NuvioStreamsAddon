@@ -1825,7 +1825,7 @@ builder.defineStreamHandler(async (args) => {
 
         // Combine streams in the preferred provider order
         combinedRawStreams = [];
-        const providerOrder = ['ShowBox', 'UHDMovies', 'MoviesMod', 'TopMovies', 'DramaDrip', 'MoviesDrive', '4KHDHub', 'Hianime', 'Xprime.tv', 'HollyMovieHD', 'Soaper TV', 'VidZee', 'MP4Hydra', 'Cuevana', 'VidSrc', 'AnimePahe'];
+        const providerOrder = ['ShowBox', 'UHDMovies', '4KHDHub', 'MoviesMod', 'TopMovies', 'DramaDrip', 'MoviesDrive', 'Hianime', 'Xprime.tv', 'HollyMovieHD', 'Soaper TV', 'VidZee', 'MP4Hydra', 'Cuevana', 'VidSrc', 'AnimePahe'];
         providerOrder.forEach(providerKey => {
             if (streamsByProvider[providerKey] && streamsByProvider[providerKey].length > 0) {
                 combinedRawStreams.push(...streamsByProvider[providerKey]);
@@ -2034,8 +2034,82 @@ builder.defineStreamHandler(async (args) => {
             // which includes detailed quality, source, and size information
             nameDisplay = stream.name || `${providerDisplayName} - ${stream.quality || 'UNK'}`;
         } else if (stream.provider === '4KHDHub') {
-            // For 4KHDHub, use the detailed name from provider that includes server details
-            nameDisplay = stream.name || `${providerDisplayName} - ${stream.quality || 'UNK'}`;
+            // For 4KHDHub, extract metadata from stream title and enhance the name
+            const extractMetadata = (title) => {
+                if (!title) return { nameMetadata: [], audioMetadata: [] };
+                const nameMetadata = [];
+                const audioMetadata = [];
+                
+                // Check for HDR formats
+                if (/HDR10/i.test(title)) nameMetadata.push('HDR10');
+                if (/\bDV\b|Dolby.?Vision/i.test(title)) nameMetadata.push('DV');
+                if (/HDR/i.test(title) && !nameMetadata.includes('HDR10')) nameMetadata.push('HDR');
+                
+                // Check for source formats
+                if (/BluRay|Blu-ray|BDRip|BRRip/i.test(title)) nameMetadata.push('BluRay');
+                if (/WEB-?DL|WEBRip/i.test(title)) nameMetadata.push('WEB');
+                if (/REMUX/i.test(title)) nameMetadata.push('REMUX');
+                if (/DVD/i.test(title)) nameMetadata.push('DVD');
+                
+                // Check for special formats
+                if (/IMAX/i.test(title)) nameMetadata.push('IMAX');
+                
+                // Check for audio formats (for title field)
+                if (/ATMOS/i.test(title)) audioMetadata.push('ATMOS');
+                if (/DTS/i.test(title)) audioMetadata.push('DTS');
+                
+                return { nameMetadata, audioMetadata };
+            };
+            
+            // Create abbreviated server name mapping for 4KHDHub
+            const getAbbreviatedServerName = (streamName) => {
+                if (!streamName) return `${providerDisplayName} - ${stream.quality || 'UNK'}`;
+                
+                const serverMappings = {
+                    'HubCloud': '[HC]',
+                    'Pixeldrain': '[PD]',
+                    'FSL Server': '[FSL]',
+                    'BuzzServer': '[BS]',
+                    'S3 Server': '[S3]',
+                    '10Gbps Server': '[10G]',
+                    'HubDrive': '[HD]',
+                    'Direct Link': '[DL]'
+                };
+                
+                // Extract server name from stream.name (format: "4KHDHub - ServerName - Quality")
+                 const match = streamName.match(/4KHDHub - ([^-]+)/);
+                 if (match) {
+                     const serverName = match[1].trim();
+                     const abbreviation = serverMappings[serverName] || `[${serverName.substring(0, 3).toUpperCase()}]`;
+                     
+                     // Format quality display
+                     const quality = stream.quality || 'UNK';
+                     let qualityDisplay;
+                     if (quality === '2160' || quality === 2160 || quality === '2160p') {
+                         qualityDisplay = '4K';
+                     } else if (typeof quality === 'string' && quality.endsWith('p')) {
+                         qualityDisplay = quality; // Already has 'p' suffix
+                     } else {
+                         qualityDisplay = `${quality}p`;
+                     }
+                     
+                     return `4KHDHub ${abbreviation} - ${qualityDisplay}`;
+                 }
+                
+                return streamName;
+            };
+            
+            const baseName = getAbbreviatedServerName(stream.name);
+            const { nameMetadata, audioMetadata } = extractMetadata(stream.title);
+            
+            // Store audio metadata for later use in title field
+            stream.audioMetadata = audioMetadata;
+            
+            if (nameMetadata.length > 0) {
+                nameDisplay = `${baseName} | ${nameMetadata.join(' | ')}`;
+            } else {
+                nameDisplay = baseName;
+            }
         } else { // For other providers (ShowBox, Xprime, etc.)
             const qualityLabel = stream.quality || 'UNK';
             if (flagEmoji) {
@@ -2101,7 +2175,14 @@ builder.defineStreamHandler(async (args) => {
         }
 
         if (stream.size && stream.size !== 'Unknown size' && !stream.size.toLowerCase().includes('n/a')) {
-            titleParts.push(stream.size);
+            let sizeWithAudio = stream.size;
+            
+            // Add audio metadata for 4KHDHub after size with dot separation
+            if (stream.provider === '4KHDHub' && stream.audioMetadata && stream.audioMetadata.length > 0) {
+                sizeWithAudio += ' • ' + stream.audioMetadata.join(' • ');
+            }
+            
+            titleParts.push(sizeWithAudio);
         }
             
         const titleSecondLine = titleParts.join(" • ");

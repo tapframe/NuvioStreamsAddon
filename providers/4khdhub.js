@@ -170,6 +170,29 @@ function makeRequest(url, options = {}) {
     });
 }
 
+// Helper function to decode URL-encoded filenames and make them human-readable
+function decodeFilename(filename) {
+    if (!filename) return filename;
+    
+    try {
+        // Handle UTF-8 prefix and decode URL encoding
+        let decoded = filename;
+        
+        // Remove UTF-8 prefix if present
+        if (decoded.startsWith('UTF-8')) {
+            decoded = decoded.substring(5);
+        }
+        
+        // Decode URL encoding (%20 -> space, etc.)
+        decoded = decodeURIComponent(decoded);
+        
+        return decoded;
+    } catch (error) {
+        console.log(`[4KHDHub] Error decoding filename: ${error.message}`);
+        return filename; // Return original if decoding fails
+    }
+}
+
 function getFilenameFromUrl(url) {
     return new Promise((resolve) => {
         try {
@@ -208,7 +231,9 @@ function getFilenameFromUrl(url) {
                     }
                 }
                 
-                resolve(filename || null);
+                // Decode the filename to make it human-readable
+                const decodedFilename = decodeFilename(filename);
+                resolve(decodedFilename || null);
             });
             
             req.on('error', () => resolve(null));
@@ -295,7 +320,9 @@ function getBaseUrl(url) {
 }
 
 function cleanTitle(title) {
-    const parts = title.split(/[.\-_]/);
+    // Decode URL-encoded title first
+    const decodedTitle = decodeFilename(title);
+    const parts = decodedTitle.split(/[.\-_]/);
     
     const qualityTags = ['WEBRip', 'WEB-DL', 'WEB', 'BluRay', 'HDRip', 'DVDRip', 'HDTV', 'CAM', 'TS', 'R5', 'DVDScr', 'BRRip', 'BDRip', 'DVD', 'PDTV', 'HD'];
     const audioTags = ['AAC', 'AC3', 'DTS', 'MP3', 'FLAC', 'DD5', 'EAC3', 'Atmos'];

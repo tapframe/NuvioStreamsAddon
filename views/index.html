@@ -1727,6 +1727,11 @@
             /* Colorful gradient for DramaDrip */
         }
 
+        .khdhub-icon {
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            /* Blue gradient for 4KHDHub */
+        }
+
         .provider-option.uhdmovies.selected {
             background-color: rgba(212, 175, 55, 0.15);
             border-color: #D4AF37;
@@ -1920,6 +1925,11 @@
                         <div class="provider-icon moviesmod-icon">🍿</div>
                         <div class="provider-name">MoviesMod</div>
                         <span class="provider-detail">Multi-Source</span>
+                    </div>
+                    <div class="provider-item">
+                        <div class="provider-icon khdhub-icon">🎬</div>
+                        <div class="provider-name">4KHDHub</div>
+                        <span class="provider-detail">4K/HD Content</span>
                     </div>
                 </div>
 
@@ -2152,6 +2162,23 @@
                                 <option value="all">All</option>
                                 <option value="720p">720p+</option>
                                 <option value="1080p">1080p+</option>
+                            </select>
+                        </div>
+                        <div class="provider-checkbox-item"
+                            style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
+                            <div style="display: flex; align-items: center;">
+                                <input type="checkbox" id="provider4khdhub" name="providerSelect" value="4khdhub"
+                                    checked="" style="margin-right: 0.5rem; accent-color: var(--primary);">
+                                <label for="provider4khdhub" style="font-size: 0.9rem;">4KHDHub <span
+                                        style="font-size: 0.75rem; color: var(--text-light);">(~7.2s)</span> <span
+                                        style="font-size: 0.75rem; color: #1e3c72;">4K/HD</span></label>
+                            </div>
+                            <select id="quality4khdhub" name="providerQuality" data-provider="4khdhub"
+                                class="provider-sort-select">
+                                <option value="all">All</option>
+                                <option value="720p">720p+</option>
+                                <option value="1080p">1080p+</option>
+                                <option value="4k">4K+</option>
                             </select>
                         </div>
 
@@ -2408,7 +2435,7 @@
                     Developed by <a href="https://github.com/tapframe" target="_blank" class="github-link">TapFrame</a>
                 </div>
                 <div class="footer-text">
-                    v0.4.0_v12_test4k
+                    v0.4.2_v12
                 </div>
             </div>
         </div>
