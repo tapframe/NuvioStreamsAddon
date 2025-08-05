@@ -303,7 +303,52 @@ async function extractTvShowDownloadLinks(showPageUrl, season, episode) {
     });
 
     if (downloadLinks.length === 0) {
-      console.log('[UHDMovies] Main extraction logic failed. Trying fallback method without season scoping.');
+      console.log('[UHDMovies] Main extraction logic failed. Checking if requested season exists on page before fallback.');
+      
+      // Check if the requested season exists on the page at all
+      let seasonExists = false;
+      $('.entry-content').find('*').each((index, element) => {
+        const $el = $(element);
+        const text = $el.text().trim();
+        // Match various season formats: "SEASON 2", "Season 2", "(Season 1 – 2)", "Season 1-2", etc.
+        const seasonMatches = [
+          text.match(/^SEASON\s+(\d+)/i),
+          text.match(/\bSeason\s+(\d+)/i),
+          text.match(/\(Season\s+\d+\s*[–-]\s*(\d+)\)/i), // Matches "(Season 1 – 2)"
+          text.match(/Season\s+\d+\s*[–-]\s*(\d+)/i), // Matches "Season 1-2"
+          text.match(/\bS(\d+)/i) // Matches "S2", "S02", etc.
+        ];
+        
+        for (const match of seasonMatches) {
+          if (match) {
+            const currentSeasonNum = parseInt(match[1], 10);
+            if (currentSeasonNum == season) {
+              seasonExists = true;
+              return false; // Exit .each() loop
+            }
+            // For range formats like "Season 1 – 2", check if requested season is in range
+            if (match[0].includes('–') || match[0].includes('-')) {
+              const rangeMatch = match[0].match(/Season\s+(\d+)\s*[–-]\s*(\d+)/i);
+              if (rangeMatch) {
+                const startSeason = parseInt(rangeMatch[1], 10);
+                const endSeason = parseInt(rangeMatch[2], 10);
+                if (season >= startSeason && season <= endSeason) {
+                  seasonExists = true;
+                  return false; // Exit .each() loop
+                }
+              }
+            }
+          }
+        }
+      });
+      
+      if (!seasonExists) {
+        console.log(`[UHDMovies] Season ${season} not found on page. Available seasons may not include the requested season.`);
+        // Don't use fallback if the season doesn't exist to avoid wrong episodes
+        return { title: showTitle, links: [] };
+      }
+      
+      console.log(`[UHDMovies] Season ${season} exists on page but episode extraction failed. Trying fallback method with season filtering.`);
       $('.entry-content').find('a[href*="tech.unblockedgames.world"], a[href*="tech.examzculture.in"]').each((i, el) => {
         const linkElement = $(el);
         const episodeRegex = new RegExp(`^Episode\\s+0*${episode}(?!\\d)`, 'i');
@@ -319,6 +364,13 @@ async function extractTvShowDownloadLinks(showPageUrl, season, episode) {
               if (prevText && prevText.length > 5 && !prevText.toLowerCase().includes('download')) {
                 qualityText = prevText;
               }
+            }
+
+            // Check if this episode belongs to the correct season
+            const seasonCheckRegex = new RegExp(`\\.S0*${season}[\\.]`, 'i');
+            if (!seasonCheckRegex.test(qualityText)) {
+              console.log(`[UHDMovies] Skipping episode from different season: Quality='${qualityText}'`);
+              return; // Skip this episode as it's from a different season
             }
 
             const sizeMatch = qualityText.match(/\[([0-9.,]+[KMGT]B[^\]]*)\]/i);
@@ -998,7 +1050,7 @@ async function resolveSidToDriveleech(sidUrl) {
 async function getUHDMoviesStreams(tmdbId, mediaType = 'movie', season = null, episode = null) {
   console.log(`[UHDMovies] Attempting to fetch streams for TMDB ID: ${tmdbId}, Type: ${mediaType}${mediaType === 'tv' ? `, S:${season}E:${episode}` : ''}`);
 
-  const cacheKey = `uhd_final_v12_${tmdbId}_${mediaType}${season ? `_s${season}e${episode}` : ''}`;
+  const cacheKey = `uhd_final_v15_${tmdbId}_${mediaType}${season ? `_s${season}e${episode}` : ''}`;
 
   try {
     // 1. Check cache first
