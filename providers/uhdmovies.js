@@ -16,6 +16,14 @@ const getAxiosCookieJarSupport = async () => {
   return axiosCookieJarSupport;
 };
 
+// --- Proxy Configuration ---
+const UHDMOVIES_PROXY_URL = process.env.UHDMOVIES_PROXY_URL;
+if (UHDMOVIES_PROXY_URL) {
+  console.log(`[UHDMovies] Proxy support enabled: ${UHDMOVIES_PROXY_URL}`);
+} else {
+  console.log('[UHDMovies] No proxy configured, using direct connections');
+}
+
 // --- Domain Fetching ---
 let uhdMoviesDomain = 'https://uhdmovies.email'; // Fallback domain
 let domainCacheTimestamp = 0;
@@ -93,17 +101,47 @@ const saveToCache = async (key, data) => {
 ensureCacheDir();
 
 // Configure axios with headers to mimic a browser
-const axiosInstance = axios.create({
-  headers: {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-    'Accept-Language': 'en-US,en;q=0.5',
-    'Connection': 'keep-alive',
-    'Upgrade-Insecure-Requests': '1',
-    'Cache-Control': 'max-age=0'
-  },
-  timeout: 30000
-});
+// Configure axios instance with optional proxy support
+const createAxiosInstance = () => {
+  const config = {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.5',
+      'Connection': 'keep-alive',
+      'Upgrade-Insecure-Requests': '1',
+      'Cache-Control': 'max-age=0'
+    },
+    timeout: 30000
+  };
+
+  // Add proxy configuration if UHDMOVIES_PROXY_URL is set
+  if (UHDMOVIES_PROXY_URL) {
+    console.log(`[UHDMovies] Using proxy: ${UHDMOVIES_PROXY_URL}`);
+    // For proxy URLs that expect the destination URL as a parameter
+    config.transformRequest = [(data, headers) => {
+      return data;
+    }];
+  }
+
+  return axios.create(config);
+};
+
+const axiosInstance = createAxiosInstance();
+
+// Proxy wrapper function
+const makeRequest = async (url, options = {}) => {
+  if (UHDMOVIES_PROXY_URL) {
+    // Route through proxy
+    const proxiedUrl = `${UHDMOVIES_PROXY_URL}${encodeURIComponent(url)}`;
+    console.log(`[UHDMovies] Making proxied request to: ${url}`);
+    return axiosInstance.get(proxiedUrl, options);
+  } else {
+    // Direct request
+    console.log(`[UHDMovies] Making direct request to: ${url}`);
+    return axiosInstance.get(url, options);
+  }
+};
 
 // Simple In-Memory Cache
 const uhdMoviesCache = {
@@ -119,7 +157,7 @@ async function searchMovies(query) {
     console.log(`[UHDMovies] Searching for: ${query}`);
     const searchUrl = `${baseUrl}/search/${encodeURIComponent(query)}`;
 
-    const response = await axiosInstance.get(searchUrl);
+    const response = await makeRequest(searchUrl);
     const $ = cheerio.load(response.data);
 
     const searchResults = [];
@@ -234,7 +272,7 @@ function extractCleanQuality(fullQualityText) {
 async function extractTvShowDownloadLinks(showPageUrl, season, episode) {
   try {
     console.log(`[UHDMovies] Extracting TV show links from: ${showPageUrl} for S${season}E${episode}`);
-    const response = await axiosInstance.get(showPageUrl);
+    const response = await makeRequest(showPageUrl);
     const $ = cheerio.load(response.data);
 
     const showTitle = $('h1').first().text().trim();
@@ -403,7 +441,7 @@ async function extractTvShowDownloadLinks(showPageUrl, season, episode) {
 async function extractDownloadLinks(moviePageUrl, targetYear = null) {
   try {
     console.log(`[UHDMovies] Extracting links from: ${moviePageUrl}`);
-    const response = await axiosInstance.get(moviePageUrl);
+    const response = await makeRequest(moviePageUrl);
     const $ = cheerio.load(response.data);
 
     const movieTitle = $('h1').first().text().trim();
@@ -660,7 +698,7 @@ async function tryResumeCloud($) {
     console.log(`[UHDMovies] Found 'Resume Cloud' page link. Following to: ${resumeUrl}`);
 
     // "Click" the link by making another request
-    const finalPageResponse = await axiosInstance.get(resumeUrl, { maxRedirects: 10 });
+    const finalPageResponse = await makeRequest(resumeUrl, { maxRedirects: 10 });
     const $$ = cheerio.load(finalPageResponse.data);
 
     // Look for direct download links
@@ -730,7 +768,7 @@ async function getFinalLink(redirectUrl) {
     console.log(`[UHDMovies] Following redirect: ${redirectUrl}`);
 
     // Request the driveleech page
-    let response = await axiosInstance.get(redirectUrl, { maxRedirects: 10 });
+    let response = await makeRequest(redirectUrl, { maxRedirects: 10 });
     let $ = cheerio.load(response.data);
 
     // --- Check for JavaScript redirect ---
@@ -741,7 +779,7 @@ async function getFinalLink(redirectUrl) {
       const newPath = redirectMatch[1];
       const newUrl = new URL(newPath, 'https://driveleech.net/').href;
       console.log(`[UHDMovies] Found JavaScript redirect. Following to: ${newUrl}`);
-      response = await axiosInstance.get(newUrl, { maxRedirects: 10 });
+      response = await makeRequest(newUrl, { maxRedirects: 10 });
       $ = cheerio.load(response.data);
     }
 
@@ -1185,7 +1223,7 @@ async function getUHDMoviesStreams(tmdbId, mediaType = 'movie', season = null, e
     const streamPromises = cachedLinks.map(async (linkInfo) => {
       try {
         // First, resolve the driveleech redirect URL to get the final file page URL
-        const response = await axiosInstance.get(linkInfo.driveleechRedirectUrl, { maxRedirects: 10 });
+        const response = await makeRequest(linkInfo.driveleechRedirectUrl, { maxRedirects: 10 });
         let $ = cheerio.load(response.data);
 
         // Check for JavaScript redirect (window.location.replace)
@@ -1198,7 +1236,7 @@ async function getUHDMoviesStreams(tmdbId, mediaType = 'movie', season = null, e
           console.log(`[UHDMovies] Resolved redirect to final file page: ${finalFilePageUrl}`);
 
           // Load the final file page
-          const finalResponse = await axiosInstance.get(finalFilePageUrl, { maxRedirects: 10 });
+          const finalResponse = await makeRequest(finalFilePageUrl, { maxRedirects: 10 });
           $ = cheerio.load(finalResponse.data);
         }
 

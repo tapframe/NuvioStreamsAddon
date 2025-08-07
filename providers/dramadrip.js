@@ -36,7 +36,7 @@ async function getDramaDripDomain() {
 
     try {
         console.log('[DramaDrip] Fetching latest domain...');
-        const response = await axios.get('https://raw.githubusercontent.com/phisher98/TVVVV/refs/heads/main/domains.json', { timeout: 10000 });
+        const response = await makeRequest('https://raw.githubusercontent.com/phisher98/TVVVV/refs/heads/main/domains.json', { timeout: 10000 });
         if (response.data && response.data.dramadrip) {
             dramaDripDomain = response.data.dramadrip;
             domainCacheTimestamp = now;
@@ -50,7 +50,15 @@ async function getDramaDripDomain() {
     return dramaDripDomain;
 }
 
-// --- Caching Configuration ---
+// --- Proxy Configuration ---
+const DRAMADRIP_PROXY_URL = process.env.DRAMADRIP_PROXY_URL;
+if (DRAMADRIP_PROXY_URL) {
+  console.log(`[DramaDrip] Proxy support enabled: ${DRAMADRIP_PROXY_URL}`);
+} else {
+  console.log('[DramaDrip] No proxy configured, using direct connections');
+}
+
+// --- Cache Configuration ---
 const CACHE_ENABLED = process.env.DISABLE_CACHE !== 'true';
 const CACHE_DIR = process.env.VERCEL ? path.join('/tmp', '.dramadrip_cache') : path.join(__dirname, '.cache', 'dramadrip');
 // --- Caching Helper Functions ---
@@ -90,6 +98,20 @@ const saveToCache = async (key, data) => {
 // Initialize cache directory
 ensureCacheDir();
 
+// Proxy wrapper function
+const makeRequest = async (url, options = {}) => {
+  if (DRAMADRIP_PROXY_URL) {
+    // Route through proxy
+    const proxiedUrl = `${DRAMADRIP_PROXY_URL}${encodeURIComponent(url)}`;
+    console.log(`[DramaDrip] Making proxied request to: ${url}`);
+    return axios.get(proxiedUrl, options);
+  } else {
+    // Direct request
+    console.log(`[DramaDrip] Making direct request to: ${url}`);
+    return axios.get(url, options);
+  }
+};
+
 // Helper function to parse quality strings into numerical values
 function parseQuality(qualityString) {
     if (!qualityString || typeof qualityString !== 'string') return 0;
@@ -119,7 +141,7 @@ async function searchDramaDrip(query) {
         const baseUrl = await getDramaDripDomain();
         const searchUrl = `${baseUrl}/?s=${encodeURIComponent(query)}`;
         console.log(`[DramaDrip] Searching for: "${query}"`);
-        const { data } = await axios.get(searchUrl);
+        const { data } = await makeRequest(searchUrl);
         const $ = cheerio.load(data);
         const results = [];
 
@@ -141,7 +163,7 @@ async function searchDramaDrip(query) {
 // Extracts season and quality links from a DramaDrip page
 async function extractDramaDripLinks(url) {
     try {
-        const { data } = await axios.get(url);
+        const { data } = await makeRequest(url);
         const $ = cheerio.load(data);
         
         // Check for TV show season headers first
@@ -197,7 +219,7 @@ async function extractDramaDripLinks(url) {
 // Resolves intermediate links from cinematickit.org or episodes.modpro.blog
 async function resolveCinemaKitOrModproLink(initialUrl, refererUrl) {
     try {
-        const { data } = await axios.get(initialUrl, { headers: { 'Referer': refererUrl } });
+        const { data } = await makeRequest(initialUrl, { headers: { 'Referer': refererUrl } });
         const $ = cheerio.load(data);
         const finalLinks = [];
         
@@ -374,7 +396,7 @@ async function resolveTechUnblockedLink(sidUrl) {
 async function resolveDriveseedLink(driveseedUrl) {
     try {
         console.log(`[DramaDrip] Resolving Driveseed link: ${driveseedUrl}`);
-        const { data } = await axios.get(driveseedUrl, {
+        const { data } = await makeRequest(driveseedUrl, {
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
                 'Referer': 'https://links.modpro.blog/', 
@@ -391,7 +413,7 @@ async function resolveDriveseedLink(driveseedUrl) {
             finalUrl = `https://driveseed.org${finalPath}`;
             console.log(`[DramaDrip] JS redirect found. Following to: ${finalUrl}`);
             
-            const finalResponse = await axios.get(finalUrl, {
+            const finalResponse = await makeRequest(finalUrl, {
                  headers: { 'Referer': driveseedUrl }
             });
             finalData = finalResponse.data;
@@ -487,7 +509,7 @@ async function resolveFinalLink(downloadOption) {
                 return data ? data.url : null;
 
             case 'resume':
-                const { data: resumeData } = await axios.get(downloadOption.url, { headers: { 'Referer': 'https://driveseed.org/' } });
+                const { data: resumeData } = await makeRequest(downloadOption.url, { headers: { 'Referer': 'https://driveseed.org/' } });
                 return cheerio.load(resumeData)('a:contains("Cloud Resume Download")').attr('href');
 
             case 'worker':
@@ -537,7 +559,7 @@ async function getDramaDripStreams(tmdbId, mediaType, seasonNum, episodeNum) {
             }
             console.log(`[DramaDrip Cache] MISS for key: ${cacheKey}. Fetching from source.`);
             // 2. If cache miss, fetch from source
-            const { data: tmdbData } = await axios.get(`https://api.themoviedb.org/3/${mediaType}/${tmdbId}?api_key=${TMDB_API_KEY}`);
+            const { data: tmdbData } = await makeRequest(`https://api.themoviedb.org/3/${mediaType}/${tmdbId}?api_key=${TMDB_API_KEY}`);
             const title = mediaType === 'tv' ? tmdbData.name : tmdbData.title;
             const year = mediaType === 'tv' ? (tmdbData.first_air_date || '').substring(0, 4) : (tmdbData.release_date || '').substring(0, 4);
 
@@ -726,7 +748,7 @@ async function getDramaDripStreams(tmdbId, mediaType, seasonNum, episodeNum) {
                 if (!driveseedRedirectUrl) return null;
 
                 // First, resolve the driveseed redirect URL to get the final file page URL
-                const response = await axios.get(driveseedRedirectUrl, {
+                const response = await makeRequest(driveseedRedirectUrl, {
                     headers: {
                         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
                         'Referer': 'https://links.modpro.blog/',
@@ -744,7 +766,7 @@ async function getDramaDripStreams(tmdbId, mediaType, seasonNum, episodeNum) {
                     console.log(`[DramaDrip] Resolved redirect to final file page: ${finalFilePageUrl}`);
                     
                     // Load the final file page
-                    const finalResponse = await axios.get(finalFilePageUrl, {
+                    const finalResponse = await makeRequest(finalFilePageUrl, {
                         headers: { 'Referer': driveseedRedirectUrl }
                     });
                     finalData = finalResponse.data;

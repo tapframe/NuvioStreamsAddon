@@ -30,7 +30,7 @@ async function getTopMoviesDomain() {
 
     try {
         console.log('[TopMovies] Fetching latest domain...');
-        const response = await axios.get('https://raw.githubusercontent.com/phisher98/TVVVV/refs/heads/main/domains.json', { timeout: 10000 });
+        const response = await makeRequest('https://raw.githubusercontent.com/phisher98/TVVVV/refs/heads/main/domains.json', { timeout: 10000 });
         if (response.data && response.data.topMovies) {
             topMoviesDomain = response.data.topMovies;
             domainCacheTimestamp = now;
@@ -45,6 +45,24 @@ async function getTopMoviesDomain() {
 }
 
 const TMDB_API_KEY = process.env.TMDB_API_KEY || "439c478a771f35c05022f9feabcca01c"; // Fallback to a public key
+
+// --- Proxy Configuration ---
+const TOPMOVIES_PROXY_URL = process.env.TOPMOVIES_PROXY_URL;
+if (TOPMOVIES_PROXY_URL) {
+    console.log(`[TopMovies] Using proxy: ${TOPMOVIES_PROXY_URL}`);
+} else {
+    console.log('[TopMovies] No proxy configured');
+}
+
+// Proxy wrapper function
+const makeRequest = (url, options = {}) => {
+    if (TOPMOVIES_PROXY_URL) {
+        const proxiedUrl = `${TOPMOVIES_PROXY_URL}/${encodeURIComponent(url)}`;
+        return axios.get(proxiedUrl, options);
+    } else {
+        return axios.get(url, options);
+    }
+};
 
 // --- Scraper Functions ---
 
@@ -610,7 +628,7 @@ async function getTopMoviesStreams(tmdbId, mediaType = 'movie', season = null, e
         console.log(`[TopMovies Cache] MISS for key: ${cacheKey}. Fetching from source.`);
         // 2. Get TMDB info
         const tmdbUrl = `https://api.themoviedb.org/3/movie/${tmdbId}?api_key=${TMDB_API_KEY}`;
-        const tmdbResponse = await axios.get(tmdbUrl);
+        const tmdbResponse = await makeRequest(tmdbUrl);
         const mediaInfo = {
           title: tmdbResponse.data.title,
           year: parseInt((tmdbResponse.data.release_date || '').split('-')[0], 10)
