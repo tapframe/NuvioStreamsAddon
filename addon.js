@@ -1768,8 +1768,9 @@ builder.defineStreamHandler(async (args) => {
     console.log('Running parallel provider fetches with caching...');
     
     try {
-        // Execute all provider functions in parallel and time them
-        const providerResults = await Promise.all([
+        // Execute all provider functions in parallel with 10-second timeout
+        const PROVIDER_TIMEOUT_MS = 30000; // 10 seconds
+        const providerPromises = [
             timeProvider('ShowBox', providerFetchFunctions.showbox()),
             timeProvider('Xprime.tv', providerFetchFunctions.xprime()),
             timeProvider('HollyMovieHD', providerFetchFunctions.hollymoviehd()),
@@ -1786,7 +1787,56 @@ builder.defineStreamHandler(async (args) => {
             timeProvider('AnimePahe', providerFetchFunctions.animepahe()),
             timeProvider('MoviesDrive', providerFetchFunctions.moviesdrive()),
             timeProvider('4KHDHub', providerFetchFunctions['4khdhub']())
-        ]);
+        ];
+        
+        // Implement proper timeout that returns results immediately after 10 seconds
+        let providerResults;
+        let timeoutOccurred = false;
+        
+        const timeoutPromise = new Promise((resolve) => {
+            setTimeout(() => {
+                timeoutOccurred = true;
+                console.log(`[Timeout] 10-second timeout reached. Returning fetched links so far.`);
+                resolve('timeout');
+            }, PROVIDER_TIMEOUT_MS);
+        });
+        
+        // Start all providers and race against timeout
+        const settledPromise = Promise.allSettled(providerPromises);
+        const raceResult = await Promise.race([settledPromise, timeoutPromise]);
+        
+        if (raceResult === 'timeout') {
+            // Timeout occurred, collect results from completed providers only
+            console.log(`[Timeout] Collecting results from completed providers...`);
+            
+            // Give a brief moment for any providers that might be just finishing
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+            // Get current state of all promises
+            const currentResults = await Promise.allSettled(providerPromises.map(p => 
+                Promise.race([p, Promise.resolve([])])
+            ));
+            
+            providerResults = currentResults.map((result, index) => {
+                const providerNames = ['ShowBox', 'Xprime.tv', 'HollyMovieHD', 'Soaper TV', 'Cuevana', 'Hianime', 'VidSrc', 'VidZee', 'MP4Hydra', 'UHDMovies', 'MoviesMod', 'TopMovies', 'DramaDrip', 'AnimePahe', 'MoviesDrive', '4KHDHub'];
+                if (result.status === 'fulfilled' && Array.isArray(result.value) && result.value.length > 0) {
+                    console.log(`[Timeout] Provider ${providerNames[index]} completed with ${result.value.length} streams.`);
+                    return result.value;
+                } else {
+                    console.log(`[Timeout] Provider ${providerNames[index]} did not complete in time or returned no streams.`);
+                    return []; // Return empty array for incomplete/failed providers
+                }
+            });
+        } else {
+            // All providers completed within timeout
+            providerResults = raceResult.map(result => {
+                if (result.status === 'fulfilled') {
+                    return result.value;
+                } else {
+                    return [];
+                }
+            });
+        }
         
         // Process results into streamsByProvider object
         const streamsByProvider = {
