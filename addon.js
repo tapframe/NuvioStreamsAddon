@@ -1769,7 +1769,7 @@ builder.defineStreamHandler(async (args) => {
     
     try {
         // Execute all provider functions in parallel with 10-second timeout
-        const PROVIDER_TIMEOUT_MS = 30000; // 10 seconds
+        const PROVIDER_TIMEOUT_MS = 45000; // 10 seconds
         const providerPromises = [
             timeProvider('ShowBox', providerFetchFunctions.showbox()),
             timeProvider('Xprime.tv', providerFetchFunctions.xprime()),
@@ -1796,7 +1796,7 @@ builder.defineStreamHandler(async (args) => {
         const timeoutPromise = new Promise((resolve) => {
             setTimeout(() => {
                 timeoutOccurred = true;
-                console.log(`[Timeout] 10-second timeout reached. Returning fetched links so far.`);
+                console.log(`[Timeout] 30-second timeout reached. Returning fetched links so far.`);
                 resolve('timeout');
             }, PROVIDER_TIMEOUT_MS);
         });
