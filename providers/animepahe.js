@@ -73,11 +73,15 @@ ensureCacheDir();
 
 // --- Helper Functions ---
 async function fetchWithRetry(url, options = {}, maxRetries = MAX_RETRIES) {
+    const useProxy = process.env.ANIMEPAHE_USE_PROXY !== 'false';
     let lastError;
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
+            // Apply proxy if enabled and URL is not already proxied
+            const requestUrl = useProxy && !url.includes(PROXY_URL) ? `${PROXY_URL}${url}` : url;
+            
             const response = await axios({
-                url,
+                url: requestUrl,
                 ...options,
                 headers: {
                     ...HEADERS,
@@ -246,8 +250,11 @@ async function getVideoLinks(animeSession, episodeSession) {
 async function extractPahe(url) {
     console.log(`[AnimePahe] extractPahe → Starting extraction for: ${url}`);
     try {
+        const useProxy = process.env.ANIMEPAHE_USE_PROXY !== 'false';
+        
         // Step 1: Get redirect location from /i endpoint
-        const redirectResponse = await axios.get(`${url}/i`, {
+        const redirectUrl = useProxy ? `${PROXY_URL}${url}/i` : `${url}/i`;
+        const redirectResponse = await axios.get(redirectUrl, {
             maxRedirects: 0,
             validateStatus: (status) => status >= 200 && status < 400,
             headers: HEADERS
@@ -263,7 +270,8 @@ async function extractPahe(url) {
         console.log(`[AnimePahe] Kwik URL: ${kwikUrl}`);
         
         // Step 2: Get the Kwik page content
-        const kwikResponse = await axios.get(kwikUrl, {
+        const kwikRequestUrl = useProxy ? `${PROXY_URL}${kwikUrl}` : kwikUrl;
+        const kwikResponse = await axios.get(kwikRequestUrl, {
             headers: {
                 ...HEADERS,
                 'Referer': 'https://kwik.cx/'
@@ -301,7 +309,8 @@ async function extractPahe(url) {
         const formData = new FormData();
         formData.append('_token', token);
         
-        const finalResponse = await axios.post(postUrl, formData, {
+        const postRequestUrl = useProxy ? `${PROXY_URL}${postUrl}` : postUrl;
+        const finalResponse = await axios.post(postRequestUrl, formData, {
             headers: {
                 ...HEADERS,
                 'Referer': kwikResponse.request.res.responseUrl,
