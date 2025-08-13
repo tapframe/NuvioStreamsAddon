@@ -121,6 +121,45 @@ const makeRequest = async (url, options = {}) => {
   }
 };
 
+// Helper function to create a proxied session for SID resolution
+const createProxiedSession = async (jar) => {
+  const { wrapper } = await getAxiosCookieJarSupport();
+  
+  const sessionConfig = {
+    jar,
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+      'Accept-Language': 'en-US,en;q=0.5',
+      'Connection': 'keep-alive',
+      'Upgrade-Insecure-Requests': '1'
+    }
+  };
+
+  const session = wrapper(axios.create(sessionConfig));
+
+  // If proxy is enabled, wrap the session methods to use proxy
+  if (MOVIESMOD_PROXY_URL) {
+    console.log(`[MoviesMod] Creating SID session with proxy: ${MOVIESMOD_PROXY_URL}`);
+    const originalGet = session.get.bind(session);
+    const originalPost = session.post.bind(session);
+
+    session.get = async (url, options = {}) => {
+      const proxiedUrl = `${MOVIESMOD_PROXY_URL}${encodeURIComponent(url)}`;
+      console.log(`[MoviesMod] Making proxied SID GET request to: ${url}`);
+      return originalGet(proxiedUrl, options);
+    };
+
+    session.post = async (url, data, options = {}) => {
+      const proxiedUrl = `${MOVIESMOD_PROXY_URL}${encodeURIComponent(url)}`;
+      console.log(`[MoviesMod] Making proxied SID POST request to: ${url}`);
+      return originalPost(proxiedUrl, data, options);
+    };
+  }
+
+  return session;
+};
+
 // Helper function to extract quality from text
 function extractQuality(text) {
     if (!text) return 'Unknown';
@@ -373,18 +412,8 @@ async function resolveTechUnblockedLink(sidUrl) {
     const { origin } = new URL(sidUrl);
     const jar = new CookieJar();
 
-    // Get the wrapper function from dynamic import
-    const { wrapper } = await getAxiosCookieJarSupport();
-    const session = wrapper(axios.create({
-        jar,
-        headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-            'Accept-Language': 'en-US,en;q=0.5',
-            'Connection': 'keep-alive',
-            'Upgrade-Insecure-Requests': '1'
-        }
-    }));
+    // Create session with proxy support
+    const session = await createProxiedSession(jar);
 
     try {
         // Step 0: Get the _wp_http value
@@ -490,7 +519,7 @@ async function resolveTechUnblockedLink(sidUrl) {
 // Resolve driveseed.org links to get download options
 async function resolveDriveseedLink(driveseedUrl) {
     try {
-        const { data } = await axios.get(driveseedUrl, {
+        const { data } = await makeRequest(driveseedUrl, {
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
                 'Referer': 'https://links.modpro.blog/',
@@ -503,7 +532,7 @@ async function resolveDriveseedLink(driveseedUrl) {
             const finalPath = redirectMatch[1];
             const finalUrl = `https://driveseed.org${finalPath}`;
 
-            const finalResponse = await axios.get(finalUrl, {
+            const finalResponse = await makeRequest(finalUrl, {
                 headers: {
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
                     'Referer': driveseedUrl,
@@ -572,7 +601,7 @@ async function resolveDriveseedLink(driveseedUrl) {
 // Resolve Resume Cloud link to final download URL
 async function resolveResumeCloudLink(resumeUrl) {
     try {
-        const { data } = await axios.get(resumeUrl, {
+        const { data } = await makeRequest(resumeUrl, {
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
                 'Referer': 'https://driveseed.org/',
@@ -713,12 +742,24 @@ async function resolveVideoSeedLink(videoSeedUrl) {
             const formData = new FormData();
             formData.append('keys', keys);
 
-            const apiResponse = await axios.post(apiUrl, formData, {
-                headers: {
-                    ...formData.getHeaders(),
-                    'x-token': new URL(videoSeedUrl).hostname
-                }
-            });
+            let apiResponse;
+            if (MOVIESMOD_PROXY_URL) {
+                const proxiedApiUrl = `${MOVIESMOD_PROXY_URL}${encodeURIComponent(apiUrl)}`;
+                console.log(`[MoviesMod] Making proxied POST request to VideoSeed API`);
+                apiResponse = await axios.post(proxiedApiUrl, formData, {
+                    headers: {
+                        ...formData.getHeaders(),
+                        'x-token': new URL(videoSeedUrl).hostname
+                    }
+                });
+            } else {
+                apiResponse = await axios.post(apiUrl, formData, {
+                    headers: {
+                        ...formData.getHeaders(),
+                        'x-token': new URL(videoSeedUrl).hostname
+                    }
+                });
+            }
 
             if (apiResponse.data && apiResponse.data.url) {
                 return apiResponse.data.url;
@@ -745,13 +786,28 @@ async function validateVideoUrl(url, timeout = 10000) {
 
     try {
         console.log(`[MoviesMod] Validating URL: ${url.substring(0, 100)}...`);
-        const response = await axios.head(url, {
-            timeout,
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                'Range': 'bytes=0-1' // Just request first byte to test
-            }
-        });
+        
+        // Use proxy for URL validation if enabled
+        let response;
+        if (MOVIESMOD_PROXY_URL) {
+            const proxiedUrl = `${MOVIESMOD_PROXY_URL}${encodeURIComponent(url)}`;
+            console.log(`[MoviesMod] Making proxied HEAD request for validation to: ${url}`);
+            response = await axios.head(proxiedUrl, {
+                timeout,
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                    'Range': 'bytes=0-1' // Just request first byte to test
+                }
+            });
+        } else {
+            response = await axios.head(url, {
+                timeout,
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                    'Range': 'bytes=0-1' // Just request first byte to test
+                }
+            });
+        }
 
         // Check if status is OK (200-299) or partial content (206)
         if (response.status >= 200 && response.status < 400) {
@@ -775,13 +831,26 @@ async function validateUrlsParallel(urls, timeout = 10000) {
     
     const validationPromises = urls.map(async (url) => {
         try {
-            const response = await axios.head(url, {
-                timeout,
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                    'Range': 'bytes=0-1'
-                }
-            });
+            // Use proxy for URL validation if enabled
+            let response;
+            if (MOVIESMOD_PROXY_URL) {
+                const proxiedUrl = `${MOVIESMOD_PROXY_URL}${encodeURIComponent(url)}`;
+                response = await axios.head(proxiedUrl, {
+                    timeout,
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                        'Range': 'bytes=0-1'
+                    }
+                });
+            } else {
+                response = await axios.head(url, {
+                    timeout,
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                        'Range': 'bytes=0-1'
+                    }
+                });
+            }
 
             const isValid = response.status >= 200 && response.status < 400;
             return { url, isValid, status: response.status };

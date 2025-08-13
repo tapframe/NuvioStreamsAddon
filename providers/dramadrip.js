@@ -112,6 +112,45 @@ const makeRequest = async (url, options = {}) => {
   }
 };
 
+// Helper function to create a proxied session for SID resolution
+const createProxiedSession = async (jar) => {
+  const { wrapper } = await getAxiosCookieJarSupport();
+  
+  const sessionConfig = {
+    jar,
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+      'Accept-Language': 'en-US,en;q=0.5',
+      'Connection': 'keep-alive',
+      'Upgrade-Insecure-Requests': '1'
+    }
+  };
+
+  const session = wrapper(axios.create(sessionConfig));
+
+  // If proxy is enabled, wrap the session methods to use proxy
+  if (DRAMADRIP_PROXY_URL) {
+    console.log(`[DramaDrip] Creating SID session with proxy: ${DRAMADRIP_PROXY_URL}`);
+    const originalGet = session.get.bind(session);
+    const originalPost = session.post.bind(session);
+
+    session.get = async (url, options = {}) => {
+      const proxiedUrl = `${DRAMADRIP_PROXY_URL}${encodeURIComponent(url)}`;
+      console.log(`[DramaDrip] Making proxied SID GET request to: ${url}`);
+      return originalGet(proxiedUrl, options);
+    };
+
+    session.post = async (url, data, options = {}) => {
+      const proxiedUrl = `${DRAMADRIP_PROXY_URL}${encodeURIComponent(url)}`;
+      console.log(`[DramaDrip] Making proxied SID POST request to: ${url}`);
+      return originalPost(proxiedUrl, data, options);
+    };
+  }
+
+  return session;
+};
+
 // Helper function to parse quality strings into numerical values
 function parseQuality(qualityString) {
     if (!qualityString || typeof qualityString !== 'string') return 0;
@@ -277,19 +316,9 @@ async function resolveTechUnblockedLink(sidUrl) {
   console.log(`[DramaDrip] Resolving SID link: ${sidUrl}`);
   const { origin } = new URL(sidUrl);
   const jar = new CookieJar();
-  
-  // Get the wrapper function from dynamic import
-  const { wrapper } = await getAxiosCookieJarSupport();
-  const session = wrapper(axios.create({
-    jar,
-    headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-        'Accept-Language': 'en-US,en;q=0.5',
-        'Connection': 'keep-alive',
-        'Upgrade-Insecure-Requests': '1'
-    }
-  }));
+
+  // Create session with proxy support
+  const session = await createProxiedSession(jar);
 
   try {
     // Step 0: Get the _wp_http value
@@ -473,13 +502,28 @@ async function validateVideoUrl(url, timeout = 10000) {
 
     try {
         console.log(`[DramaDrip] Validating URL: ${url.substring(0, 100)}...`);
-        const response = await axios.head(url, {
-            timeout,
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                'Range': 'bytes=0-1' // Just request first byte to test
-            }
-        });
+        
+        // Use proxy for URL validation if enabled
+        let response;
+        if (DRAMADRIP_PROXY_URL) {
+            const proxiedUrl = `${DRAMADRIP_PROXY_URL}${encodeURIComponent(url)}`;
+            console.log(`[DramaDrip] Making proxied HEAD request for validation to: ${url}`);
+            response = await axios.head(proxiedUrl, {
+                timeout,
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                    'Range': 'bytes=0-1' // Just request first byte to test
+                }
+            });
+        } else {
+            response = await axios.head(url, {
+                timeout,
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                    'Range': 'bytes=0-1' // Just request first byte to test
+                }
+            });
+        }
         
         // Check if status is OK (200-299) or partial content (206)
         if (response.status >= 200 && response.status < 400) {
@@ -503,22 +547,32 @@ async function resolveFinalLink(downloadOption) {
                 const urlObject = new URL(downloadOption.url);
                 const keysParam = urlObject.searchParams.get('url');
                 if (!keysParam) return null;
-                const { data } = await axios.post('https://video-seed.pro/api', `keys=${keysParam}`, {
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'x-token': 'video-seed.pro' }
-                });
-                return data ? data.url : null;
+                
+                let response;
+                const videoSeedApiUrl = 'https://video-seed.pro/api';
+                const postData = `keys=${keysParam}`;
+                const headers = { 'Content-Type': 'application/x-www-form-urlencoded', 'x-token': 'video-seed.pro' };
+                
+                if (DRAMADRIP_PROXY_URL) {
+                    const proxiedApiUrl = `${DRAMADRIP_PROXY_URL}${encodeURIComponent(videoSeedApiUrl)}`;
+                    console.log(`[DramaDrip] Making proxied POST request to video-seed.pro API`);
+                    response = await axios.post(proxiedApiUrl, postData, { headers });
+                } else {
+                    response = await axios.post(videoSeedApiUrl, postData, { headers });
+                }
+                
+                return response.data ? response.data.url : null;
 
             case 'resume':
                 const { data: resumeData } = await makeRequest(downloadOption.url, { headers: { 'Referer': 'https://driveseed.org/' } });
                 return cheerio.load(resumeData)('a:contains("Cloud Resume Download")').attr('href');
 
             case 'worker':
-                const jar = new CookieJar();
+                const workerJar = new CookieJar();
                 
-                // Get the wrapper function from dynamic import
-                const { wrapper } = await getAxiosCookieJarSupport();
-                const session = wrapper(axios.create({ jar }));
-                const { data: pageHtml } = await session.get(downloadOption.url);
+                // Create session with proxy support
+                const workerSession = await createProxiedSession(workerJar);
+                const { data: pageHtml } = await workerSession.get(downloadOption.url);
                 
                 const scriptContent = pageHtml.match(/<script type="text\/javascript">([\s\S]*?)<\/script>/g).find(s => s.includes("formData.append('token'"));
                 if (!scriptContent) return null;
@@ -529,8 +583,8 @@ async function resolveFinalLink(downloadOption) {
 
                 const formData = new FormData();
                 formData.append('token', tokenMatch[1]);
-                const apiUrl = `https://workerseed.dev/download?id=${idMatch[1]}`;
-                const { data: apiResponse } = await session.post(apiUrl, formData, { headers: { ...formData.getHeaders(), 'x-requested-with': 'XMLHttpRequest' } });
+                const workerApiUrl = `https://workerseed.dev/download?id=${idMatch[1]}`;
+                const { data: apiResponse } = await workerSession.post(workerApiUrl, formData, { headers: { ...formData.getHeaders(), 'x-requested-with': 'XMLHttpRequest' } });
                 return apiResponse ? apiResponse.url : null;
             default:
                 return null;

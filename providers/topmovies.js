@@ -57,9 +57,11 @@ if (TOPMOVIES_PROXY_URL) {
 // Proxy wrapper function
 const makeRequest = (url, options = {}) => {
     if (TOPMOVIES_PROXY_URL) {
-        const proxiedUrl = `${TOPMOVIES_PROXY_URL}/${encodeURIComponent(url)}`;
+        const proxiedUrl = `${TOPMOVIES_PROXY_URL}${encodeURIComponent(url)}`;
+        console.log(`[TopMovies] Making proxied request to: ${url}`);
         return axios.get(proxiedUrl, options);
     } else {
+        console.log(`[TopMovies] Making direct request to: ${url}`);
         return axios.get(url, options);
     }
 };
@@ -86,7 +88,7 @@ async function searchMovies(query) {
         const searchUrl = `${baseUrl}/search/${encodeURIComponent(query)}`;
         console.log(`Searching: ${searchUrl}`);
         
-        const { data } = await axiosInstance.get(searchUrl);
+        const { data } = await makeRequest(searchUrl);
         const $ = cheerio.load(data);
 
         const results = [];
@@ -111,7 +113,7 @@ async function searchMovies(query) {
 async function extractDownloadLinks(moviePageUrl) {
     try {
         console.log(`\nExtracting download links from: ${moviePageUrl}`);
-        const { data } = await axiosInstance.get(moviePageUrl);
+        const { data } = await makeRequest(moviePageUrl);
         const $ = cheerio.load(data);
         
         const links = [];
@@ -165,7 +167,7 @@ async function extractDownloadLinks(moviePageUrl) {
 async function resolveLeechproLink(leechproUrl) {
     try {
         console.log(`\nResolving Leechpro link: ${leechproUrl}`);
-        const { data } = await axiosInstance.get(leechproUrl);
+        const { data } = await makeRequest(leechproUrl);
         const $ = cheerio.load(data);
 
         // Look for any of our supported link types in the timed content section first
@@ -336,12 +338,24 @@ async function tryInstantDownload($) {
             const formData = new FormData();
             formData.append('keys', keys);
 
-            const apiResponse = await axiosInstance.post(apiUrl, formData, {
-                headers: {
-                    ...formData.getHeaders(),
-                    'x-token': new URL(instantDownloadLink).hostname
-                }
-            });
+            let apiResponse;
+            if (TOPMOVIES_PROXY_URL) {
+                const proxiedApiUrl = `${TOPMOVIES_PROXY_URL}${encodeURIComponent(apiUrl)}`;
+                console.log(`[TopMovies] Making proxied POST request for Instant Download API to: ${apiUrl}`);
+                apiResponse = await axiosInstance.post(proxiedApiUrl, formData, {
+                    headers: {
+                        ...formData.getHeaders(),
+                        'x-token': new URL(instantDownloadLink).hostname
+                    }
+                });
+            } else {
+                apiResponse = await axiosInstance.post(apiUrl, formData, {
+                    headers: {
+                        ...formData.getHeaders(),
+                        'x-token': new URL(instantDownloadLink).hostname
+                    }
+                });
+            }
 
             if (apiResponse.data && apiResponse.data.url) {
                 let finalUrl = apiResponse.data.url;
@@ -401,7 +415,7 @@ async function tryResumeCloud($) {
         const resumeUrl = new URL(resumeLink, 'https://driveleech.net').href;
         console.log(`  [LOG] Found 'Resume Cloud' page link. Following to: ${resumeUrl}`);
         
-        const finalPageResponse = await axiosInstance.get(resumeUrl, { maxRedirects: 10 });
+        const finalPageResponse = await makeRequest(resumeUrl, { maxRedirects: 10 });
         const $$ = cheerio.load(finalPageResponse.data);
 
         // Corrected Selector: Look for the "Cloud Resume Download" button directly
@@ -442,13 +456,28 @@ async function validateVideoUrl(url, timeout = 10000) {
 
     try {
         console.log(`[TopMovies] Validating URL: ${url.substring(0, 100)}...`);
-        const response = await axios.head(url, {
-            timeout,
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                'Range': 'bytes=0-1' // Just request first byte to test
-            }
-        });
+        
+        // Use proxy for URL validation if enabled
+        let response;
+        if (TOPMOVIES_PROXY_URL) {
+            const proxiedUrl = `${TOPMOVIES_PROXY_URL}${encodeURIComponent(url)}`;
+            console.log(`[TopMovies] Making proxied HEAD request for validation to: ${url}`);
+            response = await axios.head(proxiedUrl, {
+                timeout,
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                    'Range': 'bytes=0-1' // Just request first byte to test
+                }
+            });
+        } else {
+            response = await axios.head(url, {
+                timeout,
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                    'Range': 'bytes=0-1' // Just request first byte to test
+                }
+            });
+        }
         
         // Check if status is OK (200-299) or partial content (206)
         if (response.status >= 200 && response.status < 400) {
@@ -469,7 +498,7 @@ async function resolveDriveleechLink(driveleechUrl) {
     try {
         console.log(`\nResolving Driveleech link: ${driveleechUrl}`);
         
-        const response = await axiosInstance.get(driveleechUrl, { maxRedirects: 10 });
+        const response = await makeRequest(driveleechUrl, { maxRedirects: 10 });
         let $ = cheerio.load(response.data);
 
         // Check for JavaScript redirect
@@ -480,7 +509,7 @@ async function resolveDriveleechLink(driveleechUrl) {
             const newPath = redirectMatch[1];
             const newUrl = new URL(newPath, 'https://driveleech.net/').href;
             console.log(`  JS redirect found. Following to: ${newUrl}`);
-            const newResponse = await axiosInstance.get(newUrl, { maxRedirects: 10 });
+            const newResponse = await makeRequest(newUrl, { maxRedirects: 10 });
             $ = cheerio.load(newResponse.data);
         }
 
@@ -628,7 +657,7 @@ async function getTopMoviesStreams(tmdbId, mediaType = 'movie', season = null, e
         console.log(`[TopMovies Cache] MISS for key: ${cacheKey}. Fetching from source.`);
         // 2. Get TMDB info
         const tmdbUrl = `https://api.themoviedb.org/3/movie/${tmdbId}?api_key=${TMDB_API_KEY}`;
-        const tmdbResponse = await makeRequest(tmdbUrl);
+        const tmdbResponse = await axios.get(tmdbUrl);
         const mediaInfo = {
           title: tmdbResponse.data.title,
           year: parseInt((tmdbResponse.data.release_date || '').split('-')[0], 10)
@@ -700,7 +729,7 @@ async function getTopMoviesStreams(tmdbId, mediaType = 'movie', season = null, e
         console.log(`[TopMovies] Processing cached driveleech redirect: ${cachedLink.quality}`);
         
         // First, resolve the driveleech redirect URL to get the final file page URL
-        const response = await axiosInstance.get(cachedLink.driveleechRedirectUrl, { maxRedirects: 10 });
+        const response = await makeRequest(cachedLink.driveleechRedirectUrl, { maxRedirects: 10 });
         let $ = cheerio.load(response.data);
 
         // Check for JavaScript redirect (window.location.replace)
@@ -712,7 +741,7 @@ async function getTopMoviesStreams(tmdbId, mediaType = 'movie', season = null, e
             console.log(`[TopMovies] Resolved redirect to final file page: ${finalFilePageUrl}`);
             
             // Load the final file page
-            const finalResponse = await axiosInstance.get(finalFilePageUrl, { maxRedirects: 10 });
+            const finalResponse = await makeRequest(finalFilePageUrl, { maxRedirects: 10 });
             $ = cheerio.load(finalResponse.data);
         }
 
