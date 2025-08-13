@@ -559,7 +559,7 @@ async function getDramaDripStreams(tmdbId, mediaType, seasonNum, episodeNum) {
             }
             console.log(`[DramaDrip Cache] MISS for key: ${cacheKey}. Fetching from source.`);
             // 2. If cache miss, fetch from source
-            const { data: tmdbData } = await makeRequest(`https://api.themoviedb.org/3/${mediaType}/${tmdbId}?api_key=${TMDB_API_KEY}`);
+            const { data: tmdbData } = await axios.get(`https://api.themoviedb.org/3/${mediaType}/${tmdbId}?api_key=${TMDB_API_KEY}`);
             const title = mediaType === 'tv' ? tmdbData.name : tmdbData.title;
             const year = mediaType === 'tv' ? (tmdbData.first_air_date || '').substring(0, 4) : (tmdbData.release_date || '').substring(0, 4);
 

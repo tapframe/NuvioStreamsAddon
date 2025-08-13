@@ -37,7 +37,7 @@ async function getUHDMoviesDomain() {
 
   try {
     console.log('[UHDMovies] Fetching latest domain...');
-    const response = await axios.get('https://raw.githubusercontent.com/phisher98/TVVVV/refs/heads/main/domains.json', { timeout: 10000 });
+    const response = await makeRequest('https://raw.githubusercontent.com/phisher98/TVVVV/refs/heads/main/domains.json', { timeout: 10000 });
     if (response.data && response.data.UHDMovies) {
       uhdMoviesDomain = response.data.UHDMovies;
       domainCacheTimestamp = now;
@@ -633,12 +633,24 @@ async function tryInstantDownload($) {
       const formData = new FormData();
       formData.append('keys', keys);
 
-      const apiResponse = await axiosInstance.post(apiUrl, formData, {
-        headers: {
-          ...formData.getHeaders(),
-          'x-token': new URL(instantDownloadLink).hostname
-        }
-      });
+      let apiResponse;
+      if (UHDMOVIES_PROXY_URL) {
+        const proxiedApiUrl = `${UHDMOVIES_PROXY_URL}${encodeURIComponent(apiUrl)}`;
+        console.log(`[UHDMovies] Making proxied POST request for Instant Download API to: ${apiUrl}`);
+        apiResponse = await axiosInstance.post(proxiedApiUrl, formData, {
+          headers: {
+            ...formData.getHeaders(),
+            'x-token': new URL(instantDownloadLink).hostname
+          }
+        });
+      } else {
+        apiResponse = await axiosInstance.post(apiUrl, formData, {
+          headers: {
+            ...formData.getHeaders(),
+            'x-token': new URL(instantDownloadLink).hostname
+          }
+        });
+      }
 
       if (apiResponse.data && apiResponse.data.url) {
         let finalUrl = apiResponse.data.url;
@@ -741,12 +753,26 @@ async function validateVideoUrl(url, timeout = 10000) {
 
   try {
     console.log(`[UHDMovies] Validating URL: ${url.substring(0, 100)}...`);
-    const response = await axiosInstance.head(url, {
-      timeout,
-      headers: {
-        'Range': 'bytes=0-1' // Just request first byte to test
-      }
-    });
+    
+    // Use proxy for URL validation if enabled
+    let response;
+    if (UHDMOVIES_PROXY_URL) {
+      const proxiedUrl = `${UHDMOVIES_PROXY_URL}${encodeURIComponent(url)}`;
+      console.log(`[UHDMovies] Making proxied HEAD request for validation to: ${url}`);
+      response = await axiosInstance.head(proxiedUrl, {
+        timeout,
+        headers: {
+          'Range': 'bytes=0-1' // Just request first byte to test
+        }
+      });
+    } else {
+      response = await axiosInstance.head(url, {
+        timeout,
+        headers: {
+          'Range': 'bytes=0-1' // Just request first byte to test
+        }
+      });
+    }
 
     // Check if status is OK (200-299) or partial content (206)
     if (response.status >= 200 && response.status < 400) {
@@ -964,15 +990,11 @@ function parseSize(sizeString) {
   return 0;
 }
 
-// New function to resolve the tech.unblockedgames.world links
-async function resolveSidToDriveleech(sidUrl) {
-  console.log(`[UHDMovies] Resolving SID link: ${sidUrl}`);
-  const { origin } = new URL(sidUrl);
-  const jar = new CookieJar();
-
-  // Get the wrapper function from dynamic import
+// Helper function to create a proxied session for SID resolution
+const createProxiedSession = async (jar) => {
   const { wrapper } = await getAxiosCookieJarSupport();
-  const session = wrapper(axios.create({
+  
+  const sessionConfig = {
     jar,
     headers: {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36',
@@ -981,7 +1003,47 @@ async function resolveSidToDriveleech(sidUrl) {
       'Connection': 'keep-alive',
       'Upgrade-Insecure-Requests': '1'
     }
-  }));
+  };
+
+  // Add proxy configuration if UHDMOVIES_PROXY_URL is set
+  if (UHDMOVIES_PROXY_URL) {
+    console.log(`[UHDMovies] Creating SID session with proxy: ${UHDMOVIES_PROXY_URL}`);
+    sessionConfig.transformRequest = [(data, headers) => {
+      return data;
+    }];
+  }
+
+  const session = wrapper(axios.create(sessionConfig));
+
+  // If proxy is enabled, wrap the session methods to use proxy
+  if (UHDMOVIES_PROXY_URL) {
+    const originalGet = session.get.bind(session);
+    const originalPost = session.post.bind(session);
+
+    session.get = async (url, options = {}) => {
+      const proxiedUrl = `${UHDMOVIES_PROXY_URL}${encodeURIComponent(url)}`;
+      console.log(`[UHDMovies] Making proxied SID GET request to: ${url}`);
+      return originalGet(proxiedUrl, options);
+    };
+
+    session.post = async (url, data, options = {}) => {
+      const proxiedUrl = `${UHDMOVIES_PROXY_URL}${encodeURIComponent(url)}`;
+      console.log(`[UHDMovies] Making proxied SID POST request to: ${url}`);
+      return originalPost(proxiedUrl, data, options);
+    };
+  }
+
+  return session;
+};
+
+// New function to resolve the tech.unblockedgames.world links
+async function resolveSidToDriveleech(sidUrl) {
+  console.log(`[UHDMovies] Resolving SID link: ${sidUrl}`);
+  const { origin } = new URL(sidUrl);
+  const jar = new CookieJar();
+
+  // Create session with proxy support
+  const session = await createProxiedSession(jar);
 
   try {
     // Step 0: Get the _wp_http value
