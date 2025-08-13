@@ -21,6 +21,40 @@ const HEADERS = {
     'Cache-Control': 'no-cache',
     'Pragma': 'no-cache'
 };
+// Global forward-proxy for all outbound requests made by this provider (acts like a VPN, does not rewrite URLs)
+const GLOBAL_PROXY_URL = process.env.ANIMEPAHE_PROXY_GLOBAL || process.env.animepahe_proxy_global || null;
+function buildAxiosProxyConfig(proxyUrl) {
+    try {
+        const parsed = new URL(proxyUrl);
+        const proxyConfig = {
+            host: parsed.hostname,
+            port: parseInt(parsed.port || (parsed.protocol === 'https:' ? '443' : '80'))
+        };
+        if (parsed.username || parsed.password) {
+            proxyConfig.auth = {
+                username: decodeURIComponent(parsed.username),
+                password: decodeURIComponent(parsed.password || '')
+            };
+        }
+        return proxyConfig;
+    } catch (err) {
+        console.warn(`[AnimePahe] Invalid ANIMEPAHE_PROXY_GLOBAL value "${proxyUrl}": ${err.message}`);
+        return null;
+    }
+}
+const AXIOS_BASE_CONFIG = {
+    headers: HEADERS
+};
+if (GLOBAL_PROXY_URL) {
+    const proxyCfg = buildAxiosProxyConfig(GLOBAL_PROXY_URL);
+    if (proxyCfg) {
+        AXIOS_BASE_CONFIG.proxy = proxyCfg;
+        console.log(`[AnimePahe] Global proxy enabled for all requests via ${proxyCfg.host}:${proxyCfg.port}`);
+    } else {
+        console.warn('[AnimePahe] Global proxy is set but invalid; continuing without proxy.');
+    }
+}
+const axiosClient = axios.create(AXIOS_BASE_CONFIG);
 const TMDB_API_KEY = process.env.TMDB_API_KEY || '5b9790d9305dca8713b9a0afad42ea8d';
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 1000;
@@ -73,15 +107,11 @@ ensureCacheDir();
 
 // --- Helper Functions ---
 async function fetchWithRetry(url, options = {}, maxRetries = MAX_RETRIES) {
-    const useProxy = process.env.ANIMEPAHE_USE_PROXY !== 'false';
     let lastError;
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
-            // Apply proxy if enabled and URL is not already proxied
-            const requestUrl = useProxy && !url.includes(PROXY_URL) ? `${PROXY_URL}${url}` : url;
-            
-            const response = await axios({
-                url: requestUrl,
+            const response = await axiosClient({
+                url,
                 ...options,
                 headers: {
                     ...HEADERS,
@@ -108,7 +138,7 @@ async function getTmdbAnimeDetails(tmdbId, mediaType) {
     console.log(`[AnimePahe] Fetching TMDB details for ${mediaType} ID: ${tmdbId}`);
     
     try {
-        const response = await axios.get(url);
+        const response = await axiosClient.get(url);
         const data = response.data;
         return {
             title: data.title || data.name,
@@ -209,7 +239,7 @@ async function getVideoLinks(animeSession, episodeSession) {
     try {
         const episodeUrl = `${PROXY_URL}${MAIN_URL}/play/${animeSession}/${episodeSession}`;
         console.log(`[AnimePahe] Fetching episode page: ${episodeUrl}`);
-        const response = await axios.get(episodeUrl, { headers: HEADERS });
+        const response = await axiosClient.get(episodeUrl, { headers: HEADERS });
         console.log(`[AnimePahe] Episode page status: ${response.status}`);
         const $ = cheerio.load(response.data);
         
@@ -250,11 +280,8 @@ async function getVideoLinks(animeSession, episodeSession) {
 async function extractPahe(url) {
     console.log(`[AnimePahe] extractPahe → Starting extraction for: ${url}`);
     try {
-        const useProxy = process.env.ANIMEPAHE_USE_PROXY !== 'false';
-        
         // Step 1: Get redirect location from /i endpoint
-        const redirectUrl = useProxy ? `${PROXY_URL}${url}/i` : `${url}/i`;
-        const redirectResponse = await axios.get(redirectUrl, {
+        const redirectResponse = await axiosClient.get(`${url}/i`, {
             maxRedirects: 0,
             validateStatus: (status) => status >= 200 && status < 400,
             headers: HEADERS
@@ -270,8 +297,7 @@ async function extractPahe(url) {
         console.log(`[AnimePahe] Kwik URL: ${kwikUrl}`);
         
         // Step 2: Get the Kwik page content
-        const kwikRequestUrl = useProxy ? `${PROXY_URL}${kwikUrl}` : kwikUrl;
-        const kwikResponse = await axios.get(kwikRequestUrl, {
+        const kwikResponse = await axiosClient.get(kwikUrl, {
             headers: {
                 ...HEADERS,
                 'Referer': 'https://kwik.cx/'
@@ -309,8 +335,7 @@ async function extractPahe(url) {
         const formData = new FormData();
         formData.append('_token', token);
         
-        const postRequestUrl = useProxy ? `${PROXY_URL}${postUrl}` : postUrl;
-        const finalResponse = await axios.post(postRequestUrl, formData, {
+        const finalResponse = await axiosClient.post(postUrl, formData, {
             headers: {
                 ...HEADERS,
                 'Referer': kwikResponse.request.res.responseUrl,
@@ -381,7 +406,7 @@ function decryptPahe(fullString, key, v1, v2) {
 async function getAnimePaheStreams(tmdbId, title, mediaType, seasonNum = null, episodeNum = null, seasonTitle = null) {
     console.log(`[AnimePahe] Attempting to fetch streams for TMDB ID: ${tmdbId}, Type: ${mediaType}${mediaType === 'tv' ? `, S:${seasonNum}E:${episodeNum}` : ''}`);
     
-    const cacheKey = `animepahe_final_v2_${tmdbId}_${mediaType}${seasonNum ? `_s${seasonNum}e${episodeNum}` : ''}`;
+    const cacheKey = `animepahe_final_v1_${tmdbId}_${mediaType}${seasonNum ? `_s${seasonNum}e${episodeNum}` : ''}`;
 
     try {
         // 1. Check cache first
@@ -407,7 +432,7 @@ async function getAnimePaheStreams(tmdbId, title, mediaType, seasonNum = null, e
         // For TV shows, we need both season and episode numbers
         if (mediaType === 'tv' && (seasonNum === null || episodeNum === null)) {
             console.error('[AnimePahe] Missing season or episode number for TV show');
-            await saveToCache(cacheKey, [], '', null, 259200); // Cache empty result with 3-day TTL
+            await saveToCache(cacheKey, []); // Cache empty result
             return [];
         }
         
@@ -559,14 +584,14 @@ async function getAnimePaheStreams(tmdbId, title, mediaType, seasonNum = null, e
         
         console.log(`[AnimePahe] Found ${streams.length} streams`);
         
-        // Save to cache with 3-day TTL (259200 seconds)
-        await saveToCache(cacheKey, streams, '', null, 259200);
+        // Save to cache
+        await saveToCache(cacheKey, streams);
         
         return streams;
     } catch (error) {
         console.error(`[AnimePahe] Error getting streams: ${error.message}`);
-        // Cache empty result to prevent re-scraping with 3-day TTL
-        await saveToCache(cacheKey, [], '', null, 259200);
+        // Cache empty result to prevent re-scraping
+        await saveToCache(cacheKey, []);
         return [];
     }
 }
