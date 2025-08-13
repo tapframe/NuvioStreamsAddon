@@ -1897,11 +1897,6 @@
                         <span class="provider-detail">May contain 4K/DV/HDR</span>
                     </div>
                     <div class="provider-item">
-                        <div class="provider-icon soapertv-icon">🧼</div>
-                        <div class="provider-name">Soaper TV</div>
-                        <span class="provider-detail">Auto Quality</span>
-                    </div>
-                    <div class="provider-item">
                         <div class="provider-icon vidsrc-icon">🎬</div>
                         <div class="provider-name">VidSrc</div>
                         <span class="provider-detail">Auto Quality</span>
@@ -1921,10 +1916,10 @@
                         <div class="provider-name">UHDMovies</div>
                         <span class="provider-detail">Multiple Qualities</span>
                     </div>
-                    <div class="provider-item">
+                    <div class="provider-item" style="opacity: 0.5;">
                         <div class="provider-icon moviesmod-icon">🍿</div>
                         <div class="provider-name">MoviesMod</div>
-                        <span class="provider-detail">Multi-Source</span>
+                        <span class="provider-detail">Disabled by default</span>
                     </div>
                     <div class="provider-item">
                         <div class="provider-icon khdhub-icon">🎬</div>
@@ -1956,27 +1951,12 @@
                 <div class="full-width disclaimer"
                     style="margin-top: 1rem; padding-bottom: 0.5rem; text-align: center;">
                     <div class="disclaimer-header" style="justify-content: center;">
-                        <span class="disclaimer-icon" style="color: #ff3a3a;">🔌</span>
-                        <span style="color: var(--text-light);">Offline Providers</span>
+                        <span class="disclaimer-icon" style="color: #ff3a3a;">⚠️</span>
+                        <span style="color: var(--text-light);">Provider Availability Notice</span>
                     </div>
                     <div class="disclaimer-content"
-                        style="justify-content: space-around; margin-top: 0.5rem; text-align: center; gap: 0.5rem;">
-                        <div class="provider-item" style="flex-direction: column; min-width: 80px;">
-                            <div class="provider-icon cuevana-icon">🇨</div>
-                            <div class="provider-name" style="font-size: 0.8rem;">Cuevana</div>
-                        </div>
-                        <div class="provider-item" style="flex-direction: column; min-width: 80px;">
-                            <div class="provider-icon hianime-icon">🍥</div>
-                            <div class="provider-name" style="font-size: 0.8rem;">Hianime</div>
-                        </div>
-                        <div class="provider-item" style="flex-direction: column; min-width: 80px;">
-                            <div class="provider-icon xprime-icon">⚡</div>
-                            <div class="provider-name" style="font-size: 0.8rem;">Xprime.tv</div>
-                        </div>
-                        <div class="provider-item" style="flex-direction: column; min-width: 80px;">
-                            <div class="provider-icon hollymovie-icon">🎬</div>
-                            <div class="provider-name" style="font-size: 0.8rem;">HollyMovieHD</div>
-                        </div>
+                        style="justify-content: center; margin-top: 0.5rem; text-align: center;">
+                        <p>Some providers are disabled by default due to server overload: <strong>MoviesMod</strong>, <strong>MoviesDrive</strong>.</p>
                     </div>
                 </div>
 
@@ -2050,19 +2030,7 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="provider-checkbox-item"
-                            style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
-                            <div style="display: flex; align-items: center;">
-                                <input type="checkbox" id="providerSoapertv" name="providerSelect" value="soapertv"
-                                    checked style="margin-right: 0.5rem; accent-color: var(--primary);">
-                                <label for="providerSoapertv" style="font-size: 0.9rem;">Soaper TV <span
-                                        style="font-size: 0.75rem; color: var(--text-light);">(~7.6s)</span></label>
-                            </div>
-                            <select id="qualitySoapertv" name="providerQuality" data-provider="soapertv"
-                                class="provider-sort-select" disabled="">
-                                <option value="all" selected="">All Qualities</option>
-                            </select>
-                        </div>
+                        
                         <div class="provider-checkbox-item"
                             style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
                             <div style="display: flex; align-items: center;">
@@ -2150,12 +2118,12 @@
                         </div>
                         <div class="provider-checkbox-item"
                             style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
-                            <div style="display: flex; align-items: center;">
+                            <div style="display: flex; align-items: center; opacity: 0.7;">
                                 <input type="checkbox" id="providerMoviesmod" name="providerSelect" value="moviesmod"
-                                    checked="" style="margin-right: 0.5rem; accent-color: var(--primary);">
+                                    style="margin-right: 0.5rem; accent-color: var(--primary);" disabled>
                                 <label for="providerMoviesmod" style="font-size: 0.9rem;">MoviesMod <span
                                         style="font-size: 0.75rem; color: var(--text-light);">(~8.5s)</span> <span
-                                        style="font-size: 0.75rem; color: var(--text-light);">Multi-Source</span></label>
+                                        style="font-size: 0.75rem; color: var(--text-light);">Disabled by default</span></label>
                             </div>
                             <select id="qualityMoviesmod" name="providerQuality" data-provider="moviesmod"
                                 class="provider-sort-select">
