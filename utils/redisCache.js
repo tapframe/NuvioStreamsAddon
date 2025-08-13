@@ -145,7 +145,7 @@ class RedisCache {
         return null;
     }
 
-    async saveToCache(cacheKey, content, subDir = '', cacheDir = null) {
+    async saveToCache(cacheKey, content, subDir = '', cacheDir = null, ttlSeconds = null) {
         if (process.env.DISABLE_CACHE === 'true') {
             console.log(`[${this.providerName} Cache] CACHE DISABLED: Skipping write for ${path.join(subDir, cacheKey)}`);
             return;
@@ -154,11 +154,16 @@ class RedisCache {
         const dataToSave = typeof content === 'string' ? content : JSON.stringify(content, null, 2);
         const fullCacheKey = subDir ? `${this.providerName.toLowerCase()}:${subDir}:${cacheKey}` : `${this.providerName.toLowerCase()}:${cacheKey}`;
 
-        // Attempt to save to Redis first (no expiration - permanent cache)
+        // Attempt to save to Redis first with optional TTL
         if (this.redisClient && this.redisClient.status === 'ready') {
             try {
-                await this.redisClient.set(fullCacheKey, dataToSave);
-                console.log(`[${this.providerName} Cache] SAVED TO REDIS CACHE: ${fullCacheKey} (PERMANENT - no expiration)`);
+                if (ttlSeconds) {
+                    await this.redisClient.setex(fullCacheKey, ttlSeconds, dataToSave);
+                    console.log(`[${this.providerName} Cache] SAVED TO REDIS CACHE: ${fullCacheKey} (TTL: ${ttlSeconds}s)`);
+                } else {
+                    await this.redisClient.set(fullCacheKey, dataToSave);
+                    console.log(`[${this.providerName} Cache] SAVED TO REDIS CACHE: ${fullCacheKey} (PERMANENT - no expiration)`);
+                }
             } catch (redisError) {
                 console.warn(`[${this.providerName} Cache] REDIS CACHE WRITE ERROR for ${fullCacheKey}: ${redisError.message}. Proceeding with file system cache.`);
             }

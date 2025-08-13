@@ -381,7 +381,7 @@ function decryptPahe(fullString, key, v1, v2) {
 async function getAnimePaheStreams(tmdbId, title, mediaType, seasonNum = null, episodeNum = null, seasonTitle = null) {
     console.log(`[AnimePahe] Attempting to fetch streams for TMDB ID: ${tmdbId}, Type: ${mediaType}${mediaType === 'tv' ? `, S:${seasonNum}E:${episodeNum}` : ''}`);
     
-    const cacheKey = `animepahe_final_v1_${tmdbId}_${mediaType}${seasonNum ? `_s${seasonNum}e${episodeNum}` : ''}`;
+    const cacheKey = `animepahe_final_v2_${tmdbId}_${mediaType}${seasonNum ? `_s${seasonNum}e${episodeNum}` : ''}`;
 
     try {
         // 1. Check cache first
@@ -407,7 +407,7 @@ async function getAnimePaheStreams(tmdbId, title, mediaType, seasonNum = null, e
         // For TV shows, we need both season and episode numbers
         if (mediaType === 'tv' && (seasonNum === null || episodeNum === null)) {
             console.error('[AnimePahe] Missing season or episode number for TV show');
-            await saveToCache(cacheKey, []); // Cache empty result
+            await saveToCache(cacheKey, [], '', null, 259200); // Cache empty result with 3-day TTL
             return [];
         }
         
@@ -559,14 +559,14 @@ async function getAnimePaheStreams(tmdbId, title, mediaType, seasonNum = null, e
         
         console.log(`[AnimePahe] Found ${streams.length} streams`);
         
-        // Save to cache
-        await saveToCache(cacheKey, streams);
+        // Save to cache with 3-day TTL (259200 seconds)
+        await saveToCache(cacheKey, streams, '', null, 259200);
         
         return streams;
     } catch (error) {
         console.error(`[AnimePahe] Error getting streams: ${error.message}`);
-        // Cache empty result to prevent re-scraping
-        await saveToCache(cacheKey, []);
+        // Cache empty result to prevent re-scraping with 3-day TTL
+        await saveToCache(cacheKey, [], '', null, 259200);
         return [];
     }
 }
