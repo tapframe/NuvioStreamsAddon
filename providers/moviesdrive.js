@@ -7,11 +7,59 @@ const axios = require('axios');
 const https = require('https');
 const http = require('http');
 const cheerio = require('cheerio');
+const fs = require('fs').promises;
+const path = require('path');
+const RedisCache = require('../utils/redisCache');
 
 // Using Cheerio for HTML parsing (more memory efficient than JSDOM)
 
+// Cache configuration
+const CACHE_ENABLED = process.env.DISABLE_CACHE !== 'true';
+console.log(`[MoviesDrive] Internal cache is ${CACHE_ENABLED ? 'enabled' : 'disabled'}.`);
+const CACHE_DIR = process.env.VERCEL ? path.join('/tmp', '.moviesdrive_cache') : path.join(__dirname, '.cache', 'moviesdrive');
+
+// Initialize Redis cache
+const redisCache = new RedisCache('MoviesDrive');
+
 // Main URL for MoviesDrive
 let mainUrl = 'https://moviesdrive.design';
+
+// Cache helper functions
+const ensureCacheDir = async () => {
+    if (!CACHE_ENABLED) return;
+    
+    try {
+        await fs.mkdir(CACHE_DIR, { recursive: true });
+    } catch (error) {
+        console.error(`[MoviesDrive] Error creating cache directory: ${error.message}`);
+    }
+};
+
+const getFromCache = async (key) => {
+    if (!CACHE_ENABLED) return null;
+
+    // Try Redis cache first, then fallback to file system
+    const cachedData = await redisCache.getFromCache(key, '', CACHE_DIR);
+    if (cachedData) {
+        return cachedData.data || cachedData; // Support both new format (data field) and legacy format
+    }
+
+    return null;
+};
+
+const saveToCache = async (key, data) => {
+    if (!CACHE_ENABLED) return;
+
+    const cacheData = {
+        data: data
+    };
+
+    // Save to both Redis and file system
+    await redisCache.saveToCache(key, cacheData, '', CACHE_DIR);
+};
+
+// Initialize cache directory
+ensureCacheDir();
 
 // Function to make HTTP requests without async/await
 function makeRequest(url, callback, allowRedirects = true) {
@@ -78,64 +126,92 @@ function getBaseUrl(callback) {
     });
 }
 
-// Function to search for movies/shows
-function searchContent(query, callback) {
-    const searchResults = [];
-    let pagesChecked = 0;
-    const maxPages = 7;
+// Function to search for movies/shows with caching
+async function searchContent(query, callback) {
+    const cacheKey = `search_${query.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
     
-    function searchPage(page) {
-        const searchUrl = `${mainUrl}/page/${page}/?s=${encodeURIComponent(query)}`;
+    try {
+        // Check cache first
+        let cachedResults = await getFromCache(cacheKey);
+        if (cachedResults && cachedResults.length > 0) {
+            console.log(`[MoviesDrive] Cache HIT for search: ${query}. Using ${cachedResults.length} cached results.`);
+            callback(cachedResults);
+            return;
+        }
         
-        makeRequest(searchUrl, (err, html) => {
-            if (err) {
-                console.error(`Error searching page ${page}:`, err.message);
+        if (cachedResults && cachedResults.length === 0) {
+            console.log(`[MoviesDrive] Cache contains empty data for search: ${query}. Refetching from source.`);
+        } else {
+            console.log(`[MoviesDrive] Cache MISS for search: ${query}. Fetching from source.`);
+        }
+        
+        const searchResults = [];
+        let pagesChecked = 0;
+        const maxPages = 7;
+        
+        function searchPage(page) {
+            const searchUrl = `${mainUrl}/page/${page}/?s=${encodeURIComponent(query)}`;
+            
+            makeRequest(searchUrl, (err, html) => {
+                if (err) {
+                    console.error(`Error searching page ${page}:`, err.message);
+                    pagesChecked++;
+                    if (pagesChecked === maxPages) {
+                        // Cache empty result to avoid repeated failed requests
+                        saveToCache(cacheKey, searchResults);
+                        callback(searchResults);
+                    }
+                    return;
+                }
+                
+                const $ = cheerio.load(html);
+                const movieElements = $('ul.recent-movies > li');
+                
+                if (movieElements.length === 0) {
+                    // Cache the results (even if empty)
+                    saveToCache(cacheKey, searchResults);
+                    callback(searchResults);
+                    return;
+                }
+                
+                movieElements.each((index, element) => {
+                    const $element = $(element);
+                    const titleElement = $element.find('figure > img');
+                    const linkElement = $element.find('figure > a');
+                    const posterElement = $element.find('figure > img');
+                    
+                    if (titleElement.length && linkElement.length) {
+                        const title = titleElement.attr('title');
+                        const href = linkElement.attr('href');
+                        const posterUrl = posterElement.attr('src') || '';
+                        
+                        if (title && href) {
+                            searchResults.push({
+                                title: title.replace('Download ', ''),
+                                url: href,
+                                poster: posterUrl || ''
+                            });
+                        }
+                    }
+                });
+                
                 pagesChecked++;
-                if (pagesChecked === maxPages) {
+                if (pagesChecked < maxPages && movieElements.length > 0) {
+                    searchPage(page + 1);
+                } else {
+                    // Cache the final results
+                    console.log(`[MoviesDrive] Caching ${searchResults.length} search results for: ${query}`);
+                    saveToCache(cacheKey, searchResults);
                     callback(searchResults);
                 }
-                return;
-            }
-            
-            const $ = cheerio.load(html);
-            const movieElements = $('ul.recent-movies > li');
-            
-            if (movieElements.length === 0) {
-                callback(searchResults);
-                return;
-            }
-            
-            movieElements.each((index, element) => {
-                const $element = $(element);
-                const titleElement = $element.find('figure > img');
-                const linkElement = $element.find('figure > a');
-                const posterElement = $element.find('figure > img');
-                
-                if (titleElement.length && linkElement.length) {
-                    const title = titleElement.attr('title');
-                    const href = linkElement.attr('href');
-                    const posterUrl = posterElement.attr('src') || '';
-                    
-                    if (title && href) {
-                        searchResults.push({
-                            title: title.replace('Download ', ''),
-                            url: href,
-                            poster: posterUrl || ''
-                        });
-                    }
-                }
             });
-            
-            pagesChecked++;
-            if (pagesChecked < maxPages && movieElements.length > 0) {
-                searchPage(page + 1);
-            } else {
-                callback(searchResults);
-            }
-        });
+        }
+        
+        searchPage(1);
+    } catch (error) {
+        console.error(`[MoviesDrive] Error in searchContent:`, error.message);
+        callback([]);
     }
-    
-    searchPage(1);
 }
 
 // Function to extract quality from filename
@@ -533,151 +609,183 @@ function findBestMatch(query, searchResults) {
     return scoredResults[0];
 }
 
-// Function to extract streaming links from a movie/show page
-function extractStreamingLinks(url, callback, episodeInfo = null) {
-    makeRequest(url, (err, html) => {
-        if (err) {
-            console.error('Error fetching movie page:', err.message);
-            callback([]);
-            return;
-        }
-        
-        const $ = cheerio.load(html);
-        
-        // Get title and determine if it's a series or movie
-        const titleElement = $('meta[property="og:title"]');
-        const title = titleElement.length ? titleElement.attr('content').replace('Download ', '') : '';
-        
-        // Get download buttons
-        const buttons = $('h5 > a');
-        let downloadLinks = [];
-        
-        buttons.each((index, button) => {
-            const $button = $(button);
-            const buttonText = $button.text() || '';
-            if (!buttonText.toLowerCase().includes('zip')) {
-                const href = $button.attr('href');
-                if (href) {
-                    downloadLinks.push(href);
+// Process cached download links to extract fresh streaming links
+function processDownloadLinks(downloadLinks, callback, episodeInfo = null) {
+    const allStreamingLinks = [];
+    let processedPages = 0;
+    
+    downloadLinks.forEach(downloadLink => {
+        makeRequest(downloadLink, (err, pageHtml) => {
+            if (err) {
+                console.error('Error fetching download page:', err.message);
+                processedPages++;
+                if (processedPages === downloadLinks.length) {
+                    callback(allStreamingLinks);
                 }
+                return;
             }
-        });
-        
-        if (downloadLinks.length === 0) {
-            callback([]);
-            return;
-        }
-        
-        // Process each download page to extract streaming links
-        const allStreamingLinks = [];
-        let processedPages = 0;
-        
-        downloadLinks.forEach(downloadLink => {
-            makeRequest(downloadLink, (err, pageHtml) => {
-                if (err) {
-                    console.error('Error fetching download page:', err.message);
-                    processedPages++;
-                    if (processedPages === downloadLinks.length) {
-                        callback(allStreamingLinks);
-                    }
-                    return;
-                }
+            
+            const page$ = cheerio.load(pageHtml);
+            
+            // Look for streaming links (HubCloud, GDFlix, GDLink)
+            const streamingElements = page$('a');
+            const intermediateLinks = [];
+            
+            streamingElements.each((index, element) => {
+                const $element = page$(element);
+                const href = $element.attr('href') || '';
+                const text = $element.text() || '';
                 
-                const page$ = cheerio.load(pageHtml);
-                
-                // Look for streaming links (HubCloud, GDFlix, GDLink)
-                const streamingElements = page$('a');
-                const intermediateLinks = [];
-                
-                streamingElements.each((index, element) => {
-                    const $element = page$(element);
-                    const href = $element.attr('href') || '';
-                    const text = $element.text() || '';
+                if (href && (href.toLowerCase().includes('hubcloud') || 
+                            href.toLowerCase().includes('gdflix') || 
+                            href.toLowerCase().includes('gdlink'))) {
                     
-                    if (href && (href.toLowerCase().includes('hubcloud') || 
-                                href.toLowerCase().includes('gdflix') || 
-                                href.toLowerCase().includes('gdlink'))) {
-                        
-                        let source = 'Unknown';
-                        if (text.toLowerCase().includes('hubcloud') || href.toLowerCase().includes('hubcloud')) {
-                            source = 'HubCloud';
-                        } else if (text.toLowerCase().includes('gdflix') || href.toLowerCase().includes('gdflix')) {
-                            source = 'GDFlix';
-                        } else if (text.toLowerCase().includes('gdlink') || href.toLowerCase().includes('gdlink')) {
-                            source = 'GDLink';
-                        }
-                        
-                        intermediateLinks.push({
-                            url: href,
-                            source: source
-                        });
+                    let source = 'Unknown';
+                    if (text.toLowerCase().includes('hubcloud') || href.toLowerCase().includes('hubcloud')) {
+                        source = 'HubCloud';
+                    } else if (text.toLowerCase().includes('gdflix') || href.toLowerCase().includes('gdflix')) {
+                        source = 'GDFlix';
+                    } else if (text.toLowerCase().includes('gdlink') || href.toLowerCase().includes('gdlink')) {
+                        source = 'GDLink';
                     }
-                });
-                
-                // Now extract final URLs from each intermediate link
-                let extractedCount = 0;
-                const totalToExtract = intermediateLinks.length;
-                
-                if (totalToExtract === 0) {
-                    processedPages++;
-                    if (processedPages === downloadLinks.length) {
-                        callback(allStreamingLinks);
-                    }
-                    return;
+                    
+                    intermediateLinks.push({
+                        url: href,
+                        source: source
+                    });
                 }
-                
-                intermediateLinks.forEach(intermediate => {
-                    if (intermediate.source === 'HubCloud') {
-                        extractHubCloudLinks(intermediate.url, title, (hubCloudLinks) => {
-                            // Filter for specific episode if requested
-                            let filteredLinks = hubCloudLinks;
-                            if (episodeInfo && episodeInfo.isEpisode) {
-                                filteredLinks = hubCloudLinks.filter(link => {
-                                    return matchesEpisode(link.fileName || link.title || '', episodeInfo);
-                                });
-                            }
-                            allStreamingLinks.push(...filteredLinks);
-                            extractedCount++;
-                            
-                            if (extractedCount === totalToExtract) {
-                                processedPages++;
-                                if (processedPages === downloadLinks.length) {
-                                    callback(allStreamingLinks);
-                                }
-                            }
-                        });
-                    } else if (intermediate.source === 'GDFlix' || intermediate.source === 'GDLink') {
-                        extractGDFlixLinks(intermediate.url, title, (gdFlixLinks) => {
-                            // Filter for specific episode if requested
-                            let filteredLinks = gdFlixLinks;
-                            if (episodeInfo && episodeInfo.isEpisode) {
-                                filteredLinks = gdFlixLinks.filter(link => {
-                                    return matchesEpisode(link.fileName || link.title || '', episodeInfo);
-                                });
-                            }
-                            allStreamingLinks.push(...filteredLinks);
-                            extractedCount++;
-                            
-                            if (extractedCount === totalToExtract) {
-                                processedPages++;
-                                if (processedPages === downloadLinks.length) {
-                                    callback(allStreamingLinks);
-                                }
-                            }
-                        });
-                    } else {
+            });
+            
+            // Now extract final URLs from each intermediate link
+            let extractedCount = 0;
+            const totalToExtract = intermediateLinks.length;
+            
+            if (totalToExtract === 0) {
+                processedPages++;
+                if (processedPages === downloadLinks.length) {
+                    callback(allStreamingLinks);
+                }
+                return;
+            }
+            
+            intermediateLinks.forEach(intermediate => {
+                if (intermediate.source === 'HubCloud') {
+                    extractHubCloudLinks(intermediate.url, '', (hubCloudLinks) => {
+                        // Filter for specific episode if requested
+                        let filteredLinks = hubCloudLinks;
+                        if (episodeInfo && episodeInfo.isEpisode) {
+                            filteredLinks = hubCloudLinks.filter(link => {
+                                return matchesEpisode(link.fileName || link.title || '', episodeInfo);
+                            });
+                        }
+                        allStreamingLinks.push(...filteredLinks);
                         extractedCount++;
+                        
                         if (extractedCount === totalToExtract) {
                             processedPages++;
                             if (processedPages === downloadLinks.length) {
                                 callback(allStreamingLinks);
                             }
                         }
+                    });
+                } else if (intermediate.source === 'GDFlix' || intermediate.source === 'GDLink') {
+                    extractGDFlixLinks(intermediate.url, '', (gdFlixLinks) => {
+                        // Filter for specific episode if requested
+                        let filteredLinks = gdFlixLinks;
+                        if (episodeInfo && episodeInfo.isEpisode) {
+                            filteredLinks = gdFlixLinks.filter(link => {
+                                return matchesEpisode(link.fileName || link.title || '', episodeInfo);
+                            });
+                        }
+                        allStreamingLinks.push(...filteredLinks);
+                        extractedCount++;
+                        
+                        if (extractedCount === totalToExtract) {
+                            processedPages++;
+                            if (processedPages === downloadLinks.length) {
+                                callback(allStreamingLinks);
+                            }
+                        }
+                    });
+                } else {
+                    extractedCount++;
+                    if (extractedCount === totalToExtract) {
+                        processedPages++;
+                        if (processedPages === downloadLinks.length) {
+                            callback(allStreamingLinks);
+                        }
                     }
-                });
+                }
             });
         });
     });
+}
+
+// Function to extract streaming links from a movie/show page
+async function extractStreamingLinks(url, callback, episodeInfo = null) {
+    const episodeKey = episodeInfo && episodeInfo.isEpisode ? `_S${episodeInfo.season}E${episodeInfo.episode}` : '';
+    const cacheKey = `download_links_${url.replace(/[^a-z0-9]/gi, '_')}${episodeKey}`;
+    
+    try {
+        // Check cache for intermediate download links (not final streaming links)
+        let cachedDownloadLinks = await getFromCache(cacheKey);
+        if (cachedDownloadLinks && cachedDownloadLinks.length > 0) {
+            console.log(`[MoviesDrive] Cache HIT for download links: ${url}. Using ${cachedDownloadLinks.length} cached download links.`);
+            // Process cached download links to get fresh streaming links
+            processDownloadLinks(cachedDownloadLinks, callback, episodeInfo);
+            return;
+        }
+        
+        if (cachedDownloadLinks && cachedDownloadLinks.length === 0) {
+            console.log(`[MoviesDrive] Cache contains empty data for download links: ${url}. Refetching from source.`);
+        } else {
+            console.log(`[MoviesDrive] Cache MISS for download links: ${url}. Fetching from source.`);
+        }
+        
+        makeRequest(url, (err, html) => {
+            if (err) {
+                console.error('Error fetching movie page:', err.message);
+                // Cache empty result to avoid repeated failed requests
+                saveToCache(cacheKey, []);
+                callback([]);
+                return;
+            }
+            
+            const $ = cheerio.load(html);
+            
+            // Get download buttons
+            const buttons = $('h5 > a');
+            let downloadLinks = [];
+            
+            buttons.each((index, button) => {
+                const $button = $(button);
+                const buttonText = $button.text() || '';
+                if (!buttonText.toLowerCase().includes('zip')) {
+                    const href = $button.attr('href');
+                    if (href) {
+                        downloadLinks.push(href);
+                    }
+                }
+            });
+            
+            if (downloadLinks.length === 0) {
+                // Cache empty result
+                saveToCache(cacheKey, []);
+                callback([]);
+                return;
+            }
+            
+            // Cache the download links (intermediate data, not final streaming links)
+            console.log(`[MoviesDrive] Caching ${downloadLinks.length} download links for: ${url}`);
+            saveToCache(cacheKey, downloadLinks);
+            
+            // Process download links to get fresh streaming links
+            processDownloadLinks(downloadLinks, callback, episodeInfo);
+        });
+    } catch (error) {
+        console.error(`[MoviesDrive] Error in extractStreamingLinks:`, error.message);
+        callback([]);
+    }
 }
 
 // Main function to search and extract links
@@ -739,19 +847,52 @@ function promisifyFindStreamingLinks(query) {
 
 // Helper function to get movie/show metadata from TMDB
 async function getTMDBMetadata(tmdbId, mediaType) {
+    const cacheKey = `tmdb_${mediaType}_${tmdbId}`;
+    
     try {
+        // Check cache first
+        if (CACHE_ENABLED) {
+            const cachedData = await getFromCache(cacheKey);
+            if (cachedData !== null) {
+                console.log(`[MoviesDrive] Cache hit for TMDB metadata: ${cacheKey}`);
+                // If cached data is empty, refetch
+                if (!cachedData || Object.keys(cachedData).length === 0) {
+                    console.log(`[MoviesDrive] Cached TMDB data is empty, refetching: ${cacheKey}`);
+                } else {
+                    return cachedData;
+                }
+            } else {
+                console.log(`[MoviesDrive] Cache miss for TMDB metadata: ${cacheKey}`);
+            }
+        }
+        
         const tmdbApiKey = process.env.TMDB_API_KEY;
         if (!tmdbApiKey) {
             console.warn('[MoviesDrive] TMDB API key not found, using TMDB ID only');
-            return null;
+            const result = null;
+            if (CACHE_ENABLED) {
+                await saveToCache(cacheKey, result);
+            }
+            return result;
         }
 
         const url = `https://api.themoviedb.org/3/${mediaType}/${tmdbId}?api_key=${tmdbApiKey}`;
         const response = await axios.get(url, { timeout: 10000 });
-        return response.data;
+        const result = response.data;
+        
+        // Save to cache
+        if (CACHE_ENABLED) {
+            await saveToCache(cacheKey, result);
+        }
+        
+        return result;
     } catch (error) {
         console.error(`[MoviesDrive] Error fetching TMDB metadata:`, error.message);
-        return null;
+        const result = null;
+        if (CACHE_ENABLED) {
+            await saveToCache(cacheKey, result);
+        }
+        return result;
     }
 }
 
