@@ -1,7 +1,7 @@
 const https = require('https');
 const http = require('http');
 const { URL } = require('url');
-const { JSDOM } = require('jsdom');
+const cheerio = require('cheerio');
 const fs = require('fs').promises;
 const path = require('path');
 const RedisCache = require('../utils/redisCache');
@@ -156,8 +156,8 @@ function makeRequest(url, options = {}) {
             res.on('data', chunk => data += chunk);
             res.on('end', () => {
                 if (options.parseHTML && data) {
-                    const dom = new JSDOM(data);
-                    resolve({ document: dom.window.document, body: data, statusCode: res.statusCode, headers: res.headers });
+                    const $ = cheerio.load(data);
+                    resolve({ $: $, body: data, statusCode: res.statusCode, headers: res.headers });
                 } else {
                     resolve({ body: data, statusCode: res.statusCode, headers: res.headers });
                 }
@@ -627,7 +627,7 @@ function extractHubCloudLinks(url, referer) {
     
     return makeRequest(url, { parseHTML: true })
         .then(response => {
-            const document = response.document;
+            const $ = response.$;
             console.log(`[4KHDHub] Got HubCloud page, looking for download element...`);
             
             // Check if this is already a hubcloud.php URL
@@ -636,17 +636,17 @@ function extractHubCloudLinks(url, referer) {
                 href = url;
                 console.log(`[4KHDHub] Already a hubcloud.php URL: ${href}`);
             } else {
-                const downloadElement = document.querySelector('#download');
-                if (!downloadElement) {
+                const downloadElement = $('#download');
+                if (downloadElement.length === 0) {
                     console.log('[4KHDHub] Download element #download not found, trying alternatives...');
                     // Try alternative selectors
                     const alternatives = ['a[href*="hubcloud.php"]', '.download-btn', 'a[href*="download"]'];
                     let found = false;
                     
                     for (const selector of alternatives) {
-                        const altElement = document.querySelector(selector);
-                        if (altElement) {
-                            const rawHref = altElement.getAttribute('href');
+                        const altElement = $(selector).first();
+                        if (altElement.length > 0) {
+                            const rawHref = altElement.attr('href');
                             if (rawHref) {
                                 href = rawHref.startsWith('http') ? rawHref : `${baseUrl.replace(/\/$/, '')}/${rawHref.replace(/^\//, '')}`;
                                 console.log(`[4KHDHub] Found download link with selector ${selector}: ${href}`);
@@ -660,7 +660,7 @@ function extractHubCloudLinks(url, referer) {
                         throw new Error('Download element not found with any selector');
                     }
                 } else {
-                    const rawHref = downloadElement.getAttribute('href');
+                    const rawHref = downloadElement.attr('href');
                     if (!rawHref) {
                         throw new Error('Download href not found');
                     }
@@ -674,14 +674,14 @@ function extractHubCloudLinks(url, referer) {
             return makeRequest(href, { parseHTML: true });
         })
         .then(response => {
-            const document = response.document;
+            const $ = response.$;
             const results = [];
             
             console.log(`[4KHDHub] Processing HubCloud download page...`);
             
             // Extract quality and size information
-            const size = document.querySelector('i#size')?.textContent || '';
-            const header = document.querySelector('div.card-header')?.textContent || '';
+            const size = $('i#size').text() || '';
+            const header = $('div.card-header').text() || '';
             const quality = getIndexQuality(header);
             const headerDetails = cleanTitle(header);
             
@@ -693,19 +693,20 @@ function extractHubCloudLinks(url, referer) {
             // We'll build the title format later after getting actual filename from HEAD request
             
             // Find download buttons
-            const downloadButtons = document.querySelectorAll('div.card-body h2 a.btn');
+            const downloadButtons = $('div.card-body h2 a.btn');
             console.log(`[4KHDHub] Found ${downloadButtons.length} download buttons`);
             
             if (downloadButtons.length === 0) {
                 // Try alternative selectors for download buttons
                 const altSelectors = ['a.btn', '.btn', 'a[href]'];
                 for (const selector of altSelectors) {
-                    const altButtons = document.querySelectorAll(selector);
+                    const altButtons = $(selector);
                     if (altButtons.length > 0) {
                         console.log(`[4KHDHub] Found ${altButtons.length} buttons with alternative selector: ${selector}`);
-                        altButtons.forEach((btn, index) => {
-                            const link = btn.getAttribute('href');
-                            const text = btn.textContent;
+                        altButtons.each((index, btn) => {
+                            const $btn = $(btn);
+                            const link = $btn.attr('href');
+                            const text = $btn.text();
                             console.log(`[4KHDHub] Button ${index + 1}: ${text} -> ${link}`);
                         });
                         break;
@@ -713,10 +714,11 @@ function extractHubCloudLinks(url, referer) {
                 }
             }
             
-            const promises = Array.from(downloadButtons).map((button, index) => {
+            const promises = downloadButtons.get().map((button, index) => {
                 return new Promise((resolve) => {
-                    const link = button.getAttribute('href');
-                    const text = button.textContent;
+                    const $button = $(button);
+                    const link = $button.attr('href');
+                    const text = $button.text();
                     
                     console.log(`[4KHDHub] Processing button ${index + 1}: "${text}" -> ${link}`);
                     
@@ -1052,20 +1054,20 @@ function searchContent(query) {
                 .then(response => ({ response, baseUrl }));
         })
         .then(({ response, baseUrl }) => {
-            const document = response.document;
+            const $ = response.$;
             const results = [];
             
-            const cards = document.querySelectorAll('div.card-grid a');
-            cards.forEach(card => {
-                const title = card.querySelector('h3')?.textContent;
-                const href = card.getAttribute('href');
-                const posterUrl = card.querySelector('img')?.getAttribute('src');
+            $('div.card-grid a').each((index, card) => {
+                const $card = $(card);
+                const title = $card.find('h3').text();
+                const href = $card.attr('href');
+                const posterUrl = $card.find('img').attr('src');
                 
                 // Extract year from movie-card-meta element
-                const metaElement = card.querySelector('.movie-card-meta');
+                const metaElement = $card.find('.movie-card-meta');
                 let year = null;
-                if (metaElement) {
-                    const metaText = metaElement.textContent.trim();
+                if (metaElement.length > 0) {
+                    const metaText = metaElement.text().trim();
                     const yearMatch = metaText.match(/(19|20)\d{2}/);
                     if (yearMatch) {
                         year = parseInt(yearMatch[0]);
@@ -1091,13 +1093,13 @@ function searchContent(query) {
 function loadContent(url) {
     return makeRequest(url, { parseHTML: true })
         .then(response => {
-            const document = response.document;
-            const title = document.querySelector('h1.page-title')?.textContent?.split('(')[0]?.trim() || '';
-            const poster = document.querySelector('meta[property="og:image"]')?.getAttribute('content') || '';
-            const tags = Array.from(document.querySelectorAll('div.mt-2 span.badge')).map(el => el.textContent);
-            const year = parseInt(document.querySelector('div.mt-2 span')?.textContent) || null;
-            const description = document.querySelector('div.content-section p.mt-4')?.textContent?.trim() || '';
-            const trailer = document.querySelector('#trailer-btn')?.getAttribute('data-trailer-url') || '';
+            const $ = response.$;
+            const title = $('h1.page-title').text().split('(')[0].trim() || '';
+            const poster = $('meta[property="og:image"]').attr('content') || '';
+            const tags = $('div.mt-2 span.badge').map((i, el) => $(el).text()).get();
+            const year = parseInt($('div.mt-2 span').text()) || null;
+            const description = $('div.content-section p.mt-4').text().trim() || '';
+            const trailer = $('#trailer-btn').attr('data-trailer-url') || '';
             
             const isMovie = tags.includes('Movies');
             
@@ -1114,8 +1116,9 @@ function loadContent(url) {
             ];
             
             for (const selector of selectors) {
-                const links = Array.from(document.querySelectorAll(selector))
-                    .map(a => a.getAttribute('href'))
+                const links = $(selector)
+                    .map((i, a) => $(a).attr('href'))
+                    .get()
                     .filter(href => href && href.trim());
                 if (links.length > 0) {
                     hrefs = links;
@@ -1126,8 +1129,9 @@ function loadContent(url) {
             
             if (hrefs.length === 0) {
                 console.log('[4KHDHub] No download links found. Available links on page:');
-                const allLinks = Array.from(document.querySelectorAll('a[href]'))
-                    .map(a => a.getAttribute('href'))
+                const allLinks = $('a[href]')
+                    .map((i, a) => $(a).attr('href'))
+                    .get()
                     .filter(href => href && href.includes('http'))
                     .slice(0, 10); // Show first 10 links
                 console.log(allLinks);
@@ -1152,7 +1156,7 @@ function loadContent(url) {
                 const episodesMap = new Map();
                 
                 console.log(`[4KHDHub] Looking for episode structure...`);
-                const seasonItems = document.querySelectorAll('div.episodes-list div.season-item');
+                const seasonItems = $('div.episodes-list div.season-item');
                 console.log(`[4KHDHub] Found ${seasonItems.length} season items`);
                 
                 if (seasonItems.length === 0) {
@@ -1166,7 +1170,7 @@ function loadContent(url) {
                     ];
                     
                     for (const selector of altSelectors) {
-                        const items = document.querySelectorAll(selector);
+                        const items = $(selector);
                         if (items.length > 0) {
                             console.log(`[4KHDHub] Found ${items.length} items with selector: ${selector}`);
                             break;
@@ -1186,19 +1190,22 @@ function loadContent(url) {
                         content.episodes = [];
                     }
                 } else {
-                    seasonItems.forEach(seasonElement => {
-                        const seasonText = seasonElement.querySelector('div.episode-number')?.textContent || '';
+                    seasonItems.each((i, seasonElement) => {
+                        const $seasonElement = $(seasonElement);
+                        const seasonText = $seasonElement.find('div.episode-number').text() || '';
                         const seasonMatch = seasonText.match(/S?([1-9][0-9]*)/); 
                         const season = seasonMatch ? parseInt(seasonMatch[1]) : null;
                         
-                        const episodeItems = seasonElement.querySelectorAll('div.episode-download-item');
-                        episodeItems.forEach(episodeItem => {
-                            const episodeText = episodeItem.querySelector('div.episode-file-info span.badge-psa')?.textContent || '';
+                        const episodeItems = $seasonElement.find('div.episode-download-item');
+                        episodeItems.each((j, episodeItem) => {
+                            const $episodeItem = $(episodeItem);
+                            const episodeText = $episodeItem.find('div.episode-file-info span.badge-psa').text() || '';
                             const episodeMatch = episodeText.match(/Episode-0*([1-9][0-9]*)/); 
                             const episode = episodeMatch ? parseInt(episodeMatch[1]) : null;
                             
-                            const episodeHrefs = Array.from(episodeItem.querySelectorAll('a'))
-                                .map(a => a.getAttribute('href'))
+                            const episodeHrefs = $episodeItem.find('a')
+                                .map((k, a) => $(a).attr('href'))
+                                .get()
                                 .filter(href => href && href.trim());
                             
                             if (season && episode && episodeHrefs.length > 0) {
@@ -1275,13 +1282,13 @@ function extractHubDriveLinks(url, referer) {
     
     return makeRequest(url, { parseHTML: true })
         .then(response => {
-            const document = response.document;
+            const $ = response.$;
             
             console.log(`[4KHDHub] Got HubDrive page, looking for download button...`);
             
             // Extract filename and size information
-            const size = document.querySelector('i#size')?.textContent || '';
-            const header = document.querySelector('div.card-header')?.textContent || '';
+            const size = $('i#size').text() || '';
+            const header = $('div.card-header').text() || '';
             const quality = getIndexQuality(header);
             const headerDetails = cleanTitle(header);
             
@@ -1296,9 +1303,9 @@ function extractHubDriveLinks(url, referer) {
                               .trim();
             
             // Use the exact selector from Kotlin code
-            const downloadBtn = document.querySelector('.btn.btn-primary.btn-user.btn-success1.m-1');
+            const downloadBtn = $('.btn.btn-primary.btn-user.btn-success1.m-1').first();
             
-            if (!downloadBtn) {
+            if (downloadBtn.length === 0) {
                 console.log('[4KHDHub] Primary download button not found, trying alternative selectors...');
                 // Try alternative selectors
                 const alternatives = [
@@ -1310,18 +1317,18 @@ function extractHubDriveLinks(url, referer) {
                 
                 let foundBtn = null;
                 for (const selector of alternatives) {
-                    foundBtn = document.querySelector(selector);
-                    if (foundBtn) {
+                    foundBtn = $(selector).first();
+                    if (foundBtn.length > 0) {
                         console.log(`[4KHDHub] Found download button with selector: ${selector}`);
                         break;
                     }
                 }
                 
-                if (!foundBtn) {
+                if (!foundBtn || foundBtn.length === 0) {
                     throw new Error('Download button not found with any selector');
                 }
                 
-                const href = foundBtn.getAttribute('href');
+                const href = foundBtn.attr('href');
                 if (!href) {
                     throw new Error('Download link not found');
                 }
@@ -1330,7 +1337,7 @@ function extractHubDriveLinks(url, referer) {
                 return processHubDriveLink(href, referer, filename, size, quality);
             }
             
-            const href = downloadBtn.getAttribute('href');
+            const href = downloadBtn.attr('href');
             if (!href) {
                 throw new Error('Download link not found');
             }

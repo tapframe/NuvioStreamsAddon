@@ -6,20 +6,9 @@
 const axios = require('axios');
 const https = require('https');
 const http = require('http');
-const { JSDOM } = require('jsdom');
+const cheerio = require('cheerio');
 
-// Suppress JSDOM warnings
-const originalConsoleError = console.error;
-console.error = function(...args) {
-    const message = args.join(' ');
-    if (message.includes('Could not parse CSS stylesheet') || 
-        message.includes('Error: Could not parse CSS') ||
-        message.includes('jsdom/lib/jsdom') ||
-        message.includes('parse5')) {
-        return; // Suppress CSS and JSDOM parsing warnings
-    }
-    originalConsoleError.apply(console, args);
-};
+// Using Cheerio for HTML parsing (more memory efficient than JSDOM)
 
 // Main URL for MoviesDrive
 let mainUrl = 'https://moviesdrive.design';
@@ -108,24 +97,24 @@ function searchContent(query, callback) {
                 return;
             }
             
-            const dom = new JSDOM(html);
-            const document = dom.window.document;
-            const movieElements = document.querySelectorAll('ul.recent-movies > li');
+            const $ = cheerio.load(html);
+            const movieElements = $('ul.recent-movies > li');
             
             if (movieElements.length === 0) {
                 callback(searchResults);
                 return;
             }
             
-            movieElements.forEach(element => {
-                const titleElement = element.querySelector('figure > img');
-                const linkElement = element.querySelector('figure > a');
-                const posterElement = element.querySelector('figure > img');
+            movieElements.each((index, element) => {
+                const $element = $(element);
+                const titleElement = $element.find('figure > img');
+                const linkElement = $element.find('figure > a');
+                const posterElement = $element.find('figure > img');
                 
-                if (titleElement && linkElement) {
-                    const title = titleElement.getAttribute('title');
-                    const href = linkElement.getAttribute('href');
-                    const posterUrl = posterElement ? posterElement.getAttribute('src') : '';
+                if (titleElement.length && linkElement.length) {
+                    const title = titleElement.attr('title');
+                    const href = linkElement.attr('href');
+                    const posterUrl = posterElement.attr('src') || '';
                     
                     if (title && href) {
                         searchResults.push({
@@ -175,26 +164,28 @@ function extractHubCloudLinks(url, title, callback) {
             return;
         }
         
-        const dom = new JSDOM(html);
-        const document = dom.window.document;
+        const $ = cheerio.load(html);
         
         let link = '';
         if (newUrl.includes('drive')) {
             // Extract from script tag
-            const scriptTags = document.querySelectorAll('script');
-            for (let script of scriptTags) {
-                const scriptContent = script.textContent || '';
+            const scriptTags = $('script');
+            let found = false;
+            scriptTags.each((index, script) => {
+                if (found) return false;
+                const scriptContent = $(script).html() || '';
                 const match = scriptContent.match(/var url = '([^']*)'/);
                 if (match) {
                     link = match[1];
-                    break;
+                    found = true;
+                    return false;
                 }
-            }
+            });
         } else {
             // Extract from div.vd > center > a
-            const linkElement = document.querySelector('div.vd > center > a');
-            if (linkElement) {
-                link = linkElement.getAttribute('href') || '';
+            const linkElement = $('div.vd > center > a');
+            if (linkElement.length) {
+                link = linkElement.attr('href') || '';
             }
         }
         
@@ -215,15 +206,14 @@ function extractHubCloudLinks(url, title, callback) {
                 return;
             }
             
-            const finalDom = new JSDOM(finalHtml);
-            const finalDocument = finalDom.window.document;
+            const final$ = cheerio.load(finalHtml);
             
-            const header = finalDocument.querySelector('div.card-header');
-            const headerText = header ? header.textContent : '';
-            const sizeElement = finalDocument.querySelector('i#size');
-            const size = sizeElement ? sizeElement.textContent : '';
+            const header = final$('div.card-header');
+            const headerText = header.length ? header.text() : '';
+            const sizeElement = final$('i#size');
+            const size = sizeElement.length ? sizeElement.text() : '';
             
-            const downloadButtons = finalDocument.querySelectorAll('div.card-body h2 a.btn');
+            const downloadButtons = final$('div.card-body h2 a.btn');
             const finalLinks = [];
             let processedButtons = 0;
             const totalButtons = downloadButtons.length;
@@ -233,9 +223,10 @@ function extractHubCloudLinks(url, title, callback) {
                 return;
             }
             
-            Array.from(downloadButtons).forEach(button => {
-                const buttonHref = button.getAttribute('href');
-                const buttonText = button.textContent || '';
+            downloadButtons.each((index, button) => {
+                const $button = final$(button);
+                const buttonHref = $button.attr('href');
+                const buttonText = $button.text() || '';
                 
                 const processButton = (finalUrl, sourceName) => {
                     if (finalUrl) {
@@ -321,16 +312,15 @@ function extractGDFlixLinks(url, title, callback) {
                 return;
             }
             
-            const dom = new JSDOM(html);
-            const document = dom.window.document;
+            const $ = cheerio.load(html);
             
-            const fileNameElement = document.querySelector('ul > li.list-group-item');
+            const fileNameElement = $('ul > li.list-group-item');
             let fileName = '';
             let fileSize = '';
             
-            const listItems = document.querySelectorAll('ul > li.list-group-item');
-            listItems.forEach(item => {
-                const text = item.textContent || '';
+            const listItems = $('ul > li.list-group-item');
+            listItems.each((index, item) => {
+                const text = $(item).text() || '';
                 if (text.includes('Name :')) {
                     fileName = text.replace('Name :', '').trim();
                 } else if (text.includes('Size :')) {
@@ -338,7 +328,7 @@ function extractGDFlixLinks(url, title, callback) {
                 }
             });
             
-            const downloadButtons = document.querySelectorAll('div.text-center a');
+            const downloadButtons = $('div.text-center a');
             const finalLinks = [];
             let processedButtons = 0;
             const totalButtons = downloadButtons.length;
@@ -365,9 +355,10 @@ function extractGDFlixLinks(url, title, callback) {
                 }
             };
             
-            Array.from(downloadButtons).forEach(button => {
-                const buttonHref = button.getAttribute('href');
-                const buttonText = button.textContent || '';
+            downloadButtons.each((index, button) => {
+                const $button = $(button);
+                const buttonHref = $button.attr('href');
+                const buttonText = $button.text() || '';
                 
                 if (buttonText.includes('DIRECT DL')) {
                     processButton(buttonHref, 'GDFlix[Direct]');
@@ -551,21 +542,21 @@ function extractStreamingLinks(url, callback, episodeInfo = null) {
             return;
         }
         
-        const dom = new JSDOM(html);
-        const document = dom.window.document;
+        const $ = cheerio.load(html);
         
         // Get title and determine if it's a series or movie
-        const titleElement = document.querySelector('meta[property="og:title"]');
-        const title = titleElement ? titleElement.getAttribute('content').replace('Download ', '') : '';
+        const titleElement = $('meta[property="og:title"]');
+        const title = titleElement.length ? titleElement.attr('content').replace('Download ', '') : '';
         
         // Get download buttons
-        const buttons = document.querySelectorAll('h5 > a');
+        const buttons = $('h5 > a');
         let downloadLinks = [];
         
-        Array.from(buttons).forEach(button => {
-            const buttonText = button.textContent || '';
+        buttons.each((index, button) => {
+            const $button = $(button);
+            const buttonText = $button.text() || '';
             if (!buttonText.toLowerCase().includes('zip')) {
-                const href = button.getAttribute('href');
+                const href = $button.attr('href');
                 if (href) {
                     downloadLinks.push(href);
                 }
@@ -592,16 +583,16 @@ function extractStreamingLinks(url, callback, episodeInfo = null) {
                     return;
                 }
                 
-                const pageDom = new JSDOM(pageHtml);
-                const pageDocument = pageDom.window.document;
+                const page$ = cheerio.load(pageHtml);
                 
                 // Look for streaming links (HubCloud, GDFlix, GDLink)
-                const streamingElements = pageDocument.querySelectorAll('a');
+                const streamingElements = page$('a');
                 const intermediateLinks = [];
                 
-                Array.from(streamingElements).forEach(element => {
-                    const href = element.getAttribute('href') || '';
-                    const text = element.textContent || '';
+                streamingElements.each((index, element) => {
+                    const $element = page$(element);
+                    const href = $element.attr('href') || '';
+                    const text = $element.text() || '';
                     
                     if (href && (href.toLowerCase().includes('hubcloud') || 
                                 href.toLowerCase().includes('gdflix') || 
