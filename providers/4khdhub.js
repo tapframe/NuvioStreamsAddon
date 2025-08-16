@@ -349,22 +349,108 @@ function cleanTitle(title) {
     }
 }
 
-// Normalize title for better matching
+// Enhanced title normalization with better handling of special cases
 function normalizeTitle(title) {
     return title
         .toLowerCase()
-        .replace(/[^a-z0-9\s]/g, ' ')  // Remove special characters
-        .replace(/\s+/g, ' ')          // Normalize whitespace
+        // Handle common title variations
+        .replace(/&/g, 'and')           // & -> and
+        .replace(/\b(the|a|an)\b/g, '') // Remove articles
+        // Handle common abbreviations and expansions
+        .replace(/\bvs\b/g, 'versus')
+        .replace(/\bversus\b/g, 'vs')
+        .replace(/\bdr\b/g, 'doctor')
+        .replace(/\bdoctor\b/g, 'dr')
+        .replace(/\bmr\b/g, 'mister')
+        .replace(/\bmister\b/g, 'mr')
+        .replace(/\bst\b/g, 'saint')
+        .replace(/\bsaint\b/g, 'st')
+        .replace(/\bmt\b/g, 'mount')
+        .replace(/\bmount\b/g, 'mt')
+        .replace(/[^a-z0-9\s]/g, ' ')   // Remove special characters
+        .replace(/\s+/g, ' ')           // Normalize whitespace
         .trim();
 }
 
-// Calculate similarity between two strings using Levenshtein distance
+// Extract year from title if present
+function extractYear(title) {
+    const yearMatch = title.match(/\((19|20)\d{2}\)/);
+    return yearMatch ? parseInt(yearMatch[0].replace(/[()]/g, '')) : null;
+}
+
+// Remove year from title for cleaner comparison
+function removeYear(title) {
+    return title.replace(/\s*\((19|20)\d{2}\)\s*/g, ' ').trim();
+}
+
+// Generate alternative search queries for better matching
+function generateAlternativeQueries(title, originalTitle = null) {
+    const queries = new Set();
+    
+    // Add the original title
+    queries.add(title);
+    
+    // Add original title if different
+    if (originalTitle && originalTitle !== title) {
+        queries.add(originalTitle);
+    }
+    
+    // Remove year and try again
+    const titleWithoutYear = removeYear(title);
+    if (titleWithoutYear !== title) {
+        queries.add(titleWithoutYear);
+    }
+    
+    // Remove colons and other punctuation
+    queries.add(title.replace(/:/g, ''));
+    queries.add(title.replace(/[^a-zA-Z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim());
+    
+    // Handle common title variations
+    const variations = [
+        title.replace(/\bPart\s+(\d+)\b/gi, 'Part $1'),
+        title.replace(/\bPart\s+(\d+)\b/gi, '$1'),
+        title.replace(/\b(\d+)\b/g, match => {
+            const num = parseInt(match);
+            const romans = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
+            return romans[num] || match;
+        }),
+        title.replace(/\b(I{1,3}|IV|V|VI{0,3}|IX|X)\b/g, match => {
+            const romans = { 'I': '1', 'II': '2', 'III': '3', 'IV': '4', 'V': '5', 
+                           'VI': '6', 'VII': '7', 'VIII': '8', 'IX': '9', 'X': '10' };
+            return romans[match] || match;
+        })
+    ];
+    
+    variations.forEach(v => {
+        if (v && v !== title) queries.add(v);
+    });
+    
+    // Remove duplicates and filter out empty strings
+    return Array.from(queries).filter(q => q && q.trim().length > 0);
+}
+
+// Enhanced similarity calculation with multiple algorithms
 function calculateSimilarity(str1, str2) {
     const s1 = normalizeTitle(str1);
     const s2 = normalizeTitle(str2);
     
     if (s1 === s2) return 1.0;
     
+    // Levenshtein distance
+    const levenshtein = calculateLevenshteinSimilarity(s1, s2);
+    
+    // Jaccard similarity (word-based)
+    const jaccard = calculateJaccardSimilarity(s1, s2);
+    
+    // Longest common subsequence
+    const lcs = calculateLCSSimilarity(s1, s2);
+    
+    // Weighted combination of different similarity measures
+    return (levenshtein * 0.4) + (jaccard * 0.4) + (lcs * 0.2);
+}
+
+// Levenshtein distance similarity
+function calculateLevenshteinSimilarity(s1, s2) {
     const len1 = s1.length;
     const len2 = s2.length;
     
@@ -391,51 +477,130 @@ function calculateSimilarity(str1, str2) {
     return (maxLen - matrix[len1][len2]) / maxLen;
 }
 
-// Check if query words are contained in title
-function containsWords(title, query) {
-    const titleWords = normalizeTitle(title).split(' ');
-    const queryWords = normalizeTitle(query).split(' ');
+// Jaccard similarity for word-based comparison
+function calculateJaccardSimilarity(s1, s2) {
+    const words1 = new Set(s1.split(' ').filter(w => w.length > 0));
+    const words2 = new Set(s2.split(' ').filter(w => w.length > 0));
     
-    return queryWords.every(queryWord => 
-        titleWords.some(titleWord => 
-            titleWord.includes(queryWord) || queryWord.includes(titleWord)
-        )
-    );
+    const intersection = new Set([...words1].filter(w => words2.has(w)));
+    const union = new Set([...words1, ...words2]);
+    
+    return union.size === 0 ? 0 : intersection.size / union.size;
 }
 
-// Find best matching result from search results
-function findBestMatch(results, query) {
+// Longest Common Subsequence similarity
+function calculateLCSSimilarity(s1, s2) {
+    const len1 = s1.length;
+    const len2 = s2.length;
+    
+    if (len1 === 0 || len2 === 0) return 0;
+    
+    const dp = Array(len1 + 1).fill().map(() => Array(len2 + 1).fill(0));
+    
+    for (let i = 1; i <= len1; i++) {
+        for (let j = 1; j <= len2; j++) {
+            if (s1[i - 1] === s2[j - 1]) {
+                dp[i][j] = dp[i - 1][j - 1] + 1;
+            } else {
+                dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+            }
+        }
+    }
+    
+    const maxLen = Math.max(len1, len2);
+    return dp[len1][len2] / maxLen;
+}
+
+// Enhanced word containment check with fuzzy matching
+function containsWords(title, query) {
+    const titleWords = normalizeTitle(title).split(' ').filter(w => w.length > 1);
+    const queryWords = normalizeTitle(query).split(' ').filter(w => w.length > 1);
+    
+    let matchedWords = 0;
+    
+    for (const queryWord of queryWords) {
+        const found = titleWords.some(titleWord => {
+            // Exact match
+            if (titleWord === queryWord) return true;
+            
+            // Substring match
+            if (titleWord.includes(queryWord) || queryWord.includes(titleWord)) return true;
+            
+            // Fuzzy match for longer words (allow 1 character difference)
+            if (queryWord.length > 3 && titleWord.length > 3) {
+                const similarity = calculateLevenshteinSimilarity(titleWord, queryWord);
+                return similarity > 0.8;
+            }
+            
+            return false;
+        });
+        
+        if (found) matchedWords++;
+    }
+    
+    // Require at least 70% of query words to be matched
+    return matchedWords / queryWords.length >= 0.7;
+}
+
+// Enhanced best match finder with improved scoring
+function findBestMatch(results, query, tmdbYear = null) {
     if (results.length === 0) return null;
     if (results.length === 1) return results[0];
+    
+    console.log(`[4KHDHub] Finding best match for: "${query}" (Year: ${tmdbYear || 'N/A'})`);
     
     // Score each result
     const scoredResults = results.map(result => {
         let score = 0;
+        // Use year from search result metadata if available, otherwise extract from title
+        const resultYear = result.year || extractYear(result.title);
+        const queryWithoutYear = removeYear(query);
+        const resultWithoutYear = removeYear(result.title);
         
-        // Exact match gets highest score
-        if (normalizeTitle(result.title) === normalizeTitle(query)) {
+        // Exact match gets highest score (without year)
+        if (normalizeTitle(resultWithoutYear) === normalizeTitle(queryWithoutYear)) {
             score += 100;
         }
         
-        // Similarity score (0-50 points)
-        const similarity = calculateSimilarity(result.title, query);
-        score += similarity * 50;
+        // Enhanced similarity score (0-60 points)
+        const similarity = calculateSimilarity(resultWithoutYear, queryWithoutYear);
+        score += similarity * 60;
         
-        // Word containment bonus (0-30 points)
+        // Word containment bonus (0-25 points)
         if (containsWords(result.title, query)) {
-            score += 30;
+            score += 25;
         }
         
-        // Prefer shorter titles (closer matches) (0-10 points)
-        const lengthDiff = Math.abs(result.title.length - query.length);
-        score += Math.max(0, 10 - lengthDiff / 5);
-        
-        // Year extraction bonus - prefer titles with years
-        if (result.title.match(/\((19|20)\d{2}\)/)) {
-            score += 5;
+        // Year matching bonus/penalty
+        if (tmdbYear && resultYear) {
+            if (tmdbYear === resultYear) {
+                score += 20; // Exact year match
+            } else if (Math.abs(tmdbYear - resultYear) <= 1) {
+                score += 10; // Close year match
+            } else if (Math.abs(tmdbYear - resultYear) > 5) {
+                score -= 15; // Significant year mismatch penalty
+            }
+        } else if (resultYear && !tmdbYear) {
+            score += 5; // Slight bonus for having year info
         }
         
-        return { ...result, score };
+        // Length similarity bonus (0-10 points)
+        const lengthDiff = Math.abs(resultWithoutYear.length - queryWithoutYear.length);
+        score += Math.max(0, 10 - lengthDiff / 3);
+        
+        // Prefer results with quality indicators
+        if (result.title.match(/\b(1080p|720p|4K|2160p|BluRay|WEB-DL)\b/i)) {
+            score += 3;
+        }
+        
+        // Penalty for results with too many extra words
+        const queryWordCount = queryWithoutYear.split(' ').filter(w => w.length > 0).length;
+        const resultWordCount = resultWithoutYear.split(' ').filter(w => w.length > 0).length;
+        if (resultWordCount > queryWordCount * 2) {
+            score -= 10;
+        }
+        
+        return { ...result, score, similarity, resultYear };
     });
     
     // Sort by score (highest first)
@@ -443,10 +608,17 @@ function findBestMatch(results, query) {
     
     console.log('[4KHDHub] Title matching scores:');
     scoredResults.slice(0, 5).forEach((result, index) => {
-        console.log(`${index + 1}. ${result.title} (Score: ${result.score.toFixed(1)})`);
+        console.log(`${index + 1}. ${result.title} (Score: ${result.score.toFixed(1)}, Similarity: ${(result.similarity * 100).toFixed(1)}%, Year: ${result.resultYear || 'N/A'})`);
     });
     
-    return scoredResults[0];
+    // Additional validation: ensure the best match has a reasonable score
+    const bestResult = scoredResults[0];
+    if (bestResult.score < 30) {
+        console.log(`[4KHDHub] Best match score too low (${bestResult.score.toFixed(1)}), rejecting`);
+        return null;
+    }
+    
+    return bestResult;
 }
 
 function extractHubCloudLinks(url, referer) {
@@ -889,13 +1061,25 @@ function searchContent(query) {
                 const href = card.getAttribute('href');
                 const posterUrl = card.querySelector('img')?.getAttribute('src');
                 
+                // Extract year from movie-card-meta element
+                const metaElement = card.querySelector('.movie-card-meta');
+                let year = null;
+                if (metaElement) {
+                    const metaText = metaElement.textContent.trim();
+                    const yearMatch = metaText.match(/(19|20)\d{2}/);
+                    if (yearMatch) {
+                        year = parseInt(yearMatch[0]);
+                    }
+                }
+                
                 if (title && href) {
                     // Convert relative URLs to absolute URLs
                     const absoluteUrl = href.startsWith('http') ? href : `${baseUrl}${href.startsWith('/') ? '' : '/'}${href}`;
                     results.push({
                         title: title.trim(),
                         url: absoluteUrl,
-                        poster: posterUrl || ''
+                        poster: posterUrl || '',
+                        year: year
                     });
                 }
             });
@@ -1321,7 +1505,7 @@ async function get4KHDHubStreams(tmdbId, type, season = null, episode = null) {
         console.log(`[4KHDHub] Starting search for TMDB ID: ${tmdbId}, Type: ${type}${season ? `, Season: ${season}` : ''}${episode ? `, Episode: ${episode}` : ''}`);
         
         // Create cache key for resolved file hosting URLs
-        const cacheKey = `4khdhub_resolved_urls_v1_${tmdbId}_${type}${season ? `_s${season}e${episode}` : ''}`;
+        const cacheKey = `4khdhub_resolved_urls_v2_${tmdbId}_${type}${season ? `_s${season}e${episode}` : ''}`;
         
         let streamingLinks = [];
         
@@ -1351,17 +1535,65 @@ async function get4KHDHubStreams(tmdbId, type, season = null, episode = null) {
             
             console.log(`[4KHDHub] TMDB Details: ${tmdbDetails.title} (${tmdbDetails.year || 'N/A'})`);
             
-            // Search using the actual title
+            // Enhanced search with fallback strategies
+            let searchResults = [];
+            let bestMatch = null;
+            
+            // Primary search using the actual title
             const searchQuery = tmdbDetails.title;
-            const searchResults = await searchContent(searchQuery);
-            console.log(`[4KHDHub] Found ${searchResults.length} search results`);
+            searchResults = await searchContent(searchQuery);
+            console.log(`[4KHDHub] Primary search found ${searchResults.length} results`);
+            
+            if (searchResults.length > 0) {
+                bestMatch = findBestMatch(searchResults, tmdbDetails.title, tmdbDetails.year);
+            }
+            
+            // Fallback search strategies if no good match found
+            if (!bestMatch && searchResults.length > 0) {
+                console.log(`[4KHDHub] No good match from primary search, trying fallback strategies...`);
+                
+                // Try search without year
+                const titleWithoutYear = removeYear(tmdbDetails.title);
+                if (titleWithoutYear !== tmdbDetails.title) {
+                    console.log(`[4KHDHub] Trying search without year: "${titleWithoutYear}"`);
+                    const fallbackResults = await searchContent(titleWithoutYear);
+                    if (fallbackResults.length > 0) {
+                        const fallbackMatch = findBestMatch(fallbackResults, tmdbDetails.title, tmdbDetails.year);
+                        if (fallbackMatch && (!bestMatch || fallbackMatch.score > bestMatch.score)) {
+                            bestMatch = fallbackMatch;
+                            searchResults = fallbackResults;
+                        }
+                    }
+                }
+                
+                // Try search with comprehensive alternative title formats
+                if (!bestMatch) {
+                    const alternativeQueries = generateAlternativeQueries(
+                        tmdbDetails.title, 
+                        tmdbDetails.original_title
+                    ).filter(query => query !== tmdbDetails.title); // Exclude the original title we already tried
+                    
+                    for (const altQuery of alternativeQueries) {
+                        console.log(`[4KHDHub] Trying alternative search: "${altQuery}"`);
+                        const altResults = await searchContent(altQuery);
+                        if (altResults.length > 0) {
+                            const altMatch = findBestMatch(altResults, tmdbDetails.title, tmdbDetails.year);
+                            if (altMatch && (!bestMatch || altMatch.score > bestMatch.score)) {
+                                bestMatch = altMatch;
+                                searchResults = altResults;
+                                console.log(`[4KHDHub] Found better match with query: "${altQuery}" (score: ${altMatch.score})`);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
             
             if (searchResults.length === 0) {
+                console.log(`[4KHDHub] No search results found for any query variation`);
                 return [];
             }
             
-            // Find the best matching result using title similarity
-            const bestMatch = findBestMatch(searchResults, tmdbDetails.title);
             if (!bestMatch) {
                 console.log(`[4KHDHub] No suitable match found for: ${tmdbDetails.title}`);
                 return [];
