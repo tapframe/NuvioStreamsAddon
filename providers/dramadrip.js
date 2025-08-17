@@ -113,6 +113,17 @@ const makeRequest = async (url, options = {}) => {
 };
 
 // Helper function to create a proxied session for SID resolution
+// Helper function to extract cookies from jar for a specific URL
+const getCookiesForUrl = async (jar, url) => {
+  try {
+    const cookies = await jar.getCookies(url);
+    return cookies.map(cookie => cookie.toString()).join('; ');
+  } catch (error) {
+    console.error(`[DramaDrip] Error extracting cookies: ${error.message}`);
+    return '';
+  }
+};
+
 const createProxiedSession = async (jar) => {
   const { wrapper } = await getAxiosCookieJarSupport();
   
@@ -138,12 +149,34 @@ const createProxiedSession = async (jar) => {
     session.get = async (url, options = {}) => {
       const proxiedUrl = `${DRAMADRIP_PROXY_URL}${encodeURIComponent(url)}`;
       console.log(`[DramaDrip] Making proxied SID GET request to: ${url}`);
+      
+      // Extract cookies from jar and add to headers
+      const cookieString = await getCookiesForUrl(jar, url);
+      if (cookieString) {
+        console.log(`[DramaDrip] Adding cookies to proxied request: ${cookieString}`);
+        options.headers = {
+          ...options.headers,
+          'Cookie': cookieString
+        };
+      }
+      
       return originalGet(proxiedUrl, options);
     };
 
     session.post = async (url, data, options = {}) => {
       const proxiedUrl = `${DRAMADRIP_PROXY_URL}${encodeURIComponent(url)}`;
       console.log(`[DramaDrip] Making proxied SID POST request to: ${url}`);
+      
+      // Extract cookies from jar and add to headers
+      const cookieString = await getCookiesForUrl(jar, url);
+      if (cookieString) {
+        console.log(`[DramaDrip] Adding cookies to proxied request: ${cookieString}`);
+        options.headers = {
+          ...options.headers,
+          'Cookie': cookieString
+        };
+      }
+      
       return originalPost(proxiedUrl, data, options);
     };
   }

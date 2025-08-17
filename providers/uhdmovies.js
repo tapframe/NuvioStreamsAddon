@@ -990,6 +990,19 @@ function parseSize(sizeString) {
   return 0;
 }
 
+// Helper function to extract cookies from jar for a specific URL
+const getCookiesForUrl = async (jar, url) => {
+  try {
+    const cookies = await jar.getCookies(url);
+    if (cookies && cookies.length > 0) {
+      return cookies.map(cookie => cookie.toString()).join('; ');
+    }
+  } catch (error) {
+    console.log(`[UHDMovies] Error extracting cookies for ${url}: ${error.message}`);
+  }
+  return null;
+};
+
 // Helper function to create a proxied session for SID resolution
 const createProxiedSession = async (jar) => {
   const { wrapper } = await getAxiosCookieJarSupport();
@@ -1005,30 +1018,45 @@ const createProxiedSession = async (jar) => {
     }
   };
 
-  // Add proxy configuration if UHDMOVIES_PROXY_URL is set
-  if (UHDMOVIES_PROXY_URL) {
-    console.log(`[UHDMovies] Creating SID session with proxy: ${UHDMOVIES_PROXY_URL}`);
-    sessionConfig.transformRequest = [(data, headers) => {
-      return data;
-    }];
-  }
-
   const session = wrapper(axios.create(sessionConfig));
 
   // If proxy is enabled, wrap the session methods to use proxy
   if (UHDMOVIES_PROXY_URL) {
+    console.log(`[UHDMovies] Creating SID session with proxy: ${UHDMOVIES_PROXY_URL}`);
     const originalGet = session.get.bind(session);
     const originalPost = session.post.bind(session);
 
     session.get = async (url, options = {}) => {
       const proxiedUrl = `${UHDMOVIES_PROXY_URL}${encodeURIComponent(url)}`;
       console.log(`[UHDMovies] Making proxied SID GET request to: ${url}`);
+      
+      // Extract cookies from jar and add to headers
+      const cookieString = await getCookiesForUrl(jar, url);
+      if (cookieString) {
+        console.log(`[UHDMovies] Adding cookies to proxied request: ${cookieString}`);
+        options.headers = {
+          ...options.headers,
+          'Cookie': cookieString
+        };
+      }
+      
       return originalGet(proxiedUrl, options);
     };
 
     session.post = async (url, data, options = {}) => {
       const proxiedUrl = `${UHDMOVIES_PROXY_URL}${encodeURIComponent(url)}`;
       console.log(`[UHDMovies] Making proxied SID POST request to: ${url}`);
+      
+      // Extract cookies from jar and add to headers
+      const cookieString = await getCookiesForUrl(jar, url);
+      if (cookieString) {
+        console.log(`[UHDMovies] Adding cookies to proxied request: ${cookieString}`);
+        options.headers = {
+          ...options.headers,
+          'Cookie': cookieString
+        };
+      }
+      
       return originalPost(proxiedUrl, data, options);
     };
   }

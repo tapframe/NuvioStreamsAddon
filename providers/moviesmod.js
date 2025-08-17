@@ -138,6 +138,17 @@ const createProxiedSession = async (jar) => {
 
   const session = wrapper(axios.create(sessionConfig));
 
+  // Helper function to extract cookies from jar for a given URL
+  const getCookiesForUrl = async (url) => {
+    try {
+      const cookies = await jar.getCookies(url);
+      return cookies.map(cookie => `${cookie.key}=${cookie.value}`).join('; ');
+    } catch (error) {
+      console.error(`[MoviesMod] Error getting cookies for ${url}: ${error.message}`);
+      return '';
+    }
+  };
+
   // If proxy is enabled, wrap the session methods to use proxy
   if (MOVIESMOD_PROXY_URL) {
     console.log(`[MoviesMod] Creating SID session with proxy: ${MOVIESMOD_PROXY_URL}`);
@@ -147,12 +158,34 @@ const createProxiedSession = async (jar) => {
     session.get = async (url, options = {}) => {
       const proxiedUrl = `${MOVIESMOD_PROXY_URL}${encodeURIComponent(url)}`;
       console.log(`[MoviesMod] Making proxied SID GET request to: ${url}`);
+      
+      // Extract cookies from jar and add to headers
+      const cookieString = await getCookiesForUrl(url);
+      if (cookieString) {
+        console.log(`[MoviesMod] Adding cookies to proxied request: ${cookieString}`);
+        options.headers = {
+          ...options.headers,
+          'Cookie': cookieString
+        };
+      }
+      
       return originalGet(proxiedUrl, options);
     };
 
     session.post = async (url, data, options = {}) => {
       const proxiedUrl = `${MOVIESMOD_PROXY_URL}${encodeURIComponent(url)}`;
       console.log(`[MoviesMod] Making proxied SID POST request to: ${url}`);
+      
+      // Extract cookies from jar and add to headers
+      const cookieString = await getCookiesForUrl(url);
+      if (cookieString) {
+        console.log(`[MoviesMod] Adding cookies to proxied request: ${cookieString}`);
+        options.headers = {
+          ...options.headers,
+          'Cookie': cookieString
+        };
+      }
+      
       return originalPost(proxiedUrl, data, options);
     };
   }

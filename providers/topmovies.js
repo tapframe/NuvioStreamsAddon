@@ -202,9 +202,20 @@ async function resolveLeechproLink(leechproUrl) {
     }
 }
 
+// Helper function to extract cookies from jar for a specific URL
+const getCookiesForUrl = async (jar, url) => {
+    try {
+        const cookies = await jar.getCookies(url);
+        return cookies.map(cookie => cookie.toString()).join('; ');
+    } catch (error) {
+        console.error(`[TopMovies] Error extracting cookies: ${error.message}`);
+        return '';
+    }
+};
+
 // Copy of the tech.unblockedgames.world bypass from uhdmovies scraper
 async function resolveSidToDriveleech(sidUrl) {
-    console.log(`Resolving SID link: ${sidUrl}`);
+    console.log(`[TopMovies] Resolving SID link: ${sidUrl}`);
     const { origin } = new URL(sidUrl);
     const jar = new CookieJar();
     
@@ -220,6 +231,47 @@ async function resolveSidToDriveleech(sidUrl) {
             'Upgrade-Insecure-Requests': '1'
         }
     }));
+    
+    // If proxy is enabled, wrap the session methods to use proxy
+    if (TOPMOVIES_PROXY_URL) {
+        console.log(`[TopMovies] Creating SID session with proxy: ${TOPMOVIES_PROXY_URL}`);
+        const originalGet = session.get.bind(session);
+        const originalPost = session.post.bind(session);
+
+        session.get = async (url, options = {}) => {
+            const proxiedUrl = `${TOPMOVIES_PROXY_URL}${encodeURIComponent(url)}`;
+            console.log(`[TopMovies] Making proxied SID GET request to: ${url}`);
+            
+            // Extract cookies from jar and add to headers
+            const cookieString = await getCookiesForUrl(jar, url);
+            if (cookieString) {
+                console.log(`[TopMovies] Adding cookies to proxied request: ${cookieString}`);
+                options.headers = {
+                    ...options.headers,
+                    'Cookie': cookieString
+                };
+            }
+            
+            return originalGet(proxiedUrl, options);
+        };
+
+        session.post = async (url, data, options = {}) => {
+            const proxiedUrl = `${TOPMOVIES_PROXY_URL}${encodeURIComponent(url)}`;
+            console.log(`[TopMovies] Making proxied SID POST request to: ${url}`);
+            
+            // Extract cookies from jar and add to headers
+            const cookieString = await getCookiesForUrl(jar, url);
+            if (cookieString) {
+                console.log(`[TopMovies] Adding cookies to proxied request: ${cookieString}`);
+                options.headers = {
+                    ...options.headers,
+                    'Cookie': cookieString
+                };
+            }
+            
+            return originalPost(proxiedUrl, data, options);
+        };
+    }
 
     try {
         // Step 0: Get the _wp_http value

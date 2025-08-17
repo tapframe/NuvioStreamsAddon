@@ -1732,6 +1732,11 @@
             /* Blue gradient for 4KHDHub */
         }
 
+        .moviesdrive-icon {
+            background: linear-gradient(135deg, #ff6b35, #f7931e);
+            /* Orange gradient for MoviesDrive */
+        }
+
         .provider-option.uhdmovies.selected {
             background-color: rgba(212, 175, 55, 0.15);
             border-color: #D4AF37;
@@ -1746,6 +1751,15 @@
             border-color: #FF5757;
         }
 
+        .provider-option.moviesdrive {
+            background-image: linear-gradient(to right, rgba(255, 107, 53, 0.15), rgba(0, 0, 0, 0));
+        }
+
+        .provider-option.moviesdrive.selected {
+            background-color: rgba(255, 107, 53, 0.15);
+            border-color: #ff6b35;
+        }
+
         .quality-tag.uhdmovies-tag {
             background-color: #D4AF37;
             color: #111;
@@ -1753,6 +1767,11 @@
 
         .quality-tag.moviesmod-tag {
             background-color: #FF5757;
+            color: #fff;
+        }
+
+        .quality-tag.moviesdrive-tag {
+            background-color: #ff6b35;
             color: #fff;
         }
     </style>
@@ -1919,6 +1938,11 @@
                     <div class="provider-item" style="opacity: 0.5;">
                         <div class="provider-icon moviesmod-icon">🍿</div>
                         <div class="provider-name">MoviesMod</div>
+                        <span class="provider-detail">Disabled by default</span>
+                    </div>
+                    <div class="provider-item" style="opacity: 0.5;">
+                        <div class="provider-icon moviesdrive-icon">🎬</div>
+                        <div class="provider-name">MoviesDrive</div>
                         <span class="provider-detail">Disabled by default</span>
                     </div>
                     <div class="provider-item">
@@ -2126,6 +2150,22 @@
                                         style="font-size: 0.75rem; color: var(--text-light);">Disabled by default</span></label>
                             </div>
                             <select id="qualityMoviesmod" name="providerQuality" data-provider="moviesmod"
+                                class="provider-sort-select">
+                                <option value="all">All</option>
+                                <option value="720p">720p+</option>
+                                <option value="1080p">1080p+</option>
+                            </select>
+                        </div>
+                        <div class="provider-checkbox-item"
+                            style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
+                            <div style="display: flex; align-items: center; opacity: 0.7;">
+                                <input type="checkbox" id="providerMoviesdrive" name="providerSelect" value="moviesdrive"
+                                    style="margin-right: 0.5rem; accent-color: var(--primary);" disabled>
+                                <label for="providerMoviesdrive" style="font-size: 0.9rem;">MoviesDrive <span
+                                        style="font-size: 0.75rem; color: var(--text-light);">(~9.0s)</span> <span
+                                        style="font-size: 0.75rem; color: var(--text-light);">Disabled by default</span></label>
+                            </div>
+                            <select id="qualityMoviesdrive" name="providerQuality" data-provider="moviesdrive"
                                 class="provider-sort-select">
                                 <option value="all">All</option>
                                 <option value="720p">720p+</option>
@@ -2403,7 +2443,7 @@
                     Developed by <a href="https://github.com/tapframe" target="_blank" class="github-link">TapFrame</a>
                 </div>
                 <div class="footer-text">
-                    v0.4.2_v13_TESTPROXYUHDM
+                    v0.4.2_v13_TESTPROXYSIMPLE
                 </div>
             </div>
         </div>
