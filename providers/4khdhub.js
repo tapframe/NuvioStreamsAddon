@@ -549,8 +549,35 @@ function findBestMatch(results, query, tmdbYear = null) {
     
     console.log(`[4KHDHub] Finding best match for: "${query}" (Year: ${tmdbYear || 'N/A'})`);
     
+    // Strict year gating: if TMDB year is known, only consider exact matches first,
+    // then allow unknown-year entries as fallback. Reject clear mismatches.
+    let candidateResults = results;
+    if (tmdbYear) {
+        const tmdbYearInt = parseInt(tmdbYear);
+        const exactYearMatches = results.filter(r => {
+            const y = r.year || extractYear(r.title);
+            return y && parseInt(y) === tmdbYearInt;
+        });
+        if (exactYearMatches.length > 0) {
+            candidateResults = exactYearMatches;
+            console.log(`[4KHDHub] Year filter: using ${exactYearMatches.length} exact year matches for ${tmdbYearInt}`);
+        } else {
+            const unknownYear = results.filter(r => {
+                const y = r.year || extractYear(r.title);
+                return !y;
+            });
+            if (unknownYear.length > 0) {
+                candidateResults = unknownYear;
+                console.log(`[4KHDHub] Year filter: no exact matches; falling back to ${unknownYear.length} unknown-year results`);
+            } else {
+                console.log(`[4KHDHub] Year filter: no exact or unknown-year matches for ${tmdbYearInt}; rejecting results`);
+                return null;
+            }
+        }
+    }
+    
     // Score each result
-    const scoredResults = results.map(result => {
+    const scoredResults = candidateResults.map(result => {
         let score = 0;
         // Use year from search result metadata if available, otherwise extract from title
         const resultYear = result.year || extractYear(result.title);
@@ -571,17 +598,13 @@ function findBestMatch(results, query, tmdbYear = null) {
             score += 25;
         }
         
-        // Year matching bonus/penalty
+        // Year matching bonus (strict): only reward exact match when TMDB year is known
         if (tmdbYear && resultYear) {
-            if (tmdbYear === resultYear) {
-                score += 20; // Exact year match
-            } else if (Math.abs(tmdbYear - resultYear) <= 1) {
-                score += 10; // Close year match
-            } else if (Math.abs(tmdbYear - resultYear) > 5) {
-                score -= 15; // Significant year mismatch penalty
+            if (parseInt(tmdbYear) === parseInt(resultYear)) {
+                score += 30; // Strong reward for exact year
             }
         } else if (resultYear && !tmdbYear) {
-            score += 5; // Slight bonus for having year info
+            score += 5; // Slight bonus for having year info when TMDB year unknown
         }
         
         // Length similarity bonus (0-10 points)
@@ -613,6 +636,11 @@ function findBestMatch(results, query, tmdbYear = null) {
     
     // Additional validation: ensure the best match has a reasonable score
     const bestResult = scoredResults[0];
+    // Final guard: if TMDB year is known and best has a conflicting year, reject
+    if (tmdbYear && bestResult.resultYear && parseInt(bestResult.resultYear) !== parseInt(tmdbYear)) {
+        console.log(`[4KHDHub] Best match year mismatch (best=${bestResult.resultYear}, tmdb=${tmdbYear}), rejecting`);
+        return null;
+    }
     if (bestResult.score < 30) {
         console.log(`[4KHDHub] Best match score too low (${bestResult.score.toFixed(1)}), rejecting`);
         return null;
@@ -1512,7 +1540,7 @@ async function get4KHDHubStreams(tmdbId, type, season = null, episode = null) {
         console.log(`[4KHDHub] Starting search for TMDB ID: ${tmdbId}, Type: ${type}${season ? `, Season: ${season}` : ''}${episode ? `, Episode: ${episode}` : ''}`);
         
         // Create cache key for resolved file hosting URLs
-        const cacheKey = `4khdhub_resolved_urls_v2_${tmdbId}_${type}${season ? `_s${season}e${episode}` : ''}`;
+        const cacheKey = `4khdhub_resolved_urls_v3_${tmdbId}_${type}${season ? `_s${season}e${episode}` : ''}`;
         
         let streamingLinks = [];
         
