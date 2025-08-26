@@ -175,10 +175,46 @@ app.post('/api/validate-cookie', async (req, res) => {
     const FEBBOX_TEST_SHARE_URL = 'https://www.febbox.com/share/cbaV67Kp'; // A known public share
     const FEBBOX_PLAYER_URL = 'https://www.febbox.com/file/player';
     const cookieForRequest = cookie.startsWith('ui=') ? cookie : `ui=${cookie}`;
+    const tokenForHeader = cookie.startsWith('ui=') ? cookie.slice(3) : cookie; // for ui-token header
 
     console.log(`[validate-cookie] Testing cookie: ${cookie.substring(0, 15)}...`);
 
     try {
+        // PRIMARY VALIDATION: Use febbox.andresdev.org lightweight API
+        // Uses a well-known movie id and expects JSON with `sources` if token is valid
+        try {
+            const primaryResponse = await axios.get('https://febbox.andresdev.org/movie/950396', {
+                headers: {
+                    'User-Agent': 'Mozilla/5.0',
+                    'Accept': 'application/json',
+                    'ui-token': tokenForHeader,
+                    // optional extra headers seen in example; not strictly required but harmless
+                    'Origin': 'https://pstream.mov',
+                    'Referer': 'https://pstream.mov/settings'
+                },
+                timeout: 12000,
+                validateStatus: () => true
+            });
+
+            if (primaryResponse.status === 429) {
+                console.warn('[validate-cookie] Primary API returned 429 (rate limited).');
+                return res.status(429).json({ isValid: false, message: 'Rate limited by validation API' });
+            }
+
+            if (primaryResponse.status === 200 && primaryResponse.data && Array.isArray(primaryResponse.data.sources)) {
+                const hasSources = primaryResponse.data.sources.length > 0;
+                if (hasSources) {
+                    console.log('[validate-cookie] PRIMARY SUCCESS: Sources present from febbox.andresdev API.');
+                    return res.json({ isValid: true, message: 'Cookie valid (primary API).' });
+                }
+            }
+
+            console.log(`[validate-cookie] PRIMARY did not confirm validity (status ${primaryResponse.status}). Falling back...`);
+        } catch (primaryErr) {
+            console.warn(`[validate-cookie] PRIMARY API error, falling back: ${primaryErr.message}`);
+            // continue to fallback flow below
+        }
+
         // Step 1: Try to access the public share page
         console.log(`[validate-cookie] Step 1: Accessing ${FEBBOX_TEST_SHARE_URL}`);
         const sharePageResponse = await axios.get(FEBBOX_TEST_SHARE_URL, {
