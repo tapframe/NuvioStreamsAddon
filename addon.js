@@ -2038,7 +2038,7 @@ builder.defineStreamHandler(async (args) => {
         } else if (stream.provider === '4KHDHub') {
             providerDisplayName = '4KHDHub';
         } else if (stream.provider === 'PStream') {
-            providerDisplayName = 'ShowBox ⚡'; // PStream streams should show as ShowBox with lightning
+            providerDisplayName = '🌐 ShowBox ⚡'; // PStream streams should show as ShowBox with lightning
         }
 
         let nameDisplay;
