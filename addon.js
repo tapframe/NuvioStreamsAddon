@@ -1023,7 +1023,14 @@ builder.defineStreamHandler(async (args) => {
             const cachedStreams = await getStreamFromCache('showbox', tmdbTypeFromId, tmdbId, seasonNum, episodeNum, userRegionPreference, userCookie);
             if (cachedStreams) {
                 console.log(`[ShowBox] Using ${cachedStreams.length} streams from cache.`);
-                return cachedStreams.map(stream => ({ ...stream, provider: 'ShowBox' }));
+                return cachedStreams.map(stream => {
+                    // Preserve original provider information for cached streams too
+                    if (stream.provider === 'PStream') {
+                        return stream; // Keep PStream provider as-is
+                    } else {
+                        return { ...stream, provider: 'ShowBox' }; // Set ShowBox for other streams
+                    }
+                });
             }
             
             // No cache or expired, fetch fresh with retry mechanism
@@ -1041,7 +1048,15 @@ builder.defineStreamHandler(async (args) => {
                         console.log(`[ShowBox] Successfully fetched ${streams.length} streams on attempt ${attempt}.`);
                         // Save to cache with success status
                         await saveStreamToCache('showbox', tmdbTypeFromId, tmdbId, streams, 'ok', seasonNum, episodeNum, userRegionPreference, userCookie);
-                return streams.map(stream => ({ ...stream, provider: 'ShowBox' }));
+                        // Preserve original provider information - don't override PStream streams
+                        return streams.map(stream => {
+                            // Only set provider to 'ShowBox' if it's not already set to 'PStream'
+                            if (stream.provider === 'PStream') {
+                                return stream; // Keep PStream provider as-is
+                            } else {
+                                return { ...stream, provider: 'ShowBox' }; // Set ShowBox for other streams
+                            }
+                        });
                     } else {
                         console.log(`[ShowBox] No streams returned for TMDB ${tmdbTypeFromId}/${tmdbId} on attempt ${attempt}`);
                         // Only save empty result if we're on the last retry
@@ -2022,6 +2037,8 @@ builder.defineStreamHandler(async (args) => {
             providerDisplayName = 'MoviesDrive';
         } else if (stream.provider === '4KHDHub') {
             providerDisplayName = '4KHDHub';
+        } else if (stream.provider === 'PStream') {
+            providerDisplayName = 'ShowBox ⚡'; // PStream streams should show as ShowBox with lightning
         }
 
         let nameDisplay;
@@ -2164,7 +2181,10 @@ builder.defineStreamHandler(async (args) => {
             }
         } else { // For other providers (ShowBox, Xprime, etc.)
             const qualityLabel = stream.quality || 'UNK';
-            if (flagEmoji) {
+            // Skip flag emoji for PStream streams
+            if (stream.provider === 'PStream') {
+                nameDisplay = `${providerDisplayName} - ${qualityLabel}`;
+            } else if (flagEmoji) {
                 nameDisplay = `${flagEmoji} ${providerDisplayName} - ${qualityLabel}`;
             } else {
                 nameDisplay = `${providerDisplayName} - ${qualityLabel}`;
