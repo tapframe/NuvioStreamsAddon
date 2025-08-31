@@ -3022,8 +3022,19 @@ const getStreamsFromPStreamAPI = async (imdbId, tmdbType, seasonNum = null, epis
             console.log(`[PStream] No ui-token available, making unauthenticated request`);
         }
         
+        // Check if proxy should be used
+        const useProxy = process.env.SHOWBOX_PROXY_URL_VALUE && process.env.SHOWBOX_PROXY_URL_VALUE.trim() !== '';
+        let finalApiUrl = apiUrl;
+        
+        if (useProxy) {
+            finalApiUrl = `${process.env.SHOWBOX_PROXY_URL_VALUE}${encodeURIComponent(apiUrl)}`;
+            console.log(`[PStream] Using proxy for request: ${finalApiUrl}`);
+        } else {
+            console.log(`[PStream] Making direct request (no proxy configured)`);
+        }
+        
         // Make the request
-        const response = await axios.get(apiUrl, {
+        const response = await axios.get(finalApiUrl, {
             headers: headers,
             timeout: 30000
         });
