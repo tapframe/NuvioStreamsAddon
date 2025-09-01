@@ -261,7 +261,7 @@ async function getVideoLinks(animeSession, episodeSession) {
                 links.push({
                     source: `AnimePahe [Pahe] ${source} [${type}]`,
                     url: href,
-                    quality: quality,
+                    quality: quality + 'p', // Add 'p' suffix to be consistent with other providers
                     type: type,
                     extractor: 'pahe'
                 });
