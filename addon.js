@@ -2300,6 +2300,32 @@ ${warningMessage}`;
     console.log(`Total Request Time: ${formatDuration(totalRequestTime)}`);
     console.log("-------------------------------");
 
+    // Check if 4KHDHub is not selected and add informational stream
+    const is4KHDHubSelected = selectedProvidersArray && selectedProvidersArray.includes('4khdhub');
+    if (!is4KHDHubSelected && ENABLE_4KHDHUB_PROVIDER) {
+        console.log("[4KHDHub] Not selected by user - adding informational stream");
+
+        // Create informational stream about 4KHDHub
+        const infoStream = {
+            name: "🎯 4KHDHub - Wide Content Available",
+            title: `Enable 4KHDHub Provider
+
+• Multiple servers (HubCloud, Pixeldrain, BuzzServer)
+• Extensive movie & TV collection
+• Fast streaming with quality options
+
+Add "4khdhub" to your provider configuration`,
+            url: "https://github.com/tapframe/NuvioStreamsAddon#4khdhub-provider",
+            type: 'url',
+            availability: 1,
+            behaviorHints: {
+                notWebReady: false // This is informational, so web-ready
+            }
+        };
+
+        stremioStreamObjects.push(infoStream);
+    }
+
     return {
         streams: stremioStreamObjects
     };
