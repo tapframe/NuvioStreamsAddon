@@ -681,7 +681,7 @@ const _searchAndExtractShowboxUrl = async (searchTerm, originalTmdbTitle, mediaY
     const mediaTypeString = tmdbType === 'movie' ? 'movie' : 'tv';
 
     // Add a cache version to invalidate previous incorrect cached results
-    const CACHE_VERSION = "v13"; // Increment this whenever the search algorithm significantly changes
+    const CACHE_VERSION = "v14"; // Increment this whenever the search algorithm significantly changes
 
     // Create a proper hash for the cache key to avoid filename issues with special characters
     const cacheKeyData = `${CACHE_VERSION}_${tmdbType}_${originalTmdbTitle}_${mediaYear || 'noYear'}`;
