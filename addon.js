@@ -899,8 +899,8 @@ builder.defineStreamHandler(async (args) => {
             console.log(`  Parsed season ${seasonNum}, episode ${episodeNum} from IMDb ID parts`);
         }
         
-        // Pass userRegionPreference and userCookie directly to convertImdbToTmdb
-        const conversionResult = await convertImdbToTmdb(baseImdbId, userRegionPreference);
+        // Pass userRegionPreference and expected type to convertImdbToTmdb
+        const conversionResult = await convertImdbToTmdb(baseImdbId, userRegionPreference, type);
         if (conversionResult && conversionResult.tmdbId && conversionResult.tmdbType) {
             tmdbId = conversionResult.tmdbId;
             tmdbTypeFromId = conversionResult.tmdbType;

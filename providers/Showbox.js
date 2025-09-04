@@ -681,7 +681,7 @@ const _searchAndExtractShowboxUrl = async (searchTerm, originalTmdbTitle, mediaY
     const mediaTypeString = tmdbType === 'movie' ? 'movie' : 'tv';
 
     // Add a cache version to invalidate previous incorrect cached results
-    const CACHE_VERSION = "v14"; // Increment this whenever the search algorithm significantly changes
+    const CACHE_VERSION = "v15"; // Increment this whenever the search algorithm significantly changes
 
     // Create a proper hash for the cache key to avoid filename issues with special characters
     const cacheKeyData = `${CACHE_VERSION}_${tmdbType}_${originalTmdbTitle}_${mediaYear || 'noYear'}`;
@@ -1990,19 +1990,19 @@ const extractFidsFromFebboxPage = async (febboxUrl, regionPreference = null, use
 };
 
 // Function to convert IMDb ID to TMDB ID using TMDB API
-// MODIFICATION: Accept scraperApiKey (though not directly used for TMDB calls here, kept for consistency if future needs arise)
-// -> MODIFICATION: Remove scraperApiKey parameter as it's not used for TMDB.
-const convertImdbToTmdb = async (imdbId, regionPreference = null) => {
+// MODIFICATION: Accept expectedType parameter to prioritize correct content type
+const convertImdbToTmdb = async (imdbId, regionPreference = null, expectedType = null) => {
     console.time(`convertImdbToTmdb_total_${imdbId}`);
     if (!imdbId || !imdbId.startsWith('tt')) {
         console.log('  Invalid IMDb ID format provided for conversion.', imdbId);
         console.timeEnd(`convertImdbToTmdb_total_${imdbId}`);
         return null;
     }
-    console.log(`  Attempting to convert IMDb ID: ${imdbId} to TMDB ID.`);
+    console.log(`  Attempting to convert IMDb ID: ${imdbId} to TMDB ID${expectedType ? ` (expected type: ${expectedType})` : ''}.`);
 
     const cacheSubDir = 'tmdb_external_id';
-    const cacheKey = `imdb-${imdbId}.json`;
+    // Include expected type in cache key to avoid conflicts between movie/tv requests
+    const cacheKey = `imdb-${imdbId}${expectedType ? `-${expectedType}` : ''}.json`;
     const cachedData = await getFromCache(cacheKey, cacheSubDir);
 
     if (cachedData) {
@@ -2026,16 +2026,39 @@ const convertImdbToTmdb = async (imdbId, regionPreference = null) => {
 
         if (findResults) {
             let result = null;
-            // TMDB API returns results in arrays like movie_results, tv_results etc.
-            // We prioritize movie results, then tv results.
-            if (findResults.movie_results && findResults.movie_results.length > 0) {
-                result = { tmdbId: String(findResults.movie_results[0].id), tmdbType: 'movie', title: findResults.movie_results[0].title || findResults.movie_results[0].original_title };
-            } else if (findResults.tv_results && findResults.tv_results.length > 0) {
-                result = { tmdbId: String(findResults.tv_results[0].id), tmdbType: 'tv', title: findResults.tv_results[0].name || findResults.tv_results[0].original_name };
-            } else if (findResults.person_results && findResults.person_results.length > 0) {
+            
+            // Context-aware prioritization based on expected type
+            if (expectedType === 'tv' || expectedType === 'series') {
+                // For series requests, prioritize TV results
+                if (findResults.tv_results && findResults.tv_results.length > 0) {
+                    result = { tmdbId: String(findResults.tv_results[0].id), tmdbType: 'tv', title: findResults.tv_results[0].name || findResults.tv_results[0].original_name };
+                    console.log(`    Prioritized TV result for series request: ${result.title}`);
+                } else if (findResults.movie_results && findResults.movie_results.length > 0) {
+                    result = { tmdbId: String(findResults.movie_results[0].id), tmdbType: 'movie', title: findResults.movie_results[0].title || findResults.movie_results[0].original_title };
+                    console.log(`    Fallback to movie result for series request: ${result.title}`);
+                }
+            } else if (expectedType === 'movie') {
+                // For movie requests, prioritize movie results
+                if (findResults.movie_results && findResults.movie_results.length > 0) {
+                    result = { tmdbId: String(findResults.movie_results[0].id), tmdbType: 'movie', title: findResults.movie_results[0].title || findResults.movie_results[0].original_title };
+                    console.log(`    Prioritized movie result for movie request: ${result.title}`);
+                } else if (findResults.tv_results && findResults.tv_results.length > 0) {
+                    result = { tmdbId: String(findResults.tv_results[0].id), tmdbType: 'tv', title: findResults.tv_results[0].name || findResults.tv_results[0].original_name };
+                    console.log(`    Fallback to TV result for movie request: ${result.title}`);
+                }
+            } else {
+                // Default behavior: prioritize movie results, then tv results (backward compatibility)
+                if (findResults.movie_results && findResults.movie_results.length > 0) {
+                    result = { tmdbId: String(findResults.movie_results[0].id), tmdbType: 'movie', title: findResults.movie_results[0].title || findResults.movie_results[0].original_title };
+                } else if (findResults.tv_results && findResults.tv_results.length > 0) {
+                    result = { tmdbId: String(findResults.tv_results[0].id), tmdbType: 'tv', title: findResults.tv_results[0].name || findResults.tv_results[0].original_name };
+                }
+            }
+            
+            if (findResults.person_results && findResults.person_results.length > 0 && !result) {
                 // Could handle other types if necessary, e.g. person, but for streams, movie/tv are key
                 console.log(`    IMDb ID ${imdbId} resolved to a person, not a movie or TV show on TMDB.`);
-            } else {
+            } else if (!result) {
                 console.log(`    No movie or TV results found on TMDB for IMDb ID ${imdbId}. Response:`, JSON.stringify(findResults).substring(0, 200));
             }
 
