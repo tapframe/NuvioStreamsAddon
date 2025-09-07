@@ -945,18 +945,26 @@
             }
         }
 
-        /* Nuvio App Card Styles */
+        /* Nuvio App Card Styles - Enhanced Eye-catching Version */
         .nuvio-app-card {
-            border: 1px solid rgba(140, 82, 255, 0.3);
+            border: 2px solid rgba(106, 59, 184, 0.6);
             position: relative;
             overflow: visible;
-            animation: pulse 2s infinite;
+            animation: pulse 1.5s infinite;
+            box-shadow: 0 8px 25px rgba(106, 59, 184, 0.3), 0 0 40px rgba(106, 59, 184, 0.2);
+            transform: scale(1.02);
+            transition: all 0.3s ease;
+        }
+
+        .nuvio-app-card:hover {
+            transform: scale(1.05);
+            box-shadow: 0 12px 35px rgba(106, 59, 184, 0.4), 0 0 60px rgba(106, 59, 184, 0.3);
         }
 
         .nuvio-app-card:before {
-            background: linear-gradient(45deg, var(--nuvio-app), var(--primary), var(--secondary));
-            background-size: 200% 200%;
-            animation: gradientFlow 10s ease infinite;
+            background: linear-gradient(45deg, #6a3bb8, #007acc, #008a55, #cc5555, #6a3bb8);
+            background-size: 300% 300%;
+            animation: gradientFlow 8s ease infinite, glowPulse 2s ease-in-out infinite alternate;
         }
 
         @keyframes gradientFlow {
@@ -964,8 +972,16 @@
                 background-position: 0% 50%;
             }
 
+            25% {
+                background-position: 100% 0%;
+            }
+
             50% {
-                background-position: 100% 50%;
+                background-position: 100% 100%;
+            }
+
+            75% {
+                background-position: 0% 100%;
             }
 
             100% {
@@ -975,30 +991,90 @@
 
         @keyframes pulse {
             0% {
-                box-shadow: 0 0 0 0 rgba(140, 82, 255, 0.4);
+                box-shadow: 0 0 0 0 rgba(106, 59, 184, 0.6), 0 8px 25px rgba(106, 59, 184, 0.3);
             }
 
-            70% {
-                box-shadow: 0 0 0 10px rgba(140, 82, 255, 0);
+            50% {
+                box-shadow: 0 0 0 15px rgba(106, 59, 184, 0), 0 12px 35px rgba(106, 59, 184, 0.5);
             }
 
             100% {
-                box-shadow: 0 0 0 0 rgba(140, 82, 255, 0);
+                box-shadow: 0 0 0 0 rgba(106, 59, 184, 0), 0 8px 25px rgba(106, 59, 184, 0.3);
+            }
+        }
+
+        @keyframes breathe {
+            0%, 100% {
+                transform: scale(1.02);
+            }
+
+            50% {
+                transform: scale(1.04);
+            }
+        }
+
+        @keyframes glowPulse {
+            0% {
+                opacity: 0.6;
+                filter: brightness(1);
+            }
+
+            100% {
+                opacity: 0.9;
+                filter: brightness(1.2);
+            }
+        }
+
+        @keyframes logoGlow {
+            0% {
+                box-shadow: 0 4px 15px rgba(140, 82, 255, 0.6);
+                transform: scale(1.15);
+            }
+
+            100% {
+                box-shadow: 0 6px 25px rgba(106, 59, 184, 0.8), 0 0 20px rgba(204, 85, 85, 0.4);
+                transform: scale(1.2);
             }
         }
 
         .nuvio-app-logo {
-            background: linear-gradient(135deg, var(--nuvio-app), #3a1980);
-            transform: scale(1.1);
+            background: linear-gradient(135deg, #6a3bb8, #2a1459, #cc5555);
+            transform: scale(1.15);
             position: relative;
+            animation: logoGlow 2s ease-in-out infinite alternate;
+            box-shadow: 0 4px 15px rgba(106, 59, 184, 0.6);
         }
 
         .nuvio-app-btn {
-            background: linear-gradient(135deg, var(--nuvio-app) 0%, var(--nuvio-app-hover) 100%);
+            background: linear-gradient(135deg, #6a3bb8 0%, #552a99 50%, #cc5555 100%);
+            border: 1px solid rgba(106, 59, 184, 0.4);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
 
         .nuvio-app-btn:hover {
-            box-shadow: 0 6px 15px rgba(140, 82, 255, 0.4);
+            box-shadow: 0 8px 20px rgba(106, 59, 184, 0.6), 0 0 30px rgba(204, 85, 85, 0.4);
+            transform: translateY(-2px) scale(1.05);
+        }
+
+        /* Enhanced text readability for Nuvio card */
+        .nuvio-app-card .catalog-title,
+        .nuvio-app-card .catalog-desc {
+            color: #ffffff !important;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8), 0 0 8px rgba(0, 0, 0, 0.5);
+            font-weight: 600;
+        }
+
+        .nuvio-app-card .catalog-desc {
+            color: #f0f0f0 !important;
+            font-weight: 500;
+        }
+
+        .nuvio-app-card .catalog-title {
+            color: #ffffff !important;
+            font-weight: 700;
+            text-shadow: 0 3px 6px rgba(0, 0, 0, 0.9), 0 0 12px rgba(106, 59, 184, 0.3);
         }
 
         .new-badge {
@@ -1696,6 +1772,11 @@
 
             body.has-instance-banner {
                 padding-top: 40px;
+            }
+
+            /* Add more bottom padding to Nuvio app card on mobile */
+            .nuvio-app-card {
+                margin-bottom: 5rem !important;
             }
         }
 
@@ -2470,12 +2551,11 @@
 
             <!-- New Nuvio App Promo -->
             <div class="catalog-card nuvio-app-card">
-                <div class="new-badge">Coming Soon</div>
+                <div class="new-badge">Beta</div>
                 <div class="catalog-logo nuvio-app-logo">📱</div>
                 <h3 class="catalog-title">Nuvio Streaming App</h3>
-                <p class="catalog-desc">Experience the power of Nuvio on your mobile device! Our upcoming iOS and
-                    Android app features more built-in providers and an enhanced streaming experience.</p>
-                <a href="https://github.com/tapframe/NuvioStreaming" target="_blank"
+                <p class="catalog-desc">Like Nuvio addon? Get more provider support at Nuvio's own app with internal providers! Currently in beta - test it out with many built-in providers for iOS and Android.</p>
+                <a href="https://tapframe.github.io/NuvioStreaming/" target="_blank"
                     class="install-catalog-btn nuvio-app-btn">Learn More</a>
             </div>
         </div>
