@@ -3771,6 +3771,7 @@
             const providersFromUrl = pathParams.providers || urlParams.get('providers');
             const minQualitiesFromUrl = pathParams.min_qualities || urlParams.get('min_qualities');
             const scraperApiKeyFromUrl = pathParams.scraper_api_key || urlParams.get('scraper_api_key');
+            const cookiesArrayFromUrl = pathParams.cookies || urlParams.get('cookies');
 
             // Set cookie and region
             if (cookieFromUrl && cookieInput) {
@@ -3787,6 +3788,15 @@
                 const regionExists = Array.from(regionSelector.options).some(option => option.value === regionFromUrl);
                 if (regionExists) {
                     regionSelector.value = regionFromUrl;
+                }
+            }
+
+            // Set region for multi-cookie selector if present
+            if (regionFromUrl) {
+                const regionSelectorMulti = document.getElementById('regionSelectorMulti');
+                if (regionSelectorMulti) {
+                    const exists = Array.from(regionSelectorMulti.options).some(o => o.value === regionFromUrl);
+                    if (exists) regionSelectorMulti.value = regionFromUrl;
                 }
             }
 
@@ -3839,6 +3849,21 @@
                 }
             }
 
+            // Load multi-cookies from URL if provided
+            if (cookiesArrayFromUrl) {
+                try {
+                    const decoded = decodeURIComponent(cookiesArrayFromUrl);
+                    const arr = JSON.parse(decoded);
+                    if (Array.isArray(arr) && arr.length > 0) {
+                        const mapped = arr.filter(v => typeof v === 'string' && v.trim().length > 0).map(v => ({ value: v }));
+                        saveMultiCookies(mapped);
+                        renderMultiCookieList();
+                    }
+                } catch (e) {
+                    console.error('Error decoding cookies array from URL:', e.message);
+                }
+            }
+
             // Automatically validate cookie if one is provided
             if (cookieFromUrl && cookieInput && cookieInput.value) {
                 // Trigger cookie validation
@@ -3853,7 +3878,7 @@
                         setTimeout(() => { toast.classList.remove('show'); }, 3500);
                     }
                 }, 1000);
-            } else if ((providersFromUrl || minQualitiesFromUrl || scraperApiKeyFromUrl) && applyProvidersBtn) {
+            } else if ((providersFromUrl || minQualitiesFromUrl || scraperApiKeyFromUrl || cookiesArrayFromUrl || regionFromUrl) && applyProvidersBtn) {
                 // If we have any other parameters but no cookie, just apply providers
                 setTimeout(() => {
                     applyProvidersBtn.click(); // Simulate Apply Selection button click
