@@ -126,6 +126,9 @@ global.regionAvailabilityStatus = {};
 const US_FALLBACK_REGIONS = ['USA7', 'USA6', 'USA5']; // Prioritized US regions for fallback
 
 // Modify the getCookieForRequest function to handle region fallbacks
+// Quota-aware cookie selection: if global.currentRequestConfig.cookies exists (array),
+// select the best cookie by querying flow from FebBox and choosing the highest remaining.
+// Fallback to existing single-cookie/rotation behavior.
 const getCookieForRequest = async (regionPreference = null, userCookie = null) => {
     // Reset the detected region for each new request to ensure we use the latest preference
     let detectedOssGroup = null;
@@ -164,11 +167,38 @@ const getCookieForRequest = async (regionPreference = null, userCookie = null) =
     };
     // --- End of Region Detection Logic ---
 
+    // If multiple cookies provided in request config, select best by remaining MB.
+    if (!baseCookieToUse && global.currentRequestConfig && Array.isArray(global.currentRequestConfig.cookies) && global.currentRequestConfig.cookies.length > 0) {
+        try {
+            const candidates = global.currentRequestConfig.cookies;
+            const flowResults = await Promise.all(candidates.map(async (c) => {
+                try {
+                    const headers = { 'Cookie': c.startsWith('ui=') ? c : `ui=${c}`, 'Accept': 'application/json, text/javascript, */*; q=0.01' };
+                    const resp = await axios.get('https://www.febbox.com/console/user_cards', { headers, timeout: 10000, validateStatus: () => true });
+                    if (resp.status === 200 && resp.data && resp.data.data && resp.data.data.flow) {
+                        const flow = resp.data.data.flow;
+                        const remaining = (Number(flow.traffic_limit_mb) || 0) - (Number(flow.traffic_usage_mb) || 0);
+                        return { cookie: c, remainingMB: remaining, ok: true };
+                    }
+                } catch (e) { /* ignore per-candidate error */ }
+                return { cookie: c, remainingMB: -1, ok: false };
+            }));
+            flowResults.sort((a, b) => (b.remainingMB - a.remainingMB));
+            const best = flowResults[0];
+            if (best && best.ok) {
+                baseCookieToUse = best.cookie;
+                console.log(`[CookieManager] Selected best cookie by remaining quota: ${best.remainingMB} MB`);
+            }
+        } catch (e) {
+            console.warn(`[CookieManager] Multi-cookie selection error: ${e.message}. Falling back to single-cookie flow.`);
+        }
+    }
+
     // Check if a base cookie has already been chosen and cached for this specific request cycle
     if (global.currentRequestConfig && global.currentRequestConfig.chosenFebboxBaseCookieForRequest) {
         console.log(`[CookieManager] Re-using request-cached base cookie for this cycle.`);
         baseCookieToUse = global.currentRequestConfig.chosenFebboxBaseCookieForRequest;
-    } else {
+    } else if (!baseCookieToUse) {
         // No request-cached cookie, so we need to select one.
         // 1. Prioritize user-supplied cookie passed directly to this function
         if (userCookie) {

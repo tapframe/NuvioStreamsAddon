@@ -43,6 +43,7 @@ app.use(async (req, res, next) => {
     const userRegionPreference = req.query.region;
     const userProvidersQuery = req.query.providers;
     const userMinQualitiesQuery = req.query.min_qualities;
+    const userCookiesParam = req.query.cookies; // JSON array of ui tokens
     const userScraperApiKey = req.query.scraper_api_key;
     const userExcludeCodecsQuery = req.query.exclude_codecs;
 
@@ -83,6 +84,7 @@ app.use(async (req, res, next) => {
     const region = pathParams.region || userRegionPreference;
     const providers = pathParams.providers || userProvidersQuery;
     const minQualities = pathParams.min_qualities || userMinQualitiesQuery;
+    const cookiesParam = pathParams.cookies || userCookiesParam;
     const scraperApiKey = pathParams.scraper_api_key || userScraperApiKey;
     const excludeCodecs = pathParams.exclude_codecs || userExcludeCodecsQuery;
 
@@ -114,6 +116,19 @@ app.use(async (req, res, next) => {
             console.error(`[server.js] Error decoding scraper_api_key from request: ${scraperApiKey}`, e.message);
         }
     }
+    // Parse multi-cookies param (encoded JSON array)
+    if (cookiesParam) {
+        try {
+            const decodedCookies = decodeURIComponent(cookiesParam);
+            const parsed = JSON.parse(decodedCookies);
+            if (Array.isArray(parsed)) {
+                // Store as array of strings
+                global.currentRequestConfig.cookies = parsed.filter(c => typeof c === 'string' && c.trim().length > 0);
+            }
+        } catch (e) {
+            console.error(`[server.js] Error parsing cookies array from request: ${cookiesParam}`, e.message);
+        }
+    }
     if (excludeCodecs) {
         try {
             const decodedExcludeCodecs = decodeURIComponent(excludeCodecs);
@@ -128,6 +143,7 @@ app.use(async (req, res, next) => {
         const configForLog = {...global.currentRequestConfig};
         if (configForLog.cookie) configForLog.cookie = `[PRESENT: ${configForLog.cookie.substring(0, 10)}...]`;
         if (configForLog.scraper_api_key) configForLog.scraper_api_key = '[PRESENT]';
+        if (configForLog.cookies) configForLog.cookies = `[${configForLog.cookies.length} cookies]`;
         
         console.log(`[server.js] Set global.currentRequestConfig for this request: ${JSON.stringify(configForLog)}`);
         
@@ -323,6 +339,38 @@ app.post('/api/validate-cookie', async (req, res) => {
             errorMessage = `FebBox server error: ${error.response.status}`;
         }
         return res.status(500).json({ isValid: false, message: errorMessage });
+    }
+});
+
+// API endpoint to fetch FebBox flow for a cookie (quota/usage)
+app.post('/api/febbox-flow', async (req, res) => {
+    try {
+        const { cookie } = req.body || {};
+        if (!cookie || typeof cookie !== 'string') {
+            return res.status(400).json({ ok: false, message: 'cookie is required' });
+        }
+        const headers = {
+            'User-Agent': 'Mozilla/5.0',
+            'Accept': 'application/json, text/javascript, */*; q=0.01',
+            'Cookie': cookie.startsWith('ui=') ? cookie : `ui=${cookie}`
+        };
+        const resp = await axios.get('https://www.febbox.com/console/user_cards', {
+            headers,
+            timeout: 12000,
+            validateStatus: () => true
+        });
+        if (resp.status !== 200 || !resp.data || !resp.data.data || !resp.data.data.flow) {
+            return res.status(200).json({ ok: false, message: `Unexpected response (status ${resp.status})` });
+        }
+        const flow = resp.data.data.flow;
+        return res.json({ ok: true, flow: {
+            traffic_limit_mb: flow.traffic_limit_mb,
+            traffic_usage_mb: flow.traffic_usage_mb,
+            reset_at: flow.reset_at,
+            is_vip: flow.is_vip
+        }});
+    } catch (e) {
+        return res.status(500).json({ ok: false, message: e.message });
     }
 });
 

@@ -2478,6 +2478,24 @@
                             </div>
                         </div>
 
+                        <!-- Multi-Cookie Manager (Quota-Aware) -->
+                        <div class="cookie-form" style="margin-top: 0.75rem;">
+                            <div class="full-width" style="grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between;">
+                                <h3 style="font-size: 0.95rem; font-weight: 600; margin: 0;">Multi-Cookie Manager (Beta)</h3>
+                                <small style="color: var(--text-light);">Add multiple FebBox ui tokens; auto-selects by remaining quota.</small>
+                            </div>
+                            <div class="cookie-input-container" style="grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 0.5fr auto; gap: 0.5rem; align-items: center;">
+                                <input type="text" id="multiCookieInput" placeholder="Paste another ui token" class="cookie-input" style="grid-column: 1 / 2;">
+                                <input type="text" id="multiCookieLabelInput" placeholder="Optional label (e.g., Main)" class="cookie-input" style="grid-column: 2 / 3;">
+                                <button id="addMultiCookieBtn" class="btn btn-secondary" style="grid-column: 3 / 4; white-space: nowrap;">Add Cookie</button>
+                            </div>
+                            <div class="full-width" style="grid-column: 1 / -1; display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+                                <button id="validateAllCookiesBtn" class="btn" style="background: rgba(0,163,255,0.15); border: 1px solid rgba(0,163,255,0.3); color: var(--primary);">Validate All</button>
+                                <button id="applyMultiCookiesBtn" class="btn" style="background: rgba(0,193,110,0.15); border: 1px solid rgba(0,193,110,0.3); color: var(--secondary);">Apply Cookies</button>
+                            </div>
+                            <div id="multiCookieList" class="full-width" style="grid-column: 1 / -1; margin-top: 0.5rem; display: grid; gap: 0.5rem;"></div>
+                        </div>
+
                         <p class="server-selection-note"
                             style="margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-light);">
                             <strong>Server Selection:</strong> Choose the server region closest to your physical
@@ -2802,6 +2820,195 @@
         const cookieConfigSection = document.getElementById('cookieConfigSection');
         const cookieConfigContainer = document.querySelector('.cookie-config-container');
 
+        // --- Multi-cookie elements ---
+        const multiCookieInput = document.getElementById('multiCookieInput');
+        const multiCookieLabelInput = document.getElementById('multiCookieLabelInput');
+        const addMultiCookieBtn = document.getElementById('addMultiCookieBtn');
+        const validateAllCookiesBtn = document.getElementById('validateAllCookiesBtn');
+        const applyMultiCookiesBtn = document.getElementById('applyMultiCookiesBtn');
+        const multiCookieList = document.getElementById('multiCookieList');
+
+        // --- Multi-cookie in-memory helpers (no storage) ---
+        window.nsMultiCookies = window.nsMultiCookies || [];
+        function loadMultiCookies() { return Array.isArray(window.nsMultiCookies) ? window.nsMultiCookies : []; }
+        function saveMultiCookies(arr) { window.nsMultiCookies = Array.isArray(arr) ? arr : []; }
+
+        function shortHash(str) {
+            let h = 5381; for (let i = 0; i < str.length; i++) { h = ((h << 5) + h) + str.charCodeAt(i); h |= 0; }
+            const hex = (h >>> 0).toString(16);
+            return hex.padStart(8, '0');
+        }
+
+        function formatMB(val) {
+            if (typeof val !== 'number' || isNaN(val)) return 'N/A';
+            const nf = new Intl.NumberFormat(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 0 });
+            const safe = Math.max(0, val); // clamp negative to 0
+            if (safe >= 1024) return nf.format(safe / 1024) + ' GB';
+            return nf.format(safe) + ' MB';
+        }
+
+        function renderMultiCookieList() {
+            if (!multiCookieList) return;
+            const data = loadMultiCookies();
+            if (data.length === 0) {
+                multiCookieList.innerHTML = '<div style="color: var(--text-light); font-size: 0.85rem;">No cookies added yet.</div>';
+                return;
+            }
+            multiCookieList.innerHTML = '';
+            data.forEach((item, idx) => {
+                const idShort = shortHash(item.value || '');
+                const label = item.label && item.label.trim() ? item.label.trim() : `Cookie ${idx + 1}`;
+                const flow = item.flow || {};
+                const remaining = (typeof flow.traffic_limit_mb === 'number' && typeof flow.traffic_usage_mb === 'number')
+                    ? (flow.traffic_limit_mb - flow.traffic_usage_mb) : null;
+
+                const card = document.createElement('div');
+                card.style.background = 'rgba(15,15,15,0.6)';
+                card.style.border = '1px solid var(--border)';
+                card.style.borderRadius = '0.5rem';
+                card.style.padding = '0.6rem';
+                card.style.display = 'flex';
+                card.style.alignItems = 'center';
+                card.style.justifyContent = 'space-between';
+                card.style.gap = '0.5rem';
+
+                const left = document.createElement('div');
+                left.style.display = 'flex';
+                left.style.flexDirection = 'column';
+                left.innerHTML = `<div style=\"font-weight:600;\">${label} <span style=\"color:var(--text-light); font-weight:400;\">#${idShort}</span></div>
+                                  <div style=\"font-size:0.8rem; color: var(--text-light);\">Remaining: ${remaining !== null ? formatMB(remaining) : 'Unknown'}${flow.reset_at ? ` • Resets in ${flow.reset_at}` : ''}</div>`;
+
+                const right = document.createElement('div');
+                right.style.display = 'flex';
+                right.style.gap = '0.4rem';
+
+                const validateBtn = document.createElement('button');
+                validateBtn.className = 'how-to-get-btn';
+                validateBtn.textContent = 'Validate';
+                validateBtn.addEventListener('click', async () => {
+                    await validateSingleMultiCookie(idx);
+                });
+
+                const removeBtn = document.createElement('button');
+                removeBtn.className = 'how-to-get-btn';
+                removeBtn.style.borderColor = '#ff3a3a';
+                removeBtn.style.color = '#ff3a3a';
+                removeBtn.textContent = 'Remove';
+                removeBtn.addEventListener('click', () => {
+                    const arr = loadMultiCookies();
+                    arr.splice(idx, 1);
+                    saveMultiCookies(arr);
+                    renderMultiCookieList();
+                    regeneratePersonalizedManifest();
+                });
+
+                right.appendChild(validateBtn);
+                right.appendChild(removeBtn);
+
+                card.appendChild(left);
+                card.appendChild(right);
+
+                multiCookieList.appendChild(card);
+            });
+        }
+
+        async function validateSingleMultiCookie(index) {
+            try {
+                const arr = loadMultiCookies();
+                if (!arr[index]) return;
+                const payload = { cookie: arr[index].value };
+                // Prefer direct flow endpoint for accurate quota display
+                let resp = await fetch('/api/febbox-flow', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                let usedFallback = false;
+                if (!resp.ok) {
+                    // Fallback to validate-cookie if flow endpoint missing (404) or unavailable
+                    usedFallback = true;
+                    resp = await fetch('/api/validate-cookie', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                }
+                if (!resp.ok) throw new Error('Flow/validation request failed');
+                const res = await resp.json();
+                if (!usedFallback && res && res.ok && res.flow) {
+                    arr[index].isValid = true;
+                    arr[index].flow = {
+                        traffic_limit_mb: res.flow.traffic_limit_mb,
+                        traffic_usage_mb: res.flow.traffic_usage_mb,
+                        reset_at: res.flow.reset_at,
+                        is_vip: res.flow.is_vip
+                    };
+                    const remaining = (Number(res.flow.traffic_limit_mb) || 0) - (Number(res.flow.traffic_usage_mb) || 0);
+                    toast.textContent = `Cookie ${index + 1} #${shortHash(arr[index].value)}\nRemaining: ${formatMB(remaining)}${res.flow.reset_at ? ` • Resets in ${res.flow.reset_at}` : ''}`;
+                    toast.classList.add('show');
+                    setTimeout(() => { toast.classList.remove('show'); }, 2500);
+                } else if (usedFallback && res && (res.isValid === true)) {
+                    // Fallback path: we know it's valid but don't have flow numbers
+                    arr[index].isValid = true;
+                    toast.textContent = `Cookie ${index + 1} #${shortHash(arr[index].value)} validated.`;
+                    toast.classList.add('show');
+                    setTimeout(() => { toast.classList.remove('show'); }, 2500);
+                } else {
+                    arr[index].isValid = false;
+                    toast.textContent = `Cookie ${index + 1} #${shortHash(arr[index].value)} validation failed.`;
+                    toast.classList.add('show');
+                    setTimeout(() => { toast.classList.remove('show'); }, 2500);
+                }
+                saveMultiCookies(arr);
+                renderMultiCookieList();
+            } catch (e) {
+                console.warn('Cookie validation error:', e.message);
+                toast.textContent = `Validation error: ${e.message}`;
+                toast.classList.add('show');
+                setTimeout(() => { toast.classList.remove('show'); }, 2500);
+            }
+        }
+
+        async function validateAllMultiCookies() {
+            const arr = loadMultiCookies();
+            for (let i = 0; i < arr.length; i++) {
+                await validateSingleMultiCookie(i);
+            }
+        }
+
+        // Multi-cookie handlers
+        if (addMultiCookieBtn) {
+            addMultiCookieBtn.addEventListener('click', () => {
+                const v = (multiCookieInput && multiCookieInput.value.trim()) || '';
+                const lbl = (multiCookieLabelInput && multiCookieLabelInput.value.trim()) || '';
+                if (!v) {
+                    toast.textContent = 'Please paste a ui token first.';
+                    toast.classList.add('show');
+                    setTimeout(() => { toast.classList.remove('show'); }, 2500);
+                    return;
+                }
+                const arr = loadMultiCookies();
+                if (!arr.some(x => x.value === v)) {
+                    arr.push({ value: v, label: lbl });
+                    saveMultiCookies(arr);
+                }
+                if (multiCookieInput) multiCookieInput.value = '';
+                if (multiCookieLabelInput) multiCookieLabelInput.value = '';
+                renderMultiCookieList();
+                regeneratePersonalizedManifest();
+            });
+        }
+
+        if (validateAllCookiesBtn) {
+            validateAllCookiesBtn.addEventListener('click', async () => {
+                await validateAllMultiCookies();
+                toast.textContent = 'Validation finished for all cookies.';
+                toast.classList.add('show');
+                setTimeout(() => { toast.classList.remove('show'); }, 2500);
+            });
+        }
+
+        if (applyMultiCookiesBtn) {
+            applyMultiCookiesBtn.addEventListener('click', () => {
+                regeneratePersonalizedManifest();
+                toast.textContent = 'Applied multi-cookie settings to personalized manifest.';
+                toast.classList.add('show');
+                setTimeout(() => { toast.classList.remove('show'); }, 2500);
+            });
+        }
+
         // --- NEW: Provider Selection Elements ---
         const providerCheckboxes = document.querySelectorAll('input[name="providerSelect"]');
         const selectAllProvidersBtn = document.getElementById('selectAllProvidersBtn');
@@ -2959,6 +3166,24 @@
                     queryParams.push(`region=${regionValue}`);
                 }
                 manifestPersonalized = true;
+            }
+
+            // Multi-cookies handling (quota-aware pool)
+            try {
+                const multiCookies = loadMultiCookies();
+                const cookieValues = (Array.isArray(multiCookies) ? multiCookies : []).map(c => c && c.value).filter(Boolean);
+                if (isShowBoxSelected && cookieValues.length > 0) {
+                    const encodedCookies = encodeURIComponent(JSON.stringify(cookieValues));
+                    pathParams.push(`cookies=${encodedCookies}`);
+                    queryParams.push(`cookies=${encodedCookies}`);
+                    manifestPersonalized = true;
+                    if (regionValue) {
+                        if (!pathParams.some(p => p.startsWith('region='))) pathParams.push(`region=${regionValue}`);
+                        if (!queryParams.some(p => p.startsWith('region='))) queryParams.push(`region=${regionValue}`);
+                    }
+                }
+            } catch (e) {
+                console.warn('Failed to read multi-cookies from storage:', e.message);
             }
 
             // Providers handling: Only add if a subset is selected
@@ -3753,6 +3978,8 @@
             if (cookieInput && cookieInput.value.trim()) {
                 checkCookieOnServer(cookieInput.value.trim());
             }
+            // Render empty list (no persistence)
+            renderMultiCookieList();
         });
 
         // Modify the setCookieBtn event listener to restart region checks when region changes
