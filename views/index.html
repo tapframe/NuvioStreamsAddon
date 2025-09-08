@@ -2484,10 +2484,25 @@
                                 <h3 style="font-size: 0.95rem; font-weight: 600; margin: 0;">Multi-Cookie Manager (Beta)</h3>
                                 <small style="color: var(--text-light);">Add multiple FebBox ui tokens; auto-selects by remaining quota.</small>
                             </div>
-                            <div class="cookie-input-container" style="grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 0.5fr auto; gap: 0.5rem; align-items: center;">
+                            <div class="cookie-input-container" style="grid-column: 1 / -1; display: grid; grid-template-columns: 1fr auto; gap: 0.5rem; align-items: center;">
                                 <input type="text" id="multiCookieInput" placeholder="Paste another ui token" class="cookie-input" style="grid-column: 1 / 2;">
-                                <input type="text" id="multiCookieLabelInput" placeholder="Optional label (e.g., Main)" class="cookie-input" style="grid-column: 2 / 3;">
-                                <button id="addMultiCookieBtn" class="btn btn-secondary" style="grid-column: 3 / 4; white-space: nowrap;">Add Cookie</button>
+                                <button id="addMultiCookieBtn" class="btn btn-secondary" style="grid-column: 2 / 3; white-space: nowrap;">Add Cookie</button>
+                            </div>
+                            <div class="full-width" style="grid-column: 1 / -1; display: flex; align-items: center; gap: 0.5rem; margin-top: 0.25rem;">
+                                <span style="font-size: 0.85rem; color: var(--text-light);">Region:</span>
+                                <select id="regionSelectorMulti" class="cookie-input" style="max-width: 220px; padding: 0.4rem 0.6rem;">
+                                    <option value="USA7">US East</option>
+                                    <option value="USA6">US West</option>
+                                    <option value="USA5">US Middle</option>
+                                    <option value="UK3">United Kingdom</option>
+                                    <option value="CA1">Canada</option>
+                                    <option value="FR1">France</option>
+                                    <option value="DE2">Germany</option>
+                                    <option value="HK1">Hong Kong</option>
+                                    <option value="IN1">India</option>
+                                    <option value="AU1">Australia</option>
+                                    <option value="SZ">China</option>
+                                </select>
                             </div>
                             <div class="full-width" style="grid-column: 1 / -1; display: flex; gap: 0.5rem; margin-top: 0.5rem;">
                                 <button id="validateAllCookiesBtn" class="btn" style="background: rgba(0,163,255,0.15); border: 1px solid rgba(0,163,255,0.3); color: var(--primary);">Validate All</button>
@@ -2541,7 +2556,7 @@
                     Developed by <a href="https://github.com/tapframe" target="_blank" class="github-link">TapFrame</a>
                 </div>
                 <div class="footer-text">
-                    v0.4.2_v14
+                    v0.5.0
                 </div>
             </div>
         </div>
@@ -2822,7 +2837,6 @@
 
         // --- Multi-cookie elements ---
         const multiCookieInput = document.getElementById('multiCookieInput');
-        const multiCookieLabelInput = document.getElementById('multiCookieLabelInput');
         const addMultiCookieBtn = document.getElementById('addMultiCookieBtn');
         const validateAllCookiesBtn = document.getElementById('validateAllCookiesBtn');
         const applyMultiCookiesBtn = document.getElementById('applyMultiCookiesBtn');
@@ -2857,7 +2871,7 @@
             multiCookieList.innerHTML = '';
             data.forEach((item, idx) => {
                 const idShort = shortHash(item.value || '');
-                const label = item.label && item.label.trim() ? item.label.trim() : `Cookie ${idx + 1}`;
+                const label = `Cookie ${idx + 1}`;
                 const flow = item.flow || {};
                 const remaining = (typeof flow.traffic_limit_mb === 'number' && typeof flow.traffic_usage_mb === 'number')
                     ? (flow.traffic_limit_mb - flow.traffic_usage_mb) : null;
@@ -2972,7 +2986,6 @@
         if (addMultiCookieBtn) {
             addMultiCookieBtn.addEventListener('click', () => {
                 const v = (multiCookieInput && multiCookieInput.value.trim()) || '';
-                const lbl = (multiCookieLabelInput && multiCookieLabelInput.value.trim()) || '';
                 if (!v) {
                     toast.textContent = 'Please paste a ui token first.';
                     toast.classList.add('show');
@@ -2981,11 +2994,10 @@
                 }
                 const arr = loadMultiCookies();
                 if (!arr.some(x => x.value === v)) {
-                    arr.push({ value: v, label: lbl });
+                    arr.push({ value: v });
                     saveMultiCookies(arr);
                 }
                 if (multiCookieInput) multiCookieInput.value = '';
-                if (multiCookieLabelInput) multiCookieLabelInput.value = '';
                 renderMultiCookieList();
                 regeneratePersonalizedManifest();
             });
@@ -3177,9 +3189,10 @@
                     pathParams.push(`cookies=${encodedCookies}`);
                     queryParams.push(`cookies=${encodedCookies}`);
                     manifestPersonalized = true;
-                    if (regionValue) {
-                        if (!pathParams.some(p => p.startsWith('region='))) pathParams.push(`region=${regionValue}`);
-                        if (!queryParams.some(p => p.startsWith('region='))) queryParams.push(`region=${regionValue}`);
+                    const regionFromMulti = (document.getElementById('regionSelectorMulti') && document.getElementById('regionSelectorMulti').value) || regionValue;
+                    if (regionFromMulti) {
+                        if (!pathParams.some(p => p.startsWith('region='))) pathParams.push(`region=${regionFromMulti}`);
+                        if (!queryParams.some(p => p.startsWith('region='))) queryParams.push(`region=${regionFromMulti}`);
                     }
                 }
             } catch (e) {
