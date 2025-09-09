@@ -838,9 +838,11 @@ builder.defineStreamHandler(async (args) => {
         selectedProvidersArray = requestSpecificConfig.providers.split(',').map(p => p.trim().toLowerCase());
     }
     
+    // Detect presence of cookies array as a signal of personal cookies, too
+    const hasCookiesArray = Array.isArray(requestSpecificConfig.cookies) && requestSpecificConfig.cookies.length > 0;
     console.log(`Effective request details: ${JSON.stringify({
         regionPreference: userRegionPreference || 'none',
-        hasCookie: !!userCookie,
+        hasCookie: !!userCookie || hasCookiesArray || !!global.currentRequestUserCookie,
         selectedProviders: selectedProvidersArray ? selectedProvidersArray.join(', ') : 'all'
     })}`);
     
@@ -850,8 +852,10 @@ builder.defineStreamHandler(async (args) => {
         console.log(`[addon.js] No region preference found in global config.`);
     }
     
-    if (userCookie) {
-        console.log(`[addon.js] Using cookie from global config (length: ${userCookie.length})`);
+    if (userCookie || hasCookiesArray || global.currentRequestUserCookie) {
+        const cookieSource = userCookie ? 'single' : (global.currentRequestUserCookie ? 'selected-best' : 'array');
+        const cookieLen = userCookie ? userCookie.length : (global.currentRequestUserCookie ? String(global.currentRequestUserCookie).length : 0);
+        console.log(`[addon.js] Using personal cookie (${cookieSource}); length: ${cookieLen}`);
     } else {
         console.log(`[addon.js] No cookie found in global config.`);
     }
@@ -1987,10 +1991,10 @@ builder.defineStreamHandler(async (args) => {
             providerDisplayName = 'XPRIME ⚡';
         } else if (stream.provider === 'ShowBox') {
             providerDisplayName = 'ShowBox';
-            if (!userCookie) {
-                providerDisplayName += ' (SLOW)';
-            } else {
+            if (userCookie || hasCookiesArray || global.currentRequestUserCookie) {
                 providerDisplayName += ' ⚡';
+            } else {
+                providerDisplayName += ' (SLOW)';
             }
         } else if (stream.provider === 'HollyMovieHD') {
             providerDisplayName = 'HollyMovieHD'; // Changed from HollyHD
@@ -2246,6 +2250,9 @@ builder.defineStreamHandler(async (args) => {
             titleParts.push(...sortedCodecs);
         }
 
+        // Prepare optional quota line for ShowBox personal cookie usage
+        let quotaLine = '';
+
         if (stream.size && stream.size !== 'Unknown size' && !stream.size.toLowerCase().includes('n/a')) {
             let sizeWithAudio = stream.size;
             
@@ -2254,6 +2261,15 @@ builder.defineStreamHandler(async (args) => {
                 sizeWithAudio += ' • ' + stream.audioMetadata.join(' • ');
             }
             
+            // Build quota remaining info for ShowBox when a personal cookie was selected (on next line)
+            if (stream.provider === 'ShowBox' && (userCookie || hasCookiesArray || global.currentRequestUserCookie)) {
+                const remainingMb = global.currentRequestUserCookieRemainingMB;
+                if (typeof remainingMb === 'number' && remainingMb >= 0) {
+                    const remainingGb = remainingMb >= 1024 ? `${(remainingMb / 1024).toFixed(2)} GB` : `${Math.round(remainingMb)} MB`;
+                    quotaLine = `\nQuota left: ${remainingGb}`;
+                }
+            }
+
             titleParts.push(sizeWithAudio);
         }
             
@@ -2261,8 +2277,13 @@ builder.defineStreamHandler(async (args) => {
         let finalTitle = titleSecondLine ? `${displayTitle}
 ${titleSecondLine}` : displayTitle;
 
-        // Add warning for ShowBox if no user cookie is present
-        if (stream.provider === 'ShowBox' && !userCookie) {
+        // Append quota line (if any) right after size/codec line
+        if (quotaLine) {
+            finalTitle += `${quotaLine}`;
+        }
+
+        // Add warning for ShowBox if no personal cookie is present (single, array, or selected best)
+        if (stream.provider === 'ShowBox' && !(userCookie || hasCookiesArray || global.currentRequestUserCookie)) {
             const warningMessage = "⚠️ Slow? Add personal FebBox cookie in addon config for faster streaming.";
             finalTitle += `
 ${warningMessage}`;

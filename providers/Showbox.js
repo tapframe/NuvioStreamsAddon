@@ -167,27 +167,58 @@ const getCookieForRequest = async (regionPreference = null, userCookie = null) =
     };
     // --- End of Region Detection Logic ---
 
-    // If multiple cookies provided in request config, select best by remaining MB.
-    if (!baseCookieToUse && global.currentRequestConfig && Array.isArray(global.currentRequestConfig.cookies) && global.currentRequestConfig.cookies.length > 0) {
+    // Intelligent selection: when cookies array is present, evaluate ALL candidates (single cookie + array + cookies.txt)
+    // Only engage this logic if there is at least one known cookie (single provided or cookies.txt available)
+    if (!baseCookieToUse && global.currentRequestConfig) {
         try {
-            const candidates = global.currentRequestConfig.cookies;
-            const flowResults = await Promise.all(candidates.map(async (c) => {
-                try {
-                    const headers = { 'Cookie': c.startsWith('ui=') ? c : `ui=${c}`, 'Accept': 'application/json, text/javascript, */*; q=0.01' };
-                    const resp = await axios.get('https://www.febbox.com/console/user_cards', { headers, timeout: 10000, validateStatus: () => true });
-                    if (resp.status === 200 && resp.data && resp.data.data && resp.data.data.flow) {
-                        const flow = resp.data.data.flow;
-                        const remaining = (Number(flow.traffic_limit_mb) || 0) - (Number(flow.traffic_usage_mb) || 0);
-                        return { cookie: c, remainingMB: remaining, ok: true };
-                    }
-                } catch (e) { /* ignore per-candidate error */ }
-                return { cookie: c, remainingMB: -1, ok: false };
-            }));
-            flowResults.sort((a, b) => (b.remainingMB - a.remainingMB));
-            const best = flowResults[0];
-            if (best && best.ok) {
-                baseCookieToUse = best.cookie;
-                console.log(`[CookieManager] Selected best cookie by remaining quota: ${best.remainingMB} MB`);
+            const providedArray = Array.isArray(global.currentRequestConfig.cookies)
+                ? global.currentRequestConfig.cookies.filter(Boolean)
+                : [];
+
+            const providedSingle = typeof global.currentRequestConfig.cookie === 'string' && global.currentRequestConfig.cookie.trim().length > 0
+                ? [global.currentRequestConfig.cookie.trim()]
+                : [];
+
+            // cookieCache may be loaded from cookies.txt earlier in this module
+            const fallbackFromFile = Array.isArray(cookieCache) ? cookieCache : [];
+
+            // Build union of candidates from single, array, and file-based pool.
+            // Always consider the cookies array even if single/file baselines are absent.
+            let candidates = [...providedSingle, ...providedArray, ...fallbackFromFile];
+
+            // Deduplicate while preserving order
+            const seen = new Set();
+            candidates = candidates.filter((c) => {
+                const v = (c || '').trim();
+                if (!v) return false;
+                if (seen.has(v)) return false;
+                seen.add(v);
+                return true;
+            });
+
+            if (candidates.length > 0) {
+                const flowResults = await Promise.all(candidates.map(async (c) => {
+                    try {
+                        const headers = { 'Cookie': c.startsWith('ui=') ? c : `ui=${c}`, 'Accept': 'application/json, text/javascript, */*; q=0.01' };
+                        const resp = await axios.get('https://www.febbox.com/console/user_cards', { headers, timeout: 10000, validateStatus: () => true });
+                        if (resp.status === 200 && resp.data && resp.data.data && resp.data.data.flow) {
+                            const flow = resp.data.data.flow;
+                            const remaining = (Number(flow.traffic_limit_mb) || 0) - (Number(flow.traffic_usage_mb) || 0);
+                            return { cookie: c, remainingMB: remaining, ok: true };
+                        }
+                    } catch (e) { /* ignore per-candidate error */ }
+                    return { cookie: c, remainingMB: -1, ok: false };
+                }));
+
+                flowResults.sort((a, b) => (b.remainingMB - a.remainingMB));
+                const best = flowResults[0];
+                if (best && best.ok) {
+                    baseCookieToUse = best.cookie;
+                    // Expose the fact that we are using a personal cookie this cycle
+                    global.currentRequestUserCookie = best.cookie;
+                    global.currentRequestUserCookieRemainingMB = best.remainingMB;
+                    console.log(`[CookieManager] Selected best cookie by remaining quota: ${best.remainingMB} MB`);
+                }
             }
         } catch (e) {
             console.warn(`[CookieManager] Multi-cookie selection error: ${e.message}. Falling back to single-cookie flow.`);
@@ -3309,6 +3340,36 @@ const getUiTokenForPStream = async (userCookie = null) => {
     if (global.currentRequestUserCookie && global.currentRequestUserCookie.startsWith('eyJ')) {
         console.log('[PStream CookieManager] Using JWT token from global state');
         return global.currentRequestUserCookie;
+    }
+    
+    // Try intelligent selection from cookies array if available
+    if (global.currentRequestConfig && Array.isArray(global.currentRequestConfig.cookies) && global.currentRequestConfig.cookies.length > 0) {
+        try {
+            const candidates = global.currentRequestConfig.cookies.filter(Boolean);
+            const flowResults = await Promise.all(candidates.map(async (c) => {
+                try {
+                    const headers = { 'Cookie': c.startsWith('ui=') ? c : `ui=${c}`, 'Accept': 'application/json, text/javascript, */*; q=0.01' };
+                    const resp = await axios.get('https://www.febbox.com/console/user_cards', { headers, timeout: 10000, validateStatus: () => true });
+                    if (resp.status === 200 && resp.data && resp.data.data && resp.data.data.flow) {
+                        const flow = resp.data.data.flow;
+                        const remaining = (Number(flow.traffic_limit_mb) || 0) - (Number(flow.traffic_usage_mb) || 0);
+                        return { cookie: c, remainingMB: remaining, ok: true };
+                    }
+                } catch (e) { /* ignore per-candidate error */ }
+                return { cookie: c, remainingMB: -1, ok: false };
+            }));
+            flowResults.sort((a, b) => (b.remainingMB - a.remainingMB));
+            const best = flowResults[0];
+            if (best && best.ok) {
+                global.currentRequestUserCookie = best.cookie;
+                global.currentRequestUserCookieRemainingMB = best.remainingMB;
+                console.log(`[PStream CookieManager] Selected best ui-token by remaining quota: ${best.remainingMB} MB`);
+                // Return JWT directly if it is JWT, otherwise return as-is
+                return best.cookie;
+            }
+        } catch (e) {
+            console.warn(`[PStream CookieManager] Multi-cookie selection failed: ${e.message}`);
+        }
     }
     
     console.log('[PStream CookieManager] No valid ui-token available');
