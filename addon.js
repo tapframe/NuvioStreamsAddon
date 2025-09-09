@@ -630,6 +630,12 @@ const getStreamCacheKey = (provider, type, id, seasonNum = null, episodeNum = nu
 // Get cached streams for a provider - Hybrid approach (Redis first, then file)
 const getStreamFromCache = async (provider, type, id, seasonNum = null, episodeNum = null, region = null, cookie = null) => {
     if (!ENABLE_STREAM_CACHE) return null;
+    // Exclude ShowBox and PStream from cache entirely
+    try {
+        if (provider && ['showbox', 'pstream'].includes(String(provider).toLowerCase())) {
+            return null;
+        }
+    } catch (_) {}
     
     const cacheKey = getStreamCacheKey(provider, type, id, seasonNum, episodeNum, region, cookie);
     
@@ -697,6 +703,12 @@ const getStreamFromCache = async (provider, type, id, seasonNum = null, episodeN
 // Save streams to cache - Hybrid approach (Redis + file)
 const saveStreamToCache = async (provider, type, id, streams, status = 'ok', seasonNum = null, episodeNum = null, region = null, cookie = null, ttlMs = null) => {
     if (!ENABLE_STREAM_CACHE) return;
+    // Exclude ShowBox and PStream from cache entirely
+    try {
+        if (provider && ['showbox', 'pstream'].includes(String(provider).toLowerCase())) {
+            return;
+        }
+    } catch (_) {}
     
     const cacheKey = getStreamCacheKey(provider, type, id, seasonNum, episodeNum, region, cookie);
     const effectiveTtlMs = ttlMs !== null ? ttlMs : STREAM_CACHE_TTL_MS; // Use provided TTL or default
@@ -771,7 +783,20 @@ builder.defineStreamHandler(async (args) => {
 
     // Read config from global set by server.js middleware
     const requestSpecificConfig = global.currentRequestConfig || {};
-    console.log(`[addon.js] Read from global.currentRequestConfig: ${JSON.stringify(requestSpecificConfig)}`);
+    // Mask sensitive fields for logs
+    const maskedForLog = (() => {
+        try {
+            const clone = JSON.parse(JSON.stringify(requestSpecificConfig));
+            if (clone.cookie) clone.cookie = '[PRESENT: ****]';
+            if (clone.cookies && Array.isArray(clone.cookies)) clone.cookies = `[${clone.cookies.length} cookies]`;
+            if (clone.scraper_api_key) clone.scraper_api_key = '[PRESENT: ****]';
+            if (clone.chosenFebboxBaseCookieForRequest) clone.chosenFebboxBaseCookieForRequest = '[PRESENT: ****]';
+            return clone;
+        } catch (_) {
+            return { masked: true };
+        }
+    })();
+    console.log(`[addon.js] Read from global.currentRequestConfig: ${JSON.stringify(maskedForLog)}`);
 
     // NEW: Get minimum quality preferences
     const minQualitiesPreferences = requestSpecificConfig.minQualities || {};
@@ -2261,8 +2286,8 @@ builder.defineStreamHandler(async (args) => {
                 sizeWithAudio += ' • ' + stream.audioMetadata.join(' • ');
             }
             
-            // Build quota remaining info for ShowBox when a personal cookie was selected (on next line)
-            if (stream.provider === 'ShowBox' && (userCookie || hasCookiesArray || global.currentRequestUserCookie)) {
+            // Build quota remaining info for ShowBox/PStream when a personal cookie was selected (on next line)
+            if ((stream.provider === 'ShowBox' || stream.provider === 'PStream') && (userCookie || hasCookiesArray || global.currentRequestUserCookie)) {
                 const remainingMb = global.currentRequestUserCookieRemainingMB;
                 if (typeof remainingMb === 'number' && remainingMb >= 0) {
                     const remainingGb = remainingMb >= 1024 ? `${(remainingMb / 1024).toFixed(2)} GB` : `${Math.round(remainingMb)} MB`;

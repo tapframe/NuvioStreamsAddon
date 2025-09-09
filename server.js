@@ -72,7 +72,11 @@ app.use(async (req, res, next) => {
         });
 
         if (Object.keys(pathParams).length > 0) {
-            console.log(`[server.js] Extracted path parameters: ${JSON.stringify(pathParams)}`);
+            const maskedPathParams = {...pathParams};
+            if (maskedPathParams.cookie) maskedPathParams.cookie = '[MASKED]';
+            if (maskedPathParams.cookies) maskedPathParams.cookies = '[MASKED_ARRAY]';
+            if (maskedPathParams.scraper_api_key) maskedPathParams.scraper_api_key = '[MASKED]';
+            console.log(`[server.js] Extracted path parameters: ${JSON.stringify(maskedPathParams)}`);
         }
     }
 
@@ -141,16 +145,35 @@ app.use(async (req, res, next) => {
     if (Object.keys(global.currentRequestConfig).length > 0) {
         // Mask sensitive information in logs
         const configForLog = {...global.currentRequestConfig};
-        if (configForLog.cookie) configForLog.cookie = `[PRESENT: ${configForLog.cookie.substring(0, 10)}...]`;
-        if (configForLog.scraper_api_key) configForLog.scraper_api_key = '[PRESENT]';
+        if (configForLog.cookie) configForLog.cookie = '[PRESENT: ****]';
+        if (configForLog.scraper_api_key) configForLog.scraper_api_key = '[PRESENT: ****]';
         if (configForLog.cookies) configForLog.cookies = `[${configForLog.cookies.length} cookies]`;
         
         console.log(`[server.js] Set global.currentRequestConfig for this request: ${JSON.stringify(configForLog)}`);
         
-        // Debug logging for stream requests
+        // Debug logging for stream requests (mask sensitive)
         if (req.path.includes('stream') || req.url.includes('stream')) {
-            console.log(`[server.js] STREAM REQUEST detected - URL: ${req.url}`);
-            console.log(`[server.js] STREAM REQUEST parameters - Path: ${JSON.stringify(pathParams)}, Query: ${JSON.stringify(req.query)}`);
+            const maskedUrlForLog = (req.url || '').replace(/(cookie=|cookies=|scraper_api_key=)[^&/]+/g, '$1[MASKED]');
+            const maskedPathParamsForLog = (() => {
+                try {
+                    const clone = {...pathParams};
+                    if (clone.cookie) clone.cookie = '[MASKED]';
+                    if (clone.cookies) clone.cookies = '[MASKED_ARRAY]';
+                    if (clone.scraper_api_key) clone.scraper_api_key = '[MASKED]';
+                    return clone;
+                } catch (_) { return { masked: true }; }
+            })();
+            const maskedQueryForLog = (() => {
+                try {
+                    const clone = {...req.query};
+                    if (clone.cookie) clone.cookie = '[MASKED]';
+                    if (clone.cookies) clone.cookies = '[MASKED_ARRAY]';
+                    if (clone.scraper_api_key) clone.scraper_api_key = '[MASKED]';
+                    return clone;
+                } catch (_) { return { masked: true }; }
+            })();
+            console.log(`[server.js] STREAM REQUEST detected - URL: ${maskedUrlForLog}`);
+            console.log(`[server.js] STREAM REQUEST parameters - Path: ${JSON.stringify(maskedPathParamsForLog)}, Query: ${JSON.stringify(maskedQueryForLog)}`);
         }
     }
 
@@ -421,8 +444,13 @@ app.use((req, res, next) => {
     
     if (pathMatch) {
         const [, pathParams, type, id] = pathMatch;
-        console.log(`[server.js] Detected path-based stream request: ${req.path}`);
-        console.log(`[server.js] Path params: ${pathParams}, Type: ${type}, ID: ${id}`);
+        console.log(`[server.js] Detected path-based stream request: ${req.path.replace(/(cookie=|cookies=|scraper_api_key=)[^/&]+/g, '$1[MASKED]')}`);
+        // Mask any sensitive values in the composed pathParams string
+        const maskedParamsStr = String(pathParams)
+            .replace(/(cookie=)[^/&]+/g, '$1[MASKED]')
+            .replace(/(cookies=)[^/&]+/g, '$1[MASKED_ARRAY]')
+            .replace(/(scraper_api_key=)[^/&]+/g, '$1[MASKED]');
+        console.log(`[server.js] Path params: ${maskedParamsStr}, Type: ${type}, ID: ${id}`);
         
         // Rewrite the URL to the standard format that the SDK expects
         const originalQuery = req.url.includes('?') ? req.url.substring(req.url.indexOf('?')) : '';
