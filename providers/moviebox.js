@@ -8,7 +8,7 @@ const BASE_URL = 'https://api.inmoviebox.com/wefeed-mobile-bff';
 const TMDB_API_KEY = "68e094699525b18a70bab2f86b1fa706";
 
 // Get PRIMARY_KEY from environment
-const PRIMARY_KEY = process.env.MOVIEBOX_PRIMARY_KEY || '76iRl07s0xSN9jqmEWAt79EBJZulIQIsV64FZr2O';
+const PRIMARY_KEY = process.env.MOVIEBOX_PRIMARY_KEY;
 
 function md5Hex(data) {
     return CryptoJS.MD5(data).toString(CryptoJS.enc.Hex);
