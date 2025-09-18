@@ -942,7 +942,24 @@
 
             .cookie-config {
                 overflow: visible;
+                max-height: none;
+                max-height: none;
             }
+
+            /* Cookie section mobile fixes */
+            .cookie-form { grid-template-columns: 1fr !important; width: 100%; }
+            .cookie-form .button-group { flex-direction: column; width: 100%; }
+            .cookie-input { min-width: 0; }
+            .cookie-input-container { display: grid; grid-template-columns: 1fr !important; }
+            .inline-check-btn { width: 100%; margin-top: 0.5rem; }
+
+            /* Multi-cookie list cards should stack and wrap on small screens */
+            #multiCookieList { overflow-x: hidden; overflow-y: auto; max-height: 320px; }
+            #multiCookieList > div { flex-direction: column !important; align-items: stretch !important; }
+            #multiCookieList > div > div { min-width: 0; }
+            #multiCookieList > div > div:last-child { justify-content: space-between; }
+            #multiCookieList button { width: 100%; }
+            #multiCookieList * { word-break: break-word; }
         }
 
         /* Nuvio App Card Styles - Enhanced Eye-catching Version */
@@ -1164,10 +1181,10 @@
             padding: 1rem;
             border: 1px solid var(--border);
             position: relative;
-            overflow: hidden;
-            max-height: 700px;
+            overflow: visible;
+            max-height: none;
             opacity: 1;
-            transition: max-height 0.5s ease-in-out, opacity 0.3s ease-in-out, padding 0.5s ease-in-out;
+            transition: opacity 0.3s ease-in-out, padding 0.5s ease-in-out;
         }
 
         .cookie-config p {

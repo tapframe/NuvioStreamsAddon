@@ -2456,7 +2456,7 @@ ${warningMessage}`;
     console.log("-------------------------------");
 
     // Check if 4KHDHub is not selected and add informational stream
-    const is4KHDHubSelected = selectedProvidersArray && selectedProvidersArray.includes('4khdhub');
+    const is4KHDHubSelected = !selectedProvidersArray || selectedProvidersArray.includes('4khdhub');
     if (!is4KHDHubSelected && ENABLE_4KHDHUB_PROVIDER) {
         console.log("[4KHDHub] Not selected by user - adding informational stream");
 
