@@ -2017,7 +2017,7 @@ builder.defineStreamHandler(async (args) => {
 
         // Combine streams in the preferred provider order
         combinedRawStreams = [];
-        const providerOrder = ['ShowBox', 'UHDMovies', '4KHDHub', 'MoviesMod', 'TopMovies', 'DramaDrip', 'MoviesDrive', 'Hianime', 'Xprime.tv', 'HollyMovieHD', 'Soaper TV', 'VidZee', 'MP4Hydra', 'Cuevana', 'VidSrc', 'Vixsrc', 'MovieBox', 'AnimePahe'];
+		const providerOrder = ['ShowBox', 'MovieBox', 'UHDMovies', '4KHDHub', 'MoviesMod', 'TopMovies', 'DramaDrip', 'MoviesDrive', 'Hianime', 'Xprime.tv', 'HollyMovieHD', 'Soaper TV', 'VidZee', 'MP4Hydra', 'Cuevana', 'VidSrc', 'Vixsrc', 'AnimePahe'];
         providerOrder.forEach(providerKey => {
             if (streamsByProvider[providerKey] && streamsByProvider[providerKey].length > 0) {
                 combinedRawStreams.push(...streamsByProvider[providerKey]);
