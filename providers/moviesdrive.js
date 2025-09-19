@@ -22,7 +22,7 @@ const CACHE_DIR = process.env.VERCEL ? path.join('/tmp', '.moviesdrive_cache') :
 const redisCache = new RedisCache('MoviesDrive');
 
 // Main URL for MoviesDrive
-let mainUrl = 'https://moviesdrive.design';
+let mainUrl = 'https://moviesdrive.mom';
 
 // Cache helper functions
 const ensureCacheDir = async () => {
