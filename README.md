@@ -50,7 +50,6 @@
       </ul>
     </li>
     <li><a href="#usage-notes">Usage Notes</a></li>
-    <li><a href="#provider-guides">Provider Guides</a></li>
     <li><a href="#contributing">Contributing</a></li>
     <li><a href="#support">Support</a></li>
     <li><a href="#license">License</a></li>
@@ -74,7 +73,7 @@ Nuvio Streams is a powerful Stremio addon that provides direct HTTP streaming li
 
 ### Key Features
 
-* **🌐 Multiple Providers** - ShowBox, SoaperTV, VidSrc, VidZee, MP4Hydra, UHDMovies, MoviesMod, DramaDrip, TopMovies, AnimePahe
+* **🌐 Multiple Sources** - Aggregates direct HTTP streams without P2P
 * **⚡ Personal Cookie Support** - Get your own quota and access to 4K/HDR content
 * **🎯 Quality Filtering** - Set minimum quality requirements
 * **🔒 No P2P/Torrents** - Only direct HTTP streams
@@ -96,8 +95,6 @@ Nuvio Streams is a powerful Stremio addon that provides direct HTTP streaming li
 
 **🌍 Current Public Instance:** [https://nuviostreams.hayd.uk](https://nuviostreams.hayd.uk)
 
-* ✅ Includes ShowBox, SoaperTV, VidSrc, VidZee, MP4Hydra, UHDMovies, MoviesMod, DramaDrip, TopMovies, and AnimePahe providers
-
 * 💡 For the most reliable experience, consider self-hosting your own instance
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
@@ -105,7 +102,7 @@ Nuvio Streams is a powerful Stremio addon that provides direct HTTP streaming li
 <!-- GETTING STARTED -->
 ## Getting Started
 
-Self-hosting provides the best experience with full provider access and personalized performance. For detailed setup and configuration instructions, please refer to our documentation.
+Self-hosting provides the best experience with full access and personalized performance. For detailed setup and configuration instructions, please refer to our documentation.
 
 **[➡️ View the Self-Hosting Guide](https://github.com/tapframe/NuvioStreamsAddon/blob/master/DOCUMENTATION.md)**
 
@@ -114,81 +111,13 @@ Self-hosting provides the best experience with full provider access and personal
 <!-- USAGE NOTES -->
 ## Usage Notes
 
-### ShowBox Performance Tips
-
-| Configuration | Experience | Features |
-|---------------|------------|----------|
-| **Without Cookie** | Shared 100GB quota, slow speeds, limited quality | [SLOW] tag, <9GB files |
-| **With Personal Cookie** | Private 100GB quota, fast speeds, all qualities | ⚡ lightning emoji, 4K/HDR/DV |
-
 ### Troubleshooting
 
-**ShowBox links not appearing?**
-- Wait and refresh - rate limits cause temporary failures
-- Second/third attempts usually succeed due to caching
-- Common with new/popular content
-
-**Provider blocked in your region?**
-- Deploy proxy using our Netlify template
-- Configure proxy URLs in `.env` file
-- For Xprime: Use ScraperAPI instead of proxy
+If some links are missing, try a refresh or a second attempt (caching may help). If a site is blocked in your region, consider using a proxy and configure proxy URLs in your `.env` file.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
-<!-- PROVIDER GUIDES -->
-## Provider Guides
-
-### Xprime.tv with ScraperAPI
-
-**Note:** Xprime.tv is currently offline due to upstream security changes. This section is kept for archival purposes.
-
-1. Get free API key from [ScraperAPI.com](https://www.scraperapi.com/)
-2. Enter key in addon configuration
-3. Enable Xprime provider
-
-### Cuevana (Self-Host Only)
-
-Available only for self-hosted instances. Requires unique IP for optimal functionality.
-
-### Hianime Operation
-
-**Note:** Hianime is currently offline due to upstream security changes. This section is kept for archival purposes.
-
-Two-step process:
-1. **Main Addon** - Gathers TMDB information
-2. **Hianime Service** - Communicates with Hianime API
-
-### AnimePahe
-
-AnimePahe provider offers high-quality anime streams with both SUB and DUB options:
-
-1. Enable AnimePahe in addon configuration
-2. Uses a proxy by default to bypass regional restrictions
-3. Supports custom cookies for better performance
-4. Configure proxy URL in `.env` file if needed
-
-### External Provider Services
-
-For improved performance and scalability, certain providers (UHDMovies, DramaDrip, TopMovies, MoviesMod) can be deployed as separate microservices:
-
-**Benefits:**
-* Reduced main addon load
-* Independent scaling
-* Isolated provider failures
-* Better resource management
-
-**Setup:**
-1. Deploy the `provider-service` directory as a separate service
-2. Configure external URLs in your main addon's `.env`:
-   ```env
-   EXTERNAL_UHDMOVIES_URL=https://your-provider-service.com
-   EXTERNAL_DRAMADRIP_URL=https://your-provider-service.com
-   EXTERNAL_TOPMOVIES_URL=https://your-provider-service.com
-   EXTERNAL_MOVIESMOD_URL=https://your-provider-service.com
-   ```
-3. Leave URLs empty to use local providers (default behavior)
-
-**Fallback:** If external service fails, the addon automatically falls back to local providers.
+<!-- PROVIDER GUIDES REMOVED -->
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -205,7 +134,7 @@ Contributions make the open source community amazing! Any contributions are **gr
 
 ### Ways to Contribute
 
-* 🔧 **Code Contributions** - Improve providers or add new ones
+* 🔧 **Code Contributions** - Improve core features or add new ones
 * 🐛 **Bug Reports** - Help identify and fix issues
 * 💡 **Feature Requests** - Suggest improvements
 * 📚 **Documentation** - Improve or translate docs
