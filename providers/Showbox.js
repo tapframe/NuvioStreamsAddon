@@ -338,6 +338,36 @@ console.log(`Using cache directory: ${CACHE_DIR}`);
 // MODIFICATION: Remove hardcoded SHOWBOX_PROXY_URL, will use environment variable
 // const SHOWBOX_PROXY_URL = "https://starlit-valkyrie-39f5ab.netlify.app/?destination="; 
 
+// SHOWBOX proxy rotation support (comma-separated list, each ending in /?destination=)
+const SHOWBOX_PROXY_URLS = (process.env.SHOWBOX_PROXY_URLS || process.env.SHOWBOX_PROXY_URL_VALUE || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+
+// FEBBOX proxy rotation support via env (comma-separated list, each ending with /?destination=)
+const FEBBOX_PROXY_URLS = (process.env.FEBBOX_PROXY_URLS || process.env.FEBBOX_PROXY_URL_VALUE || '')
+    .split(',')
+    .map(s => s.trim())
+    .filter(s => s.length > 0);
+
+let febboxProxyCounter = Math.floor(Math.random() * 1000);
+const getNextFebboxProxyBase = () => {
+    if (!FEBBOX_PROXY_URLS || FEBBOX_PROXY_URLS.length === 0) return '';
+    febboxProxyCounter++;
+    const idx = febboxProxyCounter % FEBBOX_PROXY_URLS.length;
+    return FEBBOX_PROXY_URLS[idx];
+};
+
+const buildFebboxProxiedUrl = (url) => {
+    try {
+        const base = getNextFebboxProxyBase();
+        if (base && base.trim() !== '') {
+            return `${base}${encodeURIComponent(url)}`;
+        }
+    } catch (e) { /* ignore */ }
+    return url;
+};
+
 // Ensure cache directories exist
 const ensureCacheDir = async (dirPath) => {
     try {
@@ -1440,11 +1470,11 @@ const fetchSourcesForSingleFid = async (fidToProcess, shareKey, regionPreference
         'Content-Type': 'application/x-www-form-urlencoded'
     };
 
-    let finalPostUrl = FEBBOX_PLAYER_URL;
+    let finalPostUrl = buildFebboxProxiedUrl(FEBBOX_PLAYER_URL);
     let postDataForAxios = targetPostData.toString();
     let axiosConfig = { headers: baseHeaders, timeout: 20000 };
 
-    console.log(`  Fetching fresh player data for video FID: ${fidToProcess} (Share: ${shareKey}) directly to ${FEBBOX_PLAYER_URL}`);
+    console.log(`  Fetching fresh player data for video FID: ${fidToProcess} (Share: ${shareKey}) via ${finalPostUrl === FEBBOX_PLAYER_URL ? 'direct' : 'proxy'} to ${FEBBOX_PLAYER_URL}`);
 
     try {
         const response = await axios.post(finalPostUrl, postDataForAxios, axiosConfig);
@@ -1621,7 +1651,14 @@ class ShowBoxScraper {
             };
         }
 
-        // Return direct connection if both proxies are missing
+        // First, prefer SHOWBOX_PROXY_URLS rotation if provided
+        if (SHOWBOX_PROXY_URLS && SHOWBOX_PROXY_URLS.length > 0) {
+            const idx = this.proxyCounter % SHOWBOX_PROXY_URLS.length;
+            const base = SHOWBOX_PROXY_URLS[idx];
+            return base;
+        }
+
+        // Return direct connection if both single proxies are missing
         if (!primaryProxy && !alternateProxy) return null;
 
         // If rotation disabled or alternate proxy not set, just use primary proxy
@@ -1954,7 +1991,7 @@ const extractFidsFromFebboxPage = async (febboxUrl, regionPreference = null, use
     // const useScraperApi = process.env.USE_SCRAPER_API === 'true';
     // const scraperApiKey = process.env.SCRAPER_API_KEY_VALUE;
 
-    let finalGetUrl = febboxUrl;
+    let finalGetUrl = buildFebboxProxiedUrl(febboxUrl);
     let axiosConfig = { headers: baseHeaders, timeout: 20000 };
 
     // if (useScraperApi && scraperApiKey) {
@@ -1964,7 +2001,7 @@ const extractFidsFromFebboxPage = async (febboxUrl, regionPreference = null, use
     // } else {
     //     console.log(`Fetching FebBox page content from URL: ${febboxUrl} directly`);
     // }
-    console.log(`Fetching FebBox page content from URL: ${febboxUrl} directly`);
+    console.log(`Fetching FebBox page content from URL: ${febboxUrl} via ${finalGetUrl === febboxUrl ? 'direct' : 'proxy'}`);
 
     try {
         // console.time(fetchTimerLabel);
@@ -2642,7 +2679,7 @@ const processShowWithSeasonsEpisodes = async (febboxUrl, showboxTitle, seasonNum
                 const targetFolderListUrl = `${FEBBOX_FILE_SHARE_LIST_URL}?share_key=${shareKey}&parent_id=${selectedFolder.id}&is_html=1&pwd=`;
 
                 const cookieForRequestFolder = await getCookieForRequest(regionPreference, userCookie); // Simplified cookie call
-                let finalFolderUrl = targetFolderListUrl;
+                let finalFolderUrl = buildFebboxProxiedUrl(targetFolderListUrl);
                 let axiosConfigFolder = {
                     headers: {
                         'Cookie': `ui=${cookieForRequestFolder}`,
@@ -2652,7 +2689,7 @@ const processShowWithSeasonsEpisodes = async (febboxUrl, showboxTitle, seasonNum
                     timeout: 20000
                 };
 
-                console.log(`Fetching FebBox folder ${targetFolderListUrl} directly`);
+                console.log(`Fetching FebBox folder ${targetFolderListUrl} via ${finalFolderUrl === targetFolderListUrl ? 'direct' : 'proxy'}`);
 
                 const folderResponse = await axios.get(finalFolderUrl, axiosConfigFolder);
                 console.log(`  FebBox folder list response status: ${folderResponse.status}`);

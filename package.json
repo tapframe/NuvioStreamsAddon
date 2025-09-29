@@ -1,6 +1,6 @@
 {
   "name": "nuvio-streaming-addon",
-  "version": "0.4.1",
+  "version": "0.5.4",
   "description": "Stremio addon for HTTP streaming links",
   "main": "server.js",
   "scripts": {
