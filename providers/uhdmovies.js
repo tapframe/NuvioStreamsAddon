@@ -738,7 +738,10 @@ function extractCodecs(rawQuality) {
 // Function to try Instant Download method
 async function tryInstantDownload($) {
   const instantDownloadLink = $('a:contains("Instant Download")').attr('href');
+  const allInstantLinks = $('a:contains("Instant Download"), a:contains("Instant")');
+  console.log(`[UHDMovies] tryInstantDownload: found ${allInstantLinks.length} matching anchor(s).`);
   if (!instantDownloadLink) {
+    console.log('[UHDMovies] tryInstantDownload: no href found on "Instant Download" element.');
     return null;
   }
 
@@ -774,6 +777,7 @@ async function tryInstantDownload($) {
 
       if (apiResponse.data && apiResponse.data.url) {
         let finalUrl = apiResponse.data.url;
+        console.log(`[UHDMovies] tryInstantDownload: API responded with url: ${String(finalUrl).substring(0, 200)}...`);
         // Fix spaces in workers.dev URLs by encoding them properly
         if (finalUrl.includes('workers.dev')) {
           const urlParts = finalUrl.split('/');
@@ -796,16 +800,44 @@ async function tryInstantDownload($) {
 }
 
 // Function to try Resume Cloud method
-async function tryResumeCloud($) {
+async function tryResumeCloud($, pageOrigin = 'https://driveleech.net') {
   // Look for both "Resume Cloud" and "Cloud Resume Download" buttons
-  const resumeCloudButton = $('a:contains("Resume Cloud"), a:contains("Cloud Resume Download")');
+  const resumeCloudButton = $('a:contains("Resume Cloud"), a:contains("Cloud Resume Download"), a:contains("Resume Worker Bot"), a:contains("Worker")');
+  console.log(`[UHDMovies] tryResumeCloud: found ${resumeCloudButton.length} candidate button(s).`);
 
   if (resumeCloudButton.length === 0) {
+    // Broaden search: any anchor containing 'Resume' and 'Cloud' text
+    const broadButtons = $('a').filter((_, el) => {
+      const t = (el.children && el.children.length ? $(el).text() : $(el).text()).toLowerCase();
+      return t.includes('resume') || t.includes('cloud');
+    });
+    console.log(`[UHDMovies] tryResumeCloud: broadened scan found ${broadButtons.length} anchor(s).`);
+    if (broadButtons.length > 0) {
+      const href = broadButtons.first().attr('href');
+      if (href) {
+        // Fall through to processing as resumeLink below by simulating
+        const fake$ = $.root();
+      }
+    }
+    // Also check for direct links on current page as last resort
+    const direct = $('a[href*="workers.dev"], a[href*="workerseed"], a[href*="workerseed"], a[href*="worker"], a[href*="driveleech.net/d/"], a[href*="driveseed.org/d/"]').attr('href');
+    if (direct) {
+      let link = direct;
+      if (link.includes('workers.dev')) {
+        const parts = link.split('/');
+        const fn = parts[parts.length - 1];
+        parts[parts.length - 1] = fn.replace(/ /g, '%20');
+        link = parts.join('/');
+      }
+      console.log(`[UHDMovies] tryResumeCloud: direct link found on page without explicit button: ${link}`);
+      return link;
+    }
     return null;
   }
 
   const resumeLink = resumeCloudButton.attr('href');
   if (!resumeLink) {
+    console.log('[UHDMovies] tryResumeCloud: button has no href attribute.');
     return null;
   }
 
@@ -826,7 +858,7 @@ async function tryResumeCloud($) {
 
   // Otherwise, follow the link to get the final download
   try {
-    const resumeUrl = new URL(resumeLink, 'https://driveleech.net').href;
+    const resumeUrl = new URL(resumeLink, pageOrigin).href;
     console.log(`[UHDMovies] Found 'Resume Cloud' page link. Following to: ${resumeUrl}`);
 
     // "Click" the link by making another request
@@ -834,7 +866,14 @@ async function tryResumeCloud($) {
     const $$ = cheerio.load(finalPageResponse.data);
 
     // Look for direct download links
-    let finalDownloadLink = $$('a.btn-success[href*="workers.dev"], a[href*="driveleech.net/d/"]').attr('href');
+    let finalDownloadLink = $$('a.btn-success[href*="workers.dev"], a[href*="workerseed"], a[href*="workerseed"], a[href*="worker"], a[href*="driveleech.net/d/"], a[href*="driveseed.org/d/"]').attr('href');
+    if (!finalDownloadLink) {
+      const candidateCount = $$('a[href*="workers.dev"], a[href*="workerseed"], a[href*="workerseed"], a[href*="worker"], a[href*="driveleech.net/d/"], a[href*="driveseed.org/d/"]').length;
+      console.log(`[UHDMovies] tryResumeCloud: no primary selector matched, but found ${candidateCount} candidate link(s) on page.`);
+      if (candidateCount > 0) {
+        finalDownloadLink = $$('a[href*="workers.dev"], a[href*="workerseed"], a[href*="workerseed"], a[href*="worker"], a[href*="driveleech.net/d/"], a[href*="driveseed.org/d/"]').first().attr('href');
+      }
+    }
 
     if (finalDownloadLink) {
       // Fix spaces in workers.dev URLs by encoding them properly
@@ -900,12 +939,46 @@ async function validateVideoUrl(url, timeout = 10000) {
       return true;
     } else {
       console.log(`[UHDMovies] ✗ URL validation failed with status: ${response.status}`);
-      return false;
+      // Fall through to GET retry
     }
   } catch (error) {
-    console.log(`[UHDMovies] ✗ URL validation failed: ${error.message}`);
-    return false;
+    console.log(`[UHDMovies] ✗ URL validation HEAD failed: ${error.message}`);
   }
+
+  // Fallback 1: Treat some known statuses/domains as acceptable without HEAD support
+  try {
+    const lower = url.toLowerCase();
+    if (lower.includes('workers.dev') || lower.includes('driveleech.net/d/')) {
+      console.log('[UHDMovies] URL appears to be a direct download on workers.dev or driveleech; attempting GET fallback.');
+    }
+
+    // Fallback 2: Try GET with small range
+    let getResponse;
+    if (UHDMOVIES_PROXY_URL) {
+      const proxiedUrl = `${UHDMOVIES_PROXY_URL}${encodeURIComponent(url)}`;
+      console.log(`[UHDMovies] Making proxied GET fallback request for validation to: ${url}`);
+      getResponse = await axiosInstance.get(proxiedUrl, {
+        timeout,
+        responseType: 'stream',
+        headers: { 'Range': 'bytes=0-1' }
+      });
+    } else {
+      getResponse = await axiosInstance.get(url, {
+        timeout,
+        responseType: 'stream',
+        headers: { 'Range': 'bytes=0-1' }
+      });
+    }
+
+    if (getResponse.status >= 200 && getResponse.status < 500) {
+      console.log(`[UHDMovies] ✓ GET fallback validation accepted (${getResponse.status}).`);
+      return true;
+    }
+  } catch (err) {
+    console.log(`[UHDMovies] ✗ GET fallback validation failed: ${err.message}`);
+  }
+
+  return false;
 }
 
 // Function to follow redirect links and get the final download URL with size info
@@ -946,7 +1019,7 @@ async function getFinalLink(redirectUrl) {
 
     // Try each download method in order until we find a working one
     const downloadMethods = [
-      { name: 'Resume Cloud', func: tryResumeCloud },
+      { name: 'Resume Cloud', func: (dom) => tryResumeCloud(dom, new URL(finalFilePageUrl).origin) },
       { name: 'Instant Download', func: tryInstantDownload }
     ];
 
@@ -969,6 +1042,23 @@ async function getFinalLink(redirectUrl) {
         }
       } catch (error) {
         console.log(`[UHDMovies] ✗ ${method.name} threw error: ${error.message}, trying next method...`);
+      }
+    }
+
+    // Final fallback: scan current page for any plausible direct links
+    const anyDirect = $('a[href*="workers.dev"], a[href*="workerseed"], a[href*="workerseed"], a[href*="worker"], a[href*="driveleech.net/d/"], a[href*="driveseed.org/d/"]').attr('href');
+    if (anyDirect) {
+      let direct = anyDirect;
+      if (direct.includes('workers.dev')) {
+        const parts = direct.split('/');
+        const fn = parts[parts.length - 1];
+        parts[parts.length - 1] = fn.replace(/ /g, '%20');
+        direct = parts.join('/');
+      }
+      const ok = await validateVideoUrl(direct);
+      if (ok) {
+        console.log('[UHDMovies] ✓ Final fallback found a direct link on page.');
+        return { url: direct, size: sizeInfo, fileName: fileName };
       }
     }
 
@@ -1338,7 +1428,7 @@ async function resolveSidToDriveleech(sidUrl) {
 async function getUHDMoviesStreams(tmdbId, mediaType = 'movie', season = null, episode = null) {
   console.log(`[UHDMovies] Attempting to fetch streams for TMDB ID: ${tmdbId}, Type: ${mediaType}${mediaType === 'tv' ? `, S:${season}E:${episode}` : ''}`);
 
-  const cacheKey = `uhd_final_v18_${tmdbId}_${mediaType}${season ? `_s${season}e${episode}` : ''}`;
+  const cacheKey = `uhd_final_v19_${tmdbId}_${mediaType}${season ? `_s${season}e${episode}` : ''}`;
 
   try {
     // 1. Check cache first
@@ -1492,7 +1582,7 @@ async function getUHDMoviesStreams(tmdbId, mediaType = 'movie', season = null, e
     console.log(`[UHDMovies] Processing ${cachedLinks.length} cached driveleech redirect URL(s) to get streaming links.`);
     const streamPromises = cachedLinks.map(async (linkInfo) => {
       try {
-        // First, resolve the driveleech redirect URL to get the final file page URL
+        // First, resolve the redirect URL (driveleech or driveseed) to get the final file page URL
         const response = await makeRequest(linkInfo.driveleechRedirectUrl, { maxRedirects: 10 });
         let $ = cheerio.load(response.data);
 
@@ -1501,8 +1591,9 @@ async function getUHDMoviesStreams(tmdbId, mediaType = 'movie', season = null, e
         const redirectMatch = scriptContent && scriptContent.match(/window\.location\.replace\("([^"]+)"\)/);
 
         let finalFilePageUrl = linkInfo.driveleechRedirectUrl;
+        const redirectBaseOrigin = new URL(linkInfo.driveleechRedirectUrl).origin;
         if (redirectMatch && redirectMatch[1]) {
-          finalFilePageUrl = new URL(redirectMatch[1], 'https://driveleech.net/').href;
+          finalFilePageUrl = new URL(redirectMatch[1], redirectBaseOrigin).href;
           console.log(`[UHDMovies] Resolved redirect to final file page: ${finalFilePageUrl}`);
 
           // Load the final file page
@@ -1561,12 +1652,43 @@ async function getUHDMoviesStreams(tmdbId, mediaType = 'movie', season = null, e
                   behaviorHints: { bingeGroup: `uhdmovies-${linkInfo.quality}` }
                 };
               }
+              console.log(`[UHDMovies] Validation rejected URL from ${method.name}: ${finalUrl.substring(0, 150)}...`);
             }
           } catch (error) {
             console.log(`[UHDMovies] ${method.name} failed: ${error.message}`);
           }
         }
 
+        // Last resort on final file page: pick any plausible direct link
+        let fallbackDirect = $('a[href*="workers.dev"], a[href*="workerseed"], a[href*="workerseed"], a[href*="worker"], a[href*="driveleech.net/d/"], a[href*="driveseed.org/d/"]').attr('href');
+        if (fallbackDirect) {
+          if (fallbackDirect.includes('workers.dev')) {
+            const p = fallbackDirect.split('/');
+            const fn = p[p.length - 1];
+            p[p.length - 1] = fn.replace(/ /g, '%20');
+            fallbackDirect = p.join('/');
+          }
+          const ok = await validateVideoUrl(fallbackDirect);
+          if (ok) {
+            const rawQuality = linkInfo.rawQuality || '';
+            const codecs = extractCodecs(rawQuality);
+            const cleanFileName = fileName ? fileName.replace(/\.[^/.]+$/, "").replace(/[._]/g, ' ') : (linkInfo.quality || 'Unknown');
+            console.log('[UHDMovies] ✓ Last-resort direct link used.');
+            return {
+              name: `UHDMovies`,
+              title: `${cleanFileName}\n${sizeInfo}`,
+              url: fallbackDirect,
+              quality: linkInfo.quality,
+              size: sizeInfo,
+              fileName: fileName,
+              fullTitle: rawQuality,
+              codecs: codecs,
+              behaviorHints: { bingeGroup: `uhdmovies-${linkInfo.quality}` }
+            };
+          }
+        }
+
+        console.log('[UHDMovies] No working method produced a valid final URL for this item.');
         return null;
       } catch (error) {
         console.error(`[UHDMovies] Error processing cached driveleech redirect ${linkInfo.driveleechRedirectUrl}: ${error.message}`);
