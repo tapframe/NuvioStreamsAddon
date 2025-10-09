@@ -1540,7 +1540,7 @@ async function get4KHDHubStreams(tmdbId, type, season = null, episode = null) {
         console.log(`[4KHDHub] Starting search for TMDB ID: ${tmdbId}, Type: ${type}${season ? `, Season: ${season}` : ''}${episode ? `, Episode: ${episode}` : ''}`);
         
         // Create cache key for resolved file hosting URLs
-        const cacheKey = `4khdhub_resolved_urls_v3_${tmdbId}_${type}${season ? `_s${season}e${episode}` : ''}`;
+        const cacheKey = `4khdhub_resolved_urls_v4_${tmdbId}_${type}${season ? `_s${season}e${episode}` : ''}`;
         
         let streamingLinks = [];
         
