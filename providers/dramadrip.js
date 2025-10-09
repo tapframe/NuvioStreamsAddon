@@ -7,6 +7,7 @@ const fs = require('fs').promises;
 const path = require('path');
 const { findBestMatch } = require('string-similarity');
 const RedisCache = require('../utils/redisCache');
+const { followRedirectToFilePage, extractFinalDownloadFromFilePage } = require('../utils/linkResolver');
 
 // Dynamic import for axios-cookiejar-support
 let axiosCookieJarSupport = null;
@@ -834,32 +835,15 @@ async function getDramaDripStreams(tmdbId, mediaType, seasonNum, episodeNum) {
                 const { driveseedRedirectUrl } = linkInfo;
                 if (!driveseedRedirectUrl) return null;
 
-                // First, resolve the driveseed redirect URL to get the final file page URL
-                const response = await makeRequest(driveseedRedirectUrl, {
-                    headers: {
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                        'Referer': 'https://links.modpro.blog/',
-                    }
+                // Resolve redirect to final file page using shared util
+                const resFollow = await followRedirectToFilePage({
+                    redirectUrl: driveseedRedirectUrl,
+                    get: (url, opts) => makeRequest(url, opts),
+                    log: console
                 });
-
-                let finalData = response.data;
-                let finalFilePageUrl = driveseedRedirectUrl;
-                
-                // Check for JavaScript redirect (window.location.replace)
-                const redirectMatch = response.data.match(/window\.location\.replace\("([^"]+)"\)/);
-                if (redirectMatch && redirectMatch[1]) {
-                    const finalPath = redirectMatch[1];
-                    finalFilePageUrl = `https://driveseed.org${finalPath}`;
-                    console.log(`[DramaDrip] Resolved redirect to final file page: ${finalFilePageUrl}`);
-                    
-                    // Load the final file page
-                    const finalResponse = await makeRequest(finalFilePageUrl, {
-                        headers: { 'Referer': driveseedRedirectUrl }
-                    });
-                    finalData = finalResponse.data;
-                }
-                
-                const $ = cheerio.load(finalData);
+                const $ = resFollow.$;
+                const finalFilePageUrl = resFollow.finalFilePageUrl;
+                console.log(`[DramaDrip] Resolved redirect to final file page: ${finalFilePageUrl}`);
                 const downloadOptions = [];
                 let title = null;
                 let size = null;
@@ -889,45 +873,29 @@ async function getDramaDripStreams(tmdbId, mediaType, seasonNum, episodeNum) {
                     if(url) downloadOptions.push({ title: buttonTitle, type, url });
                 });
 
-                const downloadInfo = { downloadOptions, title, size };
-                if (!downloadInfo || !downloadInfo.downloadOptions) return null;
+                // Use shared util to extract final link from file page
+                const origin = new URL(finalFilePageUrl).origin;
+                const finalLink = await extractFinalDownloadFromFilePage($, {
+                    origin,
+                    get: (url, opts) => makeRequest(url, opts),
+                    post: (url, data, opts) => axios.post(url, data, opts),
+                    validate: (url) => validateVideoUrl(url),
+                    log: console
+                });
 
-                const { downloadOptions: availableOptions, title: fileTitle, size: fileSize } = downloadInfo;
-
-                // Try each download method in order until we find a working one
-                const preferredOrder = ['resume', 'worker', 'instant'];
-                for (const type of preferredOrder) {
-                    try {
-                        const method = availableOptions.find(opt => opt.type === type);
-                        if (method) {
-                            console.log(`[DramaDrip] Trying ${method.title} for ${linkInfo.quality}...`);
-                            const finalLink = await resolveFinalLink(method);
-                            
-                            if (finalLink) {
-                                // Validate the URL before using it
-                                const isValid = await validateVideoUrl(finalLink);
-                                if (isValid) {
-                                    console.log(`[DramaDrip] ✓ Successfully resolved ${linkInfo.quality} using ${method.title}`);
-                                    return {
-                                        name: `DramaDrip - ${linkInfo.quality.split('(')[0].trim()}`,
-                                        title: `${fileTitle || "Unknown Title"}\n${fileSize || 'Unknown Size'}`,
-                                        url: finalLink,
-                                        quality: linkInfo.quality,
-                                        size: fileSize || '0'
-                                    };
-                                } else {
-                                    console.log(`[DramaDrip] ✗ ${method.title} returned invalid/broken URL, trying next method...`);
-                                }
-                            } else {
-                                console.log(`[DramaDrip] ✗ ${method.title} failed to resolve URL, trying next method...`);
-                            }
-                        }
-                    } catch (error) {
-                        console.log(`[DramaDrip] ✗ ${type} method threw error: ${error.message}, trying next method...`);
-                    }
+                if (finalLink) {
+                    const fileTitle = title;
+                    const fileSize = size;
+                    return {
+                        name: `DramaDrip - ${linkInfo.quality.split('(')[0].trim()}`,
+                        title: `${fileTitle || "Unknown Title"}\n${fileSize || 'Unknown Size'}`,
+                        url: finalLink,
+                        quality: linkInfo.quality,
+                        size: fileSize || '0'
+                    };
                 }
-                
-                console.log(`[DramaDrip] ✗ All download methods failed for ${linkInfo.quality}`);
+
+                console.log(`[DramaDrip] ✗ Could not extract final link for ${linkInfo.quality}`);
                 return null;
             } catch (e) {
                 console.error(`[DramaDrip] Error in stream promise: ${e.message}`);

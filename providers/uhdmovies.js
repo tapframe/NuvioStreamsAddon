@@ -6,6 +6,7 @@ const { CookieJar } = require('tough-cookie');
 const fs = require('fs').promises;
 const path = require('path');
 const RedisCache = require('../utils/redisCache');
+const { followRedirectToFilePage, extractFinalDownloadFromFilePage } = require('../utils/linkResolver');
 
 // Dynamic import for axios-cookiejar-support
 let axiosCookieJarSupport = null;
@@ -1582,24 +1583,13 @@ async function getUHDMoviesStreams(tmdbId, mediaType = 'movie', season = null, e
     console.log(`[UHDMovies] Processing ${cachedLinks.length} cached driveleech redirect URL(s) to get streaming links.`);
     const streamPromises = cachedLinks.map(async (linkInfo) => {
       try {
-        // First, resolve the redirect URL (driveleech or driveseed) to get the final file page URL
-        const response = await makeRequest(linkInfo.driveleechRedirectUrl, { maxRedirects: 10 });
-        let $ = cheerio.load(response.data);
-
-        // Check for JavaScript redirect (window.location.replace)
-        const scriptContent = $('script').html();
-        const redirectMatch = scriptContent && scriptContent.match(/window\.location\.replace\("([^"]+)"\)/);
-
-        let finalFilePageUrl = linkInfo.driveleechRedirectUrl;
-        const redirectBaseOrigin = new URL(linkInfo.driveleechRedirectUrl).origin;
-        if (redirectMatch && redirectMatch[1]) {
-          finalFilePageUrl = new URL(redirectMatch[1], redirectBaseOrigin).href;
-          console.log(`[UHDMovies] Resolved redirect to final file page: ${finalFilePageUrl}`);
-
-          // Load the final file page
-          const finalResponse = await makeRequest(finalFilePageUrl, { maxRedirects: 10 });
-          $ = cheerio.load(finalResponse.data);
-        }
+        // Resolve redirect (driveleech/driveseed) to final file page using shared util
+        const { $, finalFilePageUrl } = await followRedirectToFilePage({
+          redirectUrl: linkInfo.driveleechRedirectUrl,
+          get: (url, opts) => makeRequest(url, opts),
+          log: console
+        });
+        console.log(`[UHDMovies] Resolved redirect to final file page: ${finalFilePageUrl}`);
 
         // Extract file size and name information
         let sizeInfo = 'Unknown';
@@ -1623,69 +1613,32 @@ async function getUHDMoviesStreams(tmdbId, mediaType = 'movie', season = null, e
           }
         }
 
-        // Try download methods to get final streaming URL
-        const downloadMethods = [
-          { name: 'Resume Cloud', func: tryResumeCloud },
-          { name: 'Instant Download', func: tryInstantDownload }
-        ];
+        // Use shared util to extract final download URL from file page
+        const origin = new URL(finalFilePageUrl).origin;
+        const finalUrl = await extractFinalDownloadFromFilePage($, {
+          origin,
+          get: (url, opts) => makeRequest(url, opts),
+          post: (url, data, opts) => axiosInstance.post(url.startsWith('http') ? (UHDMOVIES_PROXY_URL ? `${UHDMOVIES_PROXY_URL}${encodeURIComponent(url)}` : url) : url, data, opts),
+          validate: (url) => validateVideoUrl(url),
+          log: console
+        });
 
-        for (const method of downloadMethods) {
-          try {
-            const finalUrl = await method.func($);
+        if (finalUrl) {
+          const rawQuality = linkInfo.rawQuality || '';
+          const codecs = extractCodecs(rawQuality);
+          const cleanFileName = fileName ? fileName.replace(/\.[^/.]+$/, "").replace(/[._]/g, ' ') : (linkInfo.quality || 'Unknown');
 
-            if (finalUrl) {
-              const isValid = await validateVideoUrl(finalUrl);
-              if (isValid) {
-                const rawQuality = linkInfo.rawQuality || '';
-                const codecs = extractCodecs(rawQuality);
-                const cleanFileName = fileName ? fileName.replace(/\.[^/.]+$/, "").replace(/[._]/g, ' ') : (linkInfo.quality || 'Unknown');
-
-                return {
-                  name: `UHDMovies`,
-                  title: `${cleanFileName}\n${sizeInfo}`,
-                  url: finalUrl,
-                  quality: linkInfo.quality,
-                  size: sizeInfo,
-                  fileName: fileName,
-                  fullTitle: rawQuality,
-                  codecs: codecs,
-                  behaviorHints: { bingeGroup: `uhdmovies-${linkInfo.quality}` }
-                };
-              }
-              console.log(`[UHDMovies] Validation rejected URL from ${method.name}: ${finalUrl.substring(0, 150)}...`);
-            }
-          } catch (error) {
-            console.log(`[UHDMovies] ${method.name} failed: ${error.message}`);
-          }
-        }
-
-        // Last resort on final file page: pick any plausible direct link
-        let fallbackDirect = $('a[href*="workers.dev"], a[href*="workerseed"], a[href*="workerseed"], a[href*="worker"], a[href*="driveleech.net/d/"], a[href*="driveseed.org/d/"]').attr('href');
-        if (fallbackDirect) {
-          if (fallbackDirect.includes('workers.dev')) {
-            const p = fallbackDirect.split('/');
-            const fn = p[p.length - 1];
-            p[p.length - 1] = fn.replace(/ /g, '%20');
-            fallbackDirect = p.join('/');
-          }
-          const ok = await validateVideoUrl(fallbackDirect);
-          if (ok) {
-            const rawQuality = linkInfo.rawQuality || '';
-            const codecs = extractCodecs(rawQuality);
-            const cleanFileName = fileName ? fileName.replace(/\.[^/.]+$/, "").replace(/[._]/g, ' ') : (linkInfo.quality || 'Unknown');
-            console.log('[UHDMovies] ✓ Last-resort direct link used.');
-            return {
-              name: `UHDMovies`,
-              title: `${cleanFileName}\n${sizeInfo}`,
-              url: fallbackDirect,
-              quality: linkInfo.quality,
-              size: sizeInfo,
-              fileName: fileName,
-              fullTitle: rawQuality,
-              codecs: codecs,
-              behaviorHints: { bingeGroup: `uhdmovies-${linkInfo.quality}` }
-            };
-          }
+          return {
+            name: `UHDMovies`,
+            title: `${cleanFileName}\n${sizeInfo}`,
+            url: finalUrl,
+            quality: linkInfo.quality,
+            size: sizeInfo,
+            fileName: fileName,
+            fullTitle: rawQuality,
+            codecs: codecs,
+            behaviorHints: { bingeGroup: `uhdmovies-${linkInfo.quality}` }
+          };
         }
 
         console.log('[UHDMovies] No working method produced a valid final URL for this item.');
