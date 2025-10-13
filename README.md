@@ -74,11 +74,11 @@ Nuvio Streams is a powerful Stremio addon that provides direct HTTP streaming li
 ### Key Features
 
 * **🌐 Multiple Sources** - Aggregates direct HTTP streams without P2P
-* **⚡ Personal Cookie Support** - Get your own quota and access to 4K/HDR content
+* **Personal Cookie Support** - Get your own quota and access to 4K/HDR content
 * **🎯 Quality Filtering** - Set minimum quality requirements
 * **🔒 No P2P/Torrents** - Only direct HTTP streams
 * **🎬 Full Compatibility** - Supports TMDB & IMDb IDs
-* **⚙️ Easy Configuration** - Web-based settings management
+* **Easy Configuration** - Web-based settings management
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -104,7 +104,7 @@ Nuvio Streams is a powerful Stremio addon that provides direct HTTP streaming li
 
 Self-hosting provides the best experience with full access and personalized performance. For detailed setup and configuration instructions, please refer to our documentation.
 
-**[➡️ View the Self-Hosting Guide](https://github.com/tapframe/NuvioStreamsAddon/blob/master/DOCUMENTATION.md)**
+**[View the Self-Hosting Guide](https://github.com/tapframe/NuvioStreamsAddon/blob/master/DOCUMENTATION.md)**
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -137,7 +137,7 @@ Contributions make the open source community amazing! Any contributions are **gr
 * 🔧 **Code Contributions** - Improve core features or add new ones
 * 🐛 **Bug Reports** - Help identify and fix issues
 * 💡 **Feature Requests** - Suggest improvements
-* 📚 **Documentation** - Improve or translate docs
+* **Documentation** - Improve or translate docs
 * 🧪 **Testing** - Test on different platforms
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>

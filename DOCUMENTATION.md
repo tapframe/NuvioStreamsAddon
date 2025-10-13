@@ -1,8 +1,8 @@
-# Nuvio Streams Self-Hosting Guide for Beginners
+# Nuvio Streams Self-Hosting Guide
 
 This guide will help you set up your own personal Nuvio Streams addon for Stremio. Don't worry if you're new to this - we'll go through each step clearly!
 
-## 📋 What's In This Guide
+## What's In This Guide
 
 - [Super Quick Start](#super-quick-start) - The fastest way to get up and running
 - [Step-by-Step Installation](#step-by-step-installation) - Detailed instructions with explanations
@@ -11,7 +11,7 @@ This guide will help you set up your own personal Nuvio Streams addon for Stremi
 - [Optimization Tips](#optimization-tips) - Making your addon run better
 - [Complete Example](#complete-example) - Full configuration example
 
-## 💨 Super Quick Start
+## Super Quick Start
 
 If you just want to get things running fast:
 
@@ -30,8 +30,8 @@ npm install
 # Copy the example settings file
 cp .env.example .env
 
-# IMPORTANT: Edit the .env file to add your TMDB API key
-# Open .env in any text editor and set TMDB_API_KEY=your_key_here
+# IMPORTANT: Edit the .env file to add your TMDB API key and provider settings
+# Open .env in any text editor and set TMDB_API_KEY=your_key_here (see Example .env below)
 
 # Start the addon only AFTER setting up your .env file
 npm start
@@ -40,7 +40,7 @@ npm start
 4. Open `http://localhost:7000` in your browser
 5. Install the addon in Stremio by clicking the "Install Addon" button
 
-## 📝 Step-by-Step Installation
+## Step-by-Step Installation
 
 ### What You'll Need
 
@@ -50,7 +50,7 @@ npm start
 - **TMDB API Key** - Required for movie/TV information
 - **Basic computer skills** - Using terminal/command prompt, editing text files
 
-### 1️⃣ Install Node.js
+### 1. Install Node.js
 
 1. Visit [nodejs.org](https://nodejs.org/)
 2. Download the "LTS" (Long Term Support) version
@@ -62,7 +62,7 @@ npm start
    ```
    You should see version numbers for both
 
-### 2️⃣ Get the Addon Code
+### 2. Get the Addon Code
 
 1. Open terminal/command prompt
 2. Navigate to where you want to store the addon
@@ -81,7 +81,7 @@ If you don't have `git` installed, you can:
 - Extract it to a folder
 - Open terminal/command prompt and navigate to that folder
 
-### 3️⃣ Install Dependencies
+### 3. Install Dependencies
 
 Dependencies are extra pieces of code the addon needs to work.
 
@@ -92,7 +92,7 @@ npm install
 
 This might take a minute or two. You'll see a progress bar and some text output.
 
-### 4️⃣ Set Up Configuration File
+### 4. Set Up Configuration File (.env)
 
 This is the most important step! You need to create and edit a file called `.env` that contains all your settings.
 
@@ -114,14 +114,7 @@ This is the most important step! You need to create and edit a file called `.env
    - Request an API key for personal use
    - Copy the API key they give you
 
-4. Configure the providers you want to use:
-   ```env
-   # Enable or disable providers (true/false)
-   ENABLE_VIDZEE_PROVIDER=true
-   ENABLE_HOLLYMOVIEHD_PROVIDER=true
-   ENABLE_XPRIME_PROVIDER=true
-   ENABLE_CUEVANA_PROVIDER=false
-   ```
+4. Configure providers and options. See the "Example .env" further below for a complete up-to-date template.
 
 5. Enable caching for better performance:
    ```env
@@ -142,7 +135,7 @@ This is the most important step! You need to create and edit a file called `.env
 
 7. Save and close the file
 
-### 5️⃣ Set Up ShowBox Cookie (Optional but Recommended)
+### 5. Set Up ShowBox Cookie (Optional but Recommended)
 
 For the best streaming experience:
 
@@ -191,9 +184,9 @@ For the best streaming experience:
 - Cookies expire after some time, so you might need to repeat this process occasionally
 - Each account gets its own 100GB monthly quota
 - Using your own cookie gives you access to 4K/HDR/DV content
-- With a personal cookie, streams will be faster and show the ⚡ lightning emoji
+- With a personal cookie, streams will be faster and display a lightning indicator in the UI
 
-### 6️⃣ Start the Addon
+### 6. Start the Addon
 
 Now that you've configured everything, you can start the addon:
 
@@ -206,7 +199,7 @@ You should see output that ends with something like:
 Addon running at: http://localhost:7000/manifest.json
 ```
 
-### 7️⃣ Install in Stremio
+### 7. Install in Stremio
 
 1. Open your web browser and go to: `http://localhost:7000`
 2. You'll see a page with an "Install Addon" button
@@ -214,7 +207,7 @@ Addon running at: http://localhost:7000/manifest.json
 4. Click "Install" in Stremio
 5. That's it! The addon is now installed in your Stremio
 
-## ⚙️ Configuration Options
+## Configuration Options
 
 Let's look at the important settings you can change in the `.env` file. Don't worry - we'll explain what each one does!
 
@@ -227,22 +220,34 @@ TMDB_API_KEY=your_key_here
 
 ### Provider Settings
 
-These control which streaming sources are active:
+These control which streaming sources are active. Only currently supported providers are shown here. Set to true/false.
 
 ```env
-# Turn providers on (true) or off (false)
+# Core
 ENABLE_VIDZEE_PROVIDER=true
-ENABLE_HOLLYMOVIEHD_PROVIDER=true
-ENABLE_XPRIME_PROVIDER=true
-ENABLE_CUEVANA_PROVIDER=false
+ENABLE_MP4HYDRA_PROVIDER=true
+ENABLE_UHDMOVIES_PROVIDER=true
+ENABLE_MOVIESMOD_PROVIDER=true
+ENABLE_TOPMOVIES_PROVIDER=true
+ENABLE_MOVIESDRIVE_PROVIDER=true
+ENABLE_4KHDHUB_PROVIDER=true
+ENABLE_VIXSRC_PROVIDER=true
+ENABLE_MOVIEBOX_PROVIDER=true
+ENABLE_SOAPERTV_PROVIDER=true
 ```
 
 | Provider | What It Offers | Notes |
 |----------|----------------|-------|
-| VidZee | Movies | Easy to set up |
-| HollyMovieHD | Movies & TV shows | Good quality |
-| Xprime.tv | Movies & TV shows | Works best with personal setup |
-| Cuevana | Spanish/LATAM content | Only works when self-hosting |
+| VidZee | Movies | General sources |
+| MP4Hydra | Movies/TV | Multiple servers; quality tagged |
+| UHDMovies | Movies | Good quality; supports external service mode |
+| MoviesMod | Movies | Pre-formatted titles with rich metadata |
+| TopMovies | Movies | Bollywood/regional focus |
+| MoviesDrive | Movies | Direct links (e.g., Pixeldrain) |
+| 4KHDHub | Movies/TV | Multiple servers; 4K/HDR/DV tagging |
+| Vixsrc | Movies/TV | Alternative source |
+| MovieBox | Movies/TV | General source |
+| SoaperTV | TV | Episodic content |
 
 ### Performance Settings
 
@@ -270,7 +275,7 @@ With your own cookie:
 - Access to higher quality streams (4K/HDR)
 - Faster speeds
 
-## 🚑 Troubleshooting
+## Troubleshooting
 
 ### Common Problem: No Streams Found
 
@@ -332,7 +337,7 @@ pm2 save
 pm2 startup
 ```
 
-## 📱 Accessing From Other Devices
+## Accessing From Other Devices
 
 Once your addon is running, you can use it on any device on your home network:
 
@@ -343,7 +348,7 @@ Once your addon is running, you can use it on any device on your home network:
 2. Use this address in Stremio on other devices:
    - Example: `http://192.168.1.100:7000/manifest.json`
 
-## 💪 Optimization Tips
+## Optimization Tips
 
 For the best experience:
 
@@ -372,58 +377,167 @@ For the best experience:
    npm install
    ```
 
-## 🔥 Complete Example
+## Example .env (Aligned with this repo)
 
-Here's a complete `.env` file example with all the common settings:
+Use the following template, which matches the `.env` in this repository and the current code:
 
 ```env
-# Required API key
-TMDB_API_KEY=your_tmdb_api_key_here
-
-# Cache Settings (recommended for better performance)
+# Cache Settings
 DISABLE_CACHE=false
 DISABLE_STREAM_CACHE=false
+USE_REDIS_CACHE=false
+REDIS_URL=
 
-# Provider Enablement (enable only what you need)
+# Enable PStream (ShowBox-backed CDN) handling
+ENABLE_PSTREAM_API=false
+
+# URL Validation Settings
+DISABLE_URL_VALIDATION=false
+DISABLE_4KHDHUB_URL_VALIDATION=true
+
+# ShowBox proxy rotation (recommended)
+# Comma-separated list of edge proxies; each must end with ?destination=
+SHOWBOX_PROXY_URLS=https://proxy-primary.example.workers.dev/?destination=,https://proxy-alt-1.example.workers.dev/?destination=,https://proxy-alt-2.example.workers.dev/?destination=
+
+# FebBox proxy rotation (optional; used when resolving personal cookie calls)
+FEBBOX_PROXY_URLS=https://proxy-primary.example.workers.dev/?destination=,https://proxy-alt-1.example.workers.dev/?destination=
+
+# Provider-specific Proxy URLs (optional; leave empty for direct)
+VIDSRC_PROXY_URL=
+VIDZEE_PROXY_URL=
+SOAPERTV_PROXY_URL=
+UHDMOVIES_PROXY_URL=
+MOVIESMOD_PROXY_URL=
+TOPMOVIES_PROXY_URL=
+
+# Provider Enablement
 ENABLE_VIDZEE_PROVIDER=true
-ENABLE_HOLLYMOVIEHD_PROVIDER=true
-ENABLE_XPRIME_PROVIDER=true
-ENABLE_CUEVANA_PROVIDER=false
+ENABLE_VIXSRC_PROVIDER=true
+ENABLE_MP4HYDRA_PROVIDER=true
+ENABLE_UHDMOVIES_PROVIDER=true
+ENABLE_MOVIESMOD_PROVIDER=true
+ENABLE_TOPMOVIES_PROVIDER=true
+ENABLE_MOVIESDRIVE_PROVIDER=true
+ENABLE_4KHDHUB_PROVIDER=true
+ENABLE_MOVIEBOX_PROVIDER=true
+ENABLE_SOAPERTV_PROVIDER=true
 
-# ShowBox Proxy Configuration (recommended)
-SHOWBOX_PROXY_URL_VALUE=https://your-proxy-url.netlify.app/?destination=
-# SHOWBOX_PROXY_URL_ALTERNATE=https://your-alternate-proxy.netlify.app/?destination=
-# SHOWBOX_USE_ROTATING_PROXY=false
+# API Keys
+TMDB_API_KEY=your_tmdb_api_key_here
 
-# HiAnime Configuration (if you want anime)
-HIANIME_SERVER=http://localhost:8082/fetch-hianime
+# External Provider Services
+USE_EXTERNAL_PROVIDERS=false
+EXTERNAL_UHDMOVIES_URL=
+EXTERNAL_TOPMOVIES_URL=
+EXTERNAL_MOVIESMOD_URL=
 
-# Xprime Configuration (only if direct access fails)
-USE_SCRAPER_API=false
-# SCRAPER_API_KEY=your_key_here  # Uncomment if needed
+# Port configuration
+PORT=7000
 ```
 
 Important notes:
 1. Replace `your_tmdb_api_key_here` with your actual TMDB API key
-2. Replace `your-proxy-url.netlify.app` with your actual proxy URL
-3. The `cookies.txt` file is separate from this configuration
+2. Replace proxy URLs with your deployed Cloudflare Workers (or Netlify) proxy URL(s)
+3. The `cookies.txt` file is separate from this configuration and is auto-read by the addon
 4. Only enable the providers you actually use
 5. Uncomment lines (remove #) only if you need those features
 
-## 🎉 Success!
+### About ShowBox Personal Cookie and PStream
+
+- Place your FebBox `ui` cookie value into `cookies.txt` at the project root (single-line value).
+- With a valid cookie, the addon will:
+  - Prefer faster ShowBox links and display a lightning icon next to ShowBox
+  - Show your remaining quota on ShowBox/PStream entries when available
+- PStream links (a ShowBox-backed CDN) appear as streaming sources and are not cached; they inherit ShowBox display conventions in the UI.
+
+### ShowBox Multi-Proxy Setup (High Throughput)
+
+To handle large numbers of requests or bursty traffic, configure multiple proxy endpoints and enable rotation:
+
+1) Add multiple proxies in `.env` (as shown in the Example .env above). Use the `SHOWBOX_PROXY_URLS` comma-separated list for ShowBox, and `FEBBOX_PROXY_URLS` for FebBox calls when using a personal cookie:
+
+```env
+SHOWBOX_PROXY_URLS=https://proxy-primary.example.workers.dev/?destination=,https://proxy-alt-1.example.workers.dev/?destination=,https://proxy-alt-2.example.workers.dev/?destination=
+FEBBOX_PROXY_URLS=https://proxy-primary.example.workers.dev/?destination=,https://proxy-alt-1.example.workers.dev/?destination=
+```
+
+- The addon round-robins across `SHOWBOX_PROXY_URLS` and `FEBBOX_PROXY_URLS` values automatically.
+- Ensure each proxy ends with `?destination=` so the addon can append the upstream URL.
+
+2) Recommended limits and best practices:
+- Distribute traffic across multiple regions in Cloudflare to reduce egress concentration.
+- Keep Workers simple (no heavy parsing) and forward only required headers.
+- Consider enabling caching at the Worker/edge for static assets if appropriate (not for signed or user-specific URLs).
+
+### Cloudflare Workers Proxy (Recommended)
+
+Deploy a lightweight HTTP proxy on Cloudflare Workers. You can reuse the SAME Workers proxy URLs for both ShowBox and any PStream-backed requests because PStream URLs are resolved from ShowBox.
+
+Worker script (copy/paste into Cloudflare Workers → Create Worker):
+
+```javascript
+export default {
+  async fetch(request) {
+    try {
+      const url = new URL(request.url);
+      const upstream = url.searchParams.get('destination');
+      if (!upstream) {
+        return new Response('Missing destination param', { status: 400 });
+      }
+
+      // Preserve method/headers as needed; strip hop-by-hop headers
+      const hopByHop = ['connection','keep-alive','proxy-authenticate','proxy-authorization','te','trailer','transfer-encoding','upgrade'];
+      const headers = new Headers(request.headers);
+      hopByHop.forEach(h => headers.delete(h));
+
+      // Optional: tighten headers for upstream if desired
+      headers.set('User-Agent', 'NuvioStreamsProxy/1.0');
+
+      const init = {
+        method: request.method,
+        headers,
+        body: ['GET','HEAD'].includes(request.method) ? undefined : request.body,
+        redirect: 'follow'
+      };
+      const resp = await fetch(upstream, init);
+
+      // Mirror response while adding CORS for the addon/UI
+      const outHeaders = new Headers(resp.headers);
+      outHeaders.set('access-control-allow-origin', '*');
+      outHeaders.set('access-control-allow-headers', '*');
+      outHeaders.set('access-control-allow-methods', 'GET,HEAD,POST,OPTIONS');
+      return new Response(resp.body, { status: resp.status, headers: outHeaders });
+    } catch (e) {
+      return new Response('Proxy error: ' + (e?.message || e), { status: 502 });
+    }
+  }
+};
+```
+
+Steps:
+- Create 2-3 Workers on different subdomains (e.g., `proxy-primary`, `proxy-alt-1`, `proxy-alt-2`).
+- Note each Worker’s URL (it ends with `/`), then use it with `?destination=` in your `.env`.
+- Example final value: `https://proxy-primary.example.workers.dev/?destination=`
+
+Using the same Workers URLs:
+- Put your primary and alternate Workers URLs in `SHOWBOX_PROXY_URLS`.
+- Optionally mirror the same set in `FEBBOX_PROXY_URLS` for personal cookie flows.
+- The addon routes ShowBox and PStream-related requests through these proxies.
+
+## Success
 
 Congratulations! You now have your own personal streaming addon with:
 
-- ✅ Multiple streaming sources
-- ✅ Your own bandwidth quotas
-- ✅ No limits on stream quality
-- ✅ Full control over settings
+- Multiple streaming sources
+- Your own bandwidth quotas
+- No limits on stream quality
+- Full control over settings
 
-Happy streaming! 🍿
+Happy streaming!
 
 ---
 
-## 📚 Advanced Options
+## Advanced Options
 
 *Note: This section is for more experienced users.*
 
@@ -444,38 +558,23 @@ SHOWBOX_PROXY_URL_VALUE=https://your-proxy-url.netlify.app/?destination=
 2. Copy the deployed URL and add `?destination=` at the end
 3. Add to your `.env` file as `SHOWBOX_PROXY_URL_VALUE=your-url/?destination=`
 
-### Provider-Specific Proxies
+### Provider-Specific Proxies (optional)
 
 ```env
-# Provider-specific Proxy URLs
-VIDSRC_PROXY_URL=https://your-proxy-url.netlify.app/?destination=
+# Example placeholders (use only if you operate your own proxies)
+VIDSRC_PROXY_URL=
 VIDZEE_PROXY_URL=
 SOAPERTV_PROXY_URL=
-HOLLYMOVIEHD_PROXY_URL=
-XPRIME_PROXY_URL=
 ```
 
-### Xprime.tv with ScraperAPI
+### External Provider Services
 
-If you're not getting links from Xprime:
+If you operate separate services that implement the addon’s external provider API for certain providers, you can point the addon to them:
 
-1. Get a free API key from [ScraperAPI.com](https://www.scraperapi.com/)
-2. Add to your `.env` file:
-   ```env
-   USE_SCRAPER_API=true
-   SCRAPER_API_KEY=your_key_here
-   ```
+```env
+USE_EXTERNAL_PROVIDERS=true
+EXTERNAL_UHDMOVIES_URL=https://your-uhdmovies-service.example.com
+EXTERNAL_TOPMOVIES_URL=https://your-topmovies-service.example.com
+EXTERNAL_MOVIESMOD_URL=https://your-moviesmod-service.example.com
+```
 
-### HiAnime Setup
-
-For anime content:
-
-```bash
-# Setup Hianime service
-cd providers/hianime
-npm install
-npm start
-
-# In your main .env file
-HIANIME_SERVER=http://localhost:8082/fetch-hianime
-``` 
