@@ -469,60 +469,9 @@ FEBBOX_PROXY_URLS=https://proxy-primary.example.workers.dev/?destination=,https:
 - Keep Workers simple (no heavy parsing) and forward only required headers.
 - Consider enabling caching at the Worker/edge for static assets if appropriate (not for signed or user-specific URLs).
 
-### Cloudflare Workers Proxy (Recommended)
+### Proxy Setup Notes
 
-Deploy a lightweight HTTP proxy on Cloudflare Workers. You can reuse the SAME Workers proxy URLs for both ShowBox and any PStream-backed requests because PStream URLs are resolved from ShowBox.
-
-Worker script (copy/paste into Cloudflare Workers → Create Worker):
-
-```javascript
-export default {
-  async fetch(request) {
-    try {
-      const url = new URL(request.url);
-      const upstream = url.searchParams.get('destination');
-      if (!upstream) {
-        return new Response('Missing destination param', { status: 400 });
-      }
-
-      // Preserve method/headers as needed; strip hop-by-hop headers
-      const hopByHop = ['connection','keep-alive','proxy-authenticate','proxy-authorization','te','trailer','transfer-encoding','upgrade'];
-      const headers = new Headers(request.headers);
-      hopByHop.forEach(h => headers.delete(h));
-
-      // Optional: tighten headers for upstream if desired
-      headers.set('User-Agent', 'NuvioStreamsProxy/1.0');
-
-      const init = {
-        method: request.method,
-        headers,
-        body: ['GET','HEAD'].includes(request.method) ? undefined : request.body,
-        redirect: 'follow'
-      };
-      const resp = await fetch(upstream, init);
-
-      // Mirror response while adding CORS for the addon/UI
-      const outHeaders = new Headers(resp.headers);
-      outHeaders.set('access-control-allow-origin', '*');
-      outHeaders.set('access-control-allow-headers', '*');
-      outHeaders.set('access-control-allow-methods', 'GET,HEAD,POST,OPTIONS');
-      return new Response(resp.body, { status: resp.status, headers: outHeaders });
-    } catch (e) {
-      return new Response('Proxy error: ' + (e?.message || e), { status: 502 });
-    }
-  }
-};
-```
-
-Steps:
-- Create 2-3 Workers on different subdomains (e.g., `proxy-primary`, `proxy-alt-1`, `proxy-alt-2`).
-- Note each Worker’s URL (it ends with `/`), then use it with `?destination=` in your `.env`.
-- Example final value: `https://proxy-primary.example.workers.dev/?destination=`
-
-Using the same Workers URLs:
-- Put your primary and alternate Workers URLs in `SHOWBOX_PROXY_URLS`.
-- Optionally mirror the same set in `FEBBOX_PROXY_URLS` for personal cookie flows.
-- The addon routes ShowBox and PStream-related requests through these proxies.
+You may use your own HTTP edge proxy (for example on Cloudflare Workers or similar) as the target for `SHOWBOX_PROXY_URLS` and `FEBBOX_PROXY_URLS`. Ensure each proxy URL ends with `?destination=` and properly forwards method, headers, and body while adding permissive CORS for your deployment. Avoid copying proxy code here; follow your platform’s security best practices.
 
 ## Success
 
