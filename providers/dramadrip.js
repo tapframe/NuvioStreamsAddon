@@ -24,6 +24,239 @@ function escapeRegExp(string) {
   return string.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&'); // $& means the whole matched string
 }
 
+// Base64 decode utility function
+function base64Decode(string) {
+    try {
+        const clean = string.trim().replace(/\n/g, '').replace(/\r/g, '');
+        const padded = clean.padEnd(Math.ceil(clean.length / 4) * 4, '=');
+        return Buffer.from(padded, 'base64').toString('utf-8');
+    } catch (error) {
+        console.error('[DramaDrip] Base64 decode error:', error.message);
+        return '';
+    }
+}
+
+// Helper function to get base URL
+function getBaseUrl(url) {
+    try {
+        const urlObj = new URL(url);
+        return `${urlObj.protocol}//${urlObj.host}`;
+    } catch (error) {
+        console.error('[DramaDrip] Error getting base URL:', error.message);
+        return '';
+    }
+}
+
+// Helper function to fix URLs
+function fixUrl(url, domain) {
+    if (url.startsWith('http')) {
+        return url;
+    }
+    if (url === '') {
+        return '';
+    }
+    if (url.startsWith('//')) {
+        return 'https:' + url;
+    } else {
+        if (url.startsWith('/')) {
+            return domain + url;
+        }
+        return domain + '/' + url;
+    }
+}
+
+// Bypass function for hrefli/unblockedgames/examzculture links
+async function bypassHrefli(url) {
+    try {
+        console.log(`[DramaDrip] Bypassing hrefli link: ${url}`);
+        const host = getBaseUrl(url);
+
+        // First request to get initial form
+        let response = await makeRequest(url);
+        let $ = cheerio.load(response.data);
+
+        // Extract form data
+        const formUrl = $('form#landing').attr('action');
+        const formData = {};
+        $('form#landing input').each((i, el) => {
+            const name = $(el).attr('name');
+            const value = $(el).attr('value');
+            if (name) formData[name] = value;
+        });
+
+        if (!formUrl || Object.keys(formData).length === 0) {
+            console.error('[DramaDrip] Could not extract initial form data');
+            return null;
+        }
+
+        // Second request - POST to form action
+        response = await axios.post(formUrl, new URLSearchParams(formData).toString(), {
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+        });
+        $ = cheerio.load(response.data);
+
+        // Extract second form data
+        const formUrl2 = $('form#landing').attr('action');
+        const formData2 = {};
+        $('form#landing input').each((i, el) => {
+            const name = $(el).attr('name');
+            const value = $(el).attr('value');
+            if (name) formData2[name] = value;
+        });
+
+        // Third request - POST to second form action
+        response = await axios.post(formUrl2, new URLSearchParams(formData2).toString(), {
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+        });
+        $ = cheerio.load(response.data);
+
+        // Extract skToken from script
+        const scriptContent = $('script').filter((i, el) => $(el).html().includes('?go=')).html();
+        if (!scriptContent) {
+            console.error('[DramaDrip] Could not find script with ?go=');
+            return null;
+        }
+
+        const skToken = scriptContent.substring(scriptContent.indexOf('?go=') + 4).split('"')[0];
+        if (!skToken) {
+            console.error('[DramaDrip] Could not extract skToken');
+            return null;
+        }
+
+        // Fourth request - GET with cookie
+        const driveUrl = await axios.get(`${host}?go=${skToken}`, {
+            headers: {
+                'Cookie': `${skToken}=${formData2['_wp_http2']}`
+            }
+        }).then(res => {
+            $ = cheerio.load(res.data);
+            return $('meta[http-equiv="refresh"]').attr('content')?.split('url=')[1];
+        });
+
+        if (!driveUrl) {
+            console.error('[DramaDrip] Could not extract drive URL');
+            return null;
+        }
+
+        // Fifth request - GET drive URL and extract path
+        const finalResponse = await makeRequest(driveUrl);
+        const pathMatch = finalResponse.data.match(/replace\("([^"]+)"/);
+        if (!pathMatch) {
+            console.error('[DramaDrip] Could not extract path from final response');
+            return null;
+        }
+
+        const path = pathMatch[1];
+        if (path === '/404') return null;
+
+        return fixUrl(path, getBaseUrl(driveUrl));
+
+    } catch (error) {
+        console.error(`[DramaDrip] Error in bypassHrefli: ${error.message}`);
+        return null;
+    }
+}
+
+// Full bypass function for cinematickit safelink= URLs
+async function cinematickitBypass(url) {
+    try {
+        console.log(`[DramaDrip] Bypassing cinematickit link: ${url}`);
+        const cleanedUrl = url.replace('&#038;', '&');
+        const encodedLink = cleanedUrl.split('safelink=')[1]?.split('-')[0];
+
+        if (!encodedLink) {
+            console.error('[DramaDrip] Could not extract encoded link from safelink=');
+            return null;
+        }
+
+        const decodedUrl = base64Decode(encodedLink);
+        if (!decodedUrl) {
+            console.error('[DramaDrip] Could not decode base64 link');
+            return null;
+        }
+
+        const response = await makeRequest(decodedUrl);
+        const $ = cheerio.load(response.data);
+
+        const goValue = $('form#landing input[name=go]').attr('value');
+        if (!goValue) {
+            console.error('[DramaDrip] Could not find go value in form');
+            return null;
+        }
+
+        const decodedGoUrl = base64Decode(goValue).replace('&#038;', '&');
+        if (!decodedGoUrl) {
+            console.error('[DramaDrip] Could not decode go value');
+            return null;
+        }
+
+        const finalResponse = await makeRequest(decodedGoUrl);
+        const final$ = cheerio.load(finalResponse.data);
+
+        const script = final$('script').filter((i, el) => final$(el).html().includes('window.location.replace')).html();
+        if (!script) {
+            console.error('[DramaDrip] Could not find redirect script');
+            return null;
+        }
+
+        const regex = /window\.location\.replace\s*\(\s*["'](.+?)["']\s*\)\s*;?/;
+        const match = script.match(regex);
+        if (!match) {
+            console.error('[DramaDrip] Could not extract redirect path from script');
+            return null;
+        }
+
+        const redirectPath = match[1];
+        if (redirectPath.startsWith('http')) {
+            return redirectPath;
+        } else {
+            const urlObj = new URL(decodedGoUrl);
+            return `${urlObj.protocol}//${urlObj.host}${redirectPath}`;
+        }
+
+    } catch (error) {
+        console.error(`[DramaDrip] Error in cinematickitBypass: ${error.message}`);
+        return null;
+    }
+}
+
+// Partial bypass function for cinematickit safelink= URLs (only decodes go value)
+async function cinematickitloadBypass(url) {
+    try {
+        console.log(`[DramaDrip] Partially bypassing cinematickit link: ${url}`);
+        const cleanedUrl = url.replace('&#038;', '&');
+        const encodedLink = cleanedUrl.split('safelink=')[1]?.split('-')[0];
+
+        if (!encodedLink) {
+            console.error('[DramaDrip] Could not extract encoded link from safelink=');
+            return null;
+        }
+
+        const decodedUrl = base64Decode(encodedLink);
+        if (!decodedUrl) {
+            console.error('[DramaDrip] Could not decode base64 link');
+            return null;
+        }
+
+        const response = await makeRequest(decodedUrl);
+        const $ = cheerio.load(response.data);
+
+        const goValue = $('form#landing input[name=go]').attr('value');
+        console.log(`[DramaDrip] Extracted go value: ${goValue}`);
+
+        if (!goValue) {
+            console.error('[DramaDrip] Could not find go value in form');
+            return null;
+        }
+
+        return base64Decode(goValue).replace('&#038;', '&');
+
+    } catch (error) {
+        console.error(`[DramaDrip] Error in cinematickitloadBypass: ${error.message}`);
+        return null;
+    }
+}
+
 // --- Domain Fetching ---
 let dramaDripDomain = 'https://dramadrip.com'; // Fallback domain
 let domainCacheTimestamp = 0;
@@ -292,7 +525,19 @@ async function extractDramaDripLinks(url) {
 // Resolves intermediate links from cinematickit.org or episodes.modpro.blog
 async function resolveCinemaKitOrModproLink(initialUrl, refererUrl) {
     try {
-        const { data } = await makeRequest(initialUrl, { headers: { 'Referer': refererUrl } });
+        // Handle safelink= URLs by bypassing them first
+        let actualUrl = initialUrl;
+        if (initialUrl.includes('safelink=')) {
+            console.log(`[DramaDrip] Detected safelink URL, bypassing: ${initialUrl}`);
+            actualUrl = await cinematickitloadBypass(initialUrl);
+            if (!actualUrl) {
+                console.error('[DramaDrip] Failed to bypass safelink URL');
+                return null;
+            }
+            console.log(`[DramaDrip] Bypassed to: ${actualUrl}`);
+        }
+
+        const { data } = await makeRequest(actualUrl, { headers: { 'Referer': refererUrl } });
         const $ = cheerio.load(data);
         const finalLinks = [];
         
@@ -799,7 +1044,7 @@ async function getDramaDripStreams(tmdbId, mediaType, seasonNum, episodeNum) {
 
                     // Handle SID links first
                     if (targetUrl.includes('tech.unblockedgames.world') || targetUrl.includes('tech.creativeexpressionsblog.com') || targetUrl.includes('tech.examzculture.in')) {
-                        const resolvedUrl = await resolveTechUnblockedLink(targetUrl);
+                        const resolvedUrl = await bypassHrefli(targetUrl);
                         if (!resolvedUrl) return null;
                         targetUrl = resolvedUrl;
                     }

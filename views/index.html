@@ -433,9 +433,7 @@
             background: linear-gradient(135deg, #ff7a00, #ff0050);
         }
 
-        .xprime-icon {
-            background: linear-gradient(135deg, #00a3ff, #00c16e);
-        }
+        
 
         .hollymovie-icon {
             background: linear-gradient(135deg, #e50914, #831010);
@@ -446,15 +444,9 @@
             /* Blue gradient for Soaper TV */
         }
 
-        .cuevana-icon {
-            background: linear-gradient(135deg, #9b59b6, #8e44ad);
-            /* Purple gradient for Cuevana */
-        }
+        
 
-        .hianime-icon {
-            background: linear-gradient(135deg, #ff3a3a, #ff7c7c);
-            /* Red gradient for Hianime */
-        }
+        
 
         .coming-soon-icon {
             background: linear-gradient(135deg, #6742d9, #9f7aea);
@@ -1822,10 +1814,7 @@
             /* Blue gradient for TopMovies */
         }
 
-        .dramadrip-icon {
-            background: linear-gradient(135deg, #f7797d, #FBD786, #C6FFDD);
-            /* Colorful gradient for DramaDrip */
-        }
+        
 
         .khdhub-icon {
             background: linear-gradient(135deg, #1e3c72, #2a5298);
@@ -2054,11 +2043,6 @@
 
                 <div class="providers">
                     <h2 style="font-size: 1rem; font-weight: 500; margin-bottom: 0.75rem;">Regional & Specialty</h2>
-                    <div class="provider-item">
-                        <div class="provider-icon dramadrip-icon">🎭</div>
-                        <div class="provider-name">DramaDrip</div>
-                        <span class="provider-detail">Korean, Chinese, etc.</span>
-                    </div>
                     <div class="provider-item">
                         <div class="provider-icon topmovies-icon">🎬</div>
                         <div class="provider-name">TopMovies</div>
@@ -2292,22 +2276,7 @@
                             style="margin-top: 1.25rem; margin-bottom: 0.75rem; color: var(--text-light); font-size: 0.95rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem;">
                             Regional & Specialty Providers</h2>
 
-                        <div class="provider-checkbox-item"
-                            style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
-                            <div style="display: flex; align-items: center;">
-                                <input type="checkbox" id="providerDramadrip" name="providerSelect" value="dramadrip"
-                                    checked="" style="margin-right: 0.5rem; accent-color: var(--primary);">
-                                <label for="providerDramadrip" style="font-size: 0.9rem;">DramaDrip <span
-                                        style="font-size: 0.75rem; color: var(--text-light);">(~10s)</span> <span
-                                        style="font-size: 0.75rem; color: #f7797d;">Asian Dramas</span></label>
-                            </div>
-                            <select id="qualityDramadrip" name="providerQuality" data-provider="dramadrip"
-                                class="provider-sort-select">
-                                <option value="all">All</option>
-                                <option value="720p">720p+</option>
-                                <option value="1080p">1080p+</option>
-                            </select>
-                        </div>
+                        
                         <div class="provider-checkbox-item"
                             style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
                             <div style="display: flex; align-items: center;">
@@ -2324,66 +2293,9 @@
                                 <option value="1080p">1080p+</option>
                             </select>
                         </div>
-                        <div class="provider-checkbox-item"
-                            style="display: none; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
-                            <div style="display: flex; align-items: center;">
-                                <input type="checkbox" id="providerCuevana" name="providerSelect" value="cuevana"
-                                    disabled style="margin-right: 0.5rem; accent-color: var(--primary); opacity: 0.5;">
-                                <label for="providerCuevana" style="font-size: 0.9rem; opacity: 0.5;">Cuevana (ElfHosted
-                                    Private Instance Exclusive)</label>
-                            </div>
-                            <select id="qualityCuevana" name="providerQuality" data-provider="cuevana"
-                                class="provider-sort-select" disabled>
-                                <option value="all" selected>All Qualities</option>
-                            </select>
-                        </div>
-                        <div class="provider-checkbox-item"
-                            style="display: none; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
-                            <div style="display: flex; align-items: center;">
-                                <input type="checkbox" id="providerHianime" name="providerSelect" value="hianime"
-                                    disabled style="margin-right: 0.5rem; accent-color: var(--primary); opacity: 0.5;">
-                                <label for="providerHianime" style="font-size: 0.9rem; opacity: 0.5;">Hianime
-                                    (Offline)</label>
-                            </div>
-                            <select id="qualityHianime" name="providerQuality" data-provider="hianime"
-                                class="provider-sort-select" disabled>
-                                <option value="all" selected>All Qualities</option>
-                            </select>
-                        </div>
-                        <div class="provider-checkbox-item"
-                            style="display: none; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
-                            <div style="display: flex; align-items: center;">
-                                <input type="checkbox" id="providerXprime" name="providerSelect" value="xprime" disabled
-                                    style="margin-right: 0.5rem; accent-color: var(--primary); opacity: 0.5;">
-                                <label for="providerXprime" style="font-size: 0.9rem; opacity: 0.5;">Xprime.tv
-                                    (Offline)</label>
-                            </div>
-                            <div style="display: flex; align-items: center; gap: 0.8rem;">
-                                <select id="qualityXprime" name="providerQuality" data-provider="xprime"
-                                    class="provider-sort-select" disabled>
-                                    <option value="all" selected>All Qualities</option>
-                                </select>
-                                <div class="codec-filters"
-                                    style="display: flex; align-items: center; gap: 0.6rem; padding: 0.2rem 0.6rem; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 6px; opacity: 0.5;">
-                                    <div style="display: flex; align-items: center; gap: 0.3rem;">
-                                        <input type="checkbox" id="excludeDvXprime" name="excludeDv"
-                                            data-provider="xprime"
-                                            style="width: 14px; height: 14px; accent-color: #ff4444;" disabled>
-                                        <label for="excludeDvXprime"
-                                            style="font-size: 0.75rem; color: var(--text-light); user-select: none; cursor: pointer;">No
-                                            DV</label>
-                                    </div>
-                                    <div style="display: flex; align-items: center; gap: 0.3rem;">
-                                        <input type="checkbox" id="excludeHdrXprime" name="excludeHdr"
-                                            data-provider="xprime"
-                                            style="width: 14px; height: 14px; accent-color: #ff4444;" disabled>
-                                        <label for="excludeHdrXprime"
-                                            style="font-size: 0.75rem; color: var(--text-light); user-select: none; cursor: pointer;">No
-                                            HDR</label>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+                        
+                        
+                        
 
                         <div class="provider-info-note"
                             style="margin-top: 0.75rem; margin-bottom: 0.75rem; padding: 0.5rem; font-size: 0.8rem;">
@@ -2411,9 +2323,7 @@
                 <div class="scraper-api-key-container full-width" style="margin-top: 1.5rem; display: none;">
                     <div
                         style="background-color: rgba(15, 15, 15, 0.7); border-radius: 0.6rem; padding: 1rem; border: 1px solid var(--border);">
-                        <label for="scraperApiKeyInput"
-                            style="display: block; font-size: 0.9rem; font-weight: 500; margin-bottom: 0.25rem;">ScraperAPI
-                            Key (Optional for Xprime):</label>
+                        
                         <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
                             <input type="text" id="scraperApiKeyInput" placeholder="Enter your ScraperAPI key"
                                 class="cookie-input" style="flex-grow: 1; min-width: 150px;">
@@ -2422,9 +2332,7 @@
                             <button id="howToGetScraperApiKeyBtn" class="how-to-get-btn" style="flex-shrink: 0;">How to
                                 Get</button>
                         </div>
-                        <p style="font-size: 0.75rem; color: var(--text-light); margin-top: 0.25rem;">Xprime requires a
-                            ScraperAPI key on this public instance. Alternatively, self-host the addon for direct Xprime
-                            access. Leave blank if not using Xprime or if self-hosting.</p>
+                        
                     </div>
                 </div>
                 <!-- End ScraperAPI Key Input -->
@@ -2558,7 +2466,7 @@
                     Developed by <a href="https://github.com/tapframe" target="_blank" class="github-link">TapFrame</a>
                 </div>
                 <div class="footer-text">
-                    v0.5.6
+                    v0.5.7
                 </div>
             </div>
         </div>
@@ -2681,15 +2589,7 @@
             </div>
         </div>
         <div class="tutorial-warning">
-            <h3>Important Notice for Xprime:</h3>
-            <p>Using a ScraperAPI key is one way to access Xprime.tv streams on this public Nuvio Streams instance. This
-                helps bypass potential blocking that Xprime might implement.</p>
-            <p>However, this is not a guaranteed long-term solution. Access through ScraperAPI can become unreliable if
-                ScraperAPI itself is blocked by Xprime, if your free credits run out, or if ScraperAPI changes its
-                service terms.</p>
-            <p><strong>For the most stable and reliable Xprime access, self-hosting this addon is strongly
-                    recommended.</strong> When self-hosting, you can configure your own proxy solutions or attempt
-                direct access, bypassing the need for a third-party service like ScraperAPI for Xprime.</p>
+            
             <p style="margin-top: 10px; font-style: italic;"><strong>Disclaimer:</strong> This project is not associated
                 with ScraperAPI in any way. The ScraperAPI service is utilized here solely as a technical means to
                 facilitate the scraping of links, which is necessary for accessing content from certain providers on
@@ -3035,7 +2935,6 @@
 
         // Get reference to ShowBox checkbox specifically
         const showboxCheckbox = document.getElementById('providerShowbox');
-        const xprimeCheckbox = document.getElementById('providerXprime'); // Get Xprime checkbox
         const vidzeeCheckbox = document.getElementById('providerVidzee'); // NEW: Get VidZee checkbox
 
         // Function to update region selector state - always enabled regardless of cookie validity
@@ -3097,18 +2996,7 @@
             }
         }
 
-        // --- NEW: Function to enable/disable ScraperAPI key input based on Xprime selection ---
-        function updateScraperApiKeyInputState() {
-            if (scraperApiKeyInput && xprimeCheckbox) {
-                if (xprimeCheckbox.checked) {
-                    scraperApiKeyInput.disabled = false;
-                    scraperApiKeyInput.style.opacity = '1';
-                } else {
-                    scraperApiKeyInput.disabled = true;
-                    scraperApiKeyInput.style.opacity = '0.6';
-                }
-            }
-        }
+        
 
         // --- NEW: Centralized function to regenerate the personalized manifest URL ---
         async function regeneratePersonalizedManifest() {
@@ -3341,7 +3229,7 @@
             showboxCheckbox.addEventListener('change', () => {
                 updateCookieSectionState();
                 updateQualityDropdownStates();
-                // updateScraperApiKeyInputState(); // Not strictly needed here unless Showbox affects Xprime directly
+                
                 // Instead of direct toast, let user click "Apply" or "Set Cookie" or blur API key
                 // toast.textContent = `Provider selection changed. ${showboxCheckbox.checked ? 'ShowBox enabled, cookie section available.' : 'ShowBox disabled, cookie section disabled.'} Click "Apply Selection" to update manifest.`;
                 // toast.classList.add('show');
@@ -4169,7 +4057,7 @@
 
         // Combine streams in the preferred provider order
         combinedRawStreams = [];
-        const providerOrder = ['ShowBox', 'Hianime', 'Xprime.tv', 'HollyMovieHD', 'Soaper TV', 'VidZee', 'MP4Hydra', 'Cuevana', 'VidSrc']; // NEW: Add MP4Hydra provider
+        const providerOrder = ['ShowBox', 'Soaper TV', 'VidZee', 'MP4Hydra', 'VidSrc'];
 
     </script>
     <script src="/_vercel/insights/script.js" defer></script>
