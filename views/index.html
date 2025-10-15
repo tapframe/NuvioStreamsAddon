@@ -1648,6 +1648,11 @@
             /* Blue gradient for VidSrc */
         }
 
+        .vixsrc-icon {
+            background: linear-gradient(135deg, #1976D2, #42A5F5);
+            /* Darker blue gradient for VixSrc */
+        }
+
         .vidzee-icon {
             background: linear-gradient(135deg, #4CAF50, #8BC34A);
             /* Green gradient for VidZee */
@@ -2010,6 +2015,11 @@
                         <span class="provider-detail">Auto Quality</span>
                     </div>
                     <div class="provider-item">
+                        <div class="provider-icon vixsrc-icon">📹</div>
+                        <div class="provider-name">VixSrc</div>
+                        <span class="provider-detail">Auto Quality</span>
+                    </div>
+                    <div class="provider-item">
                         <div class="provider-icon mp4hydra-icon">🎥</div>
                         <div class="provider-name">MP4Hydra</div>
                         <span class="provider-detail">Only works on native Stremio apps (Android TV/Mobile)</span>
@@ -2160,6 +2170,22 @@
                                         style="font-size: 0.75rem; color: var(--text-light);">(~5.4s)</span></label>
                             </div>
                             <select id="qualityVidsrc" name="providerQuality" data-provider="vidsrc"
+                                class="provider-sort-select">
+                                <option value="all" selected="">All Qualities</option>
+                                <option value="480p">480p &amp; Up</option>
+                                <option value="720p">720p &amp; Up</option>
+                                <option value="1080p">1080p &amp; Up</option>
+                            </select>
+                        </div>
+                        <div class="provider-checkbox-item"
+                            style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
+                            <div style="display: flex; align-items: center;">
+                                <input type="checkbox" id="providerVixsrc" name="providerSelect" value="vixsrc"
+                                    checked="" style="margin-right: 0.5rem; accent-color: var(--primary);">
+                                <label for="providerVixsrc" style="font-size: 0.9rem;">VixSrc <span
+                                        style="font-size: 0.75rem; color: var(--text-light);">(~5.2s)</span></label>
+                            </div>
+                            <select id="qualityVixsrc" name="providerQuality" data-provider="vixsrc"
                                 class="provider-sort-select">
                                 <option value="all" selected="">All Qualities</option>
                                 <option value="480p">480p &amp; Up</option>
@@ -2466,7 +2492,7 @@
                     Developed by <a href="https://github.com/tapframe" target="_blank" class="github-link">TapFrame</a>
                 </div>
                 <div class="footer-text">
-                    v0.5.7
+                    v0.5.8
                 </div>
             </div>
         </div>

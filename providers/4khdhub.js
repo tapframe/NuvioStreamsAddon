@@ -151,13 +151,39 @@ function makeRequest(url, options = {}) {
                 resolve({ statusCode: res.statusCode, headers: res.headers });
                 return;
             }
-            
+
+            // Handle redirects (follow up to 5 redirects)
+            if ((res.statusCode === 301 || res.statusCode === 302 || res.statusCode === 303 || res.statusCode === 307 || res.statusCode === 308) && res.headers.location) {
+                const redirectUrl = res.headers.location.startsWith('http') ? res.headers.location : `${urlObj.protocol}//${urlObj.host}${res.headers.location}`;
+                console.log(`[makeRequest] Following redirect: ${url} -> ${redirectUrl}`);
+
+                // Prevent infinite redirect loops
+                if (!options._redirectCount) options._redirectCount = 0;
+                options._redirectCount++;
+
+                if (options._redirectCount > 5) {
+                    reject(new Error(`Too many redirects for ${url}`));
+                    return;
+                }
+
+                // Follow the redirect
+                makeRequest(redirectUrl, { ...options, _redirectCount: options._redirectCount })
+                    .then(resolve)
+                    .catch(reject);
+                return;
+            }
+
             let data = '';
             res.on('data', chunk => data += chunk);
             res.on('end', () => {
-                if (options.parseHTML && data) {
-                    const $ = cheerio.load(data);
-                    resolve({ $: $, body: data, statusCode: res.statusCode, headers: res.headers });
+                if (options.parseHTML) {
+                    try {
+                        const $ = cheerio.load(data || '');
+                        resolve({ $: $, body: data, statusCode: res.statusCode, headers: res.headers });
+                    } catch (error) {
+                        console.error(`[makeRequest] Failed to parse HTML for ${url}:`, error.message);
+                        reject(new Error(`HTML parsing failed: ${error.message}`));
+                    }
                 } else {
                     resolve({ body: data, statusCode: res.statusCode, headers: res.headers });
                 }
@@ -652,9 +678,12 @@ function findBestMatch(results, query, tmdbYear = null) {
 function extractHubCloudLinks(url, referer) {
     console.log(`[4KHDHub] Starting HubCloud extraction for: ${url}`);
     const baseUrl = getBaseUrl(url);
-    
+
     return makeRequest(url, { parseHTML: true })
         .then(response => {
+            if (!response || !response.$) {
+                throw new Error(`Invalid response from HubCloud URL: ${url}`);
+            }
             const $ = response.$;
             console.log(`[4KHDHub] Got HubCloud page, looking for download element...`);
             
@@ -1307,11 +1336,14 @@ function extractStreamingLinks(downloadLinks) {
 
 function extractHubDriveLinks(url, referer) {
     console.log(`[4KHDHub] Starting HubDrive extraction for: ${url}`);
-    
+
     return makeRequest(url, { parseHTML: true })
         .then(response => {
+            if (!response || !response.$) {
+                throw new Error(`Invalid response from HubDrive URL: ${url}`);
+            }
             const $ = response.$;
-            
+
             console.log(`[4KHDHub] Got HubDrive page, looking for download button...`);
             
             // Extract filename and size information
@@ -1540,7 +1572,7 @@ async function get4KHDHubStreams(tmdbId, type, season = null, episode = null) {
         console.log(`[4KHDHub] Starting search for TMDB ID: ${tmdbId}, Type: ${type}${season ? `, Season: ${season}` : ''}${episode ? `, Episode: ${episode}` : ''}`);
         
         // Create cache key for resolved file hosting URLs
-        const cacheKey = `4khdhub_resolved_urls_v4_${tmdbId}_${type}${season ? `_s${season}e${episode}` : ''}`;
+        const cacheKey = `4khdhub_resolved_urls_v5_${tmdbId}_${type}${season ? `_s${season}e${episode}` : ''}`;
         
         let streamingLinks = [];
         
