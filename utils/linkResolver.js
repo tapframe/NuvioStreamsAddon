@@ -2,92 +2,207 @@ const cheerio = require('cheerio');
 const { URL, URLSearchParams } = require('url');
 const FormData = require('form-data');
 
-// Shared helpers for resolving driveseed/driveleech style redirects and extracting final download URLs.
-// This util is proxy-agnostic: providers must inject their own network functions and validators.
-// All functions accept injected dependencies so proxy, cookies, and caching stay in provider code.
+function cleanTitle(title) {
+  if (!title) return '';
+  const parts = title.split(/\.|-|_/);
+  const qualityTags = [
+    "WEBRip", "WEB-DL", "WEB", "BluRay", "HDRip", "DVDRip", "HDTV",
+    "CAM", "TS", "R5", "DVDScr", "BRRip", "BDRip", "DVD", "PDTV", "HD"
+  ];
+  const audioTags = [
+    "AAC", "AC3", "DTS", "MP3", "FLAC", "DD5", "EAC3", "Atmos"
+  ];
+  const subTags = [
+    "ESub", "ESubs", "Subs", "MultiSub", "NoSub", "EnglishSub", "HindiSub"
+  ];
+  const codecTags = [
+    "x264", "x265", "H264", "HEVC", "AVC"
+  ];
 
-// --- Default extractors (can be used directly or replaced by providers) ---
-
-async function defaultTryInstantDownload($, { post, origin, log = console }) {
-  const allInstant = $('a:contains("Instant Download"), a:contains("Instant")');
-  log.log(`[LinkResolver] defaultTryInstantDownload: found ${allInstant.length} matching anchor(s).`);
-  const instantLink = allInstant.attr('href');
-  if (!instantLink) {
-    log.log('[LinkResolver] defaultTryInstantDownload: no href on element.');
-    return null;
-  }
-
-  try {
-    const urlObj = new URL(instantLink, origin);
-    const keys = new URLSearchParams(urlObj.search).get('url');
-    if (!keys) return null;
-
-    const apiUrl = `${urlObj.origin}/api`;
-    const formData = new FormData();
-    formData.append('keys', keys);
-
-    const resp = await post(apiUrl, formData, {
-      headers: { ...formData.getHeaders(), 'x-token': urlObj.hostname }
+  const startIndex = parts.findIndex(part => qualityTags.some(tag => part.toLowerCase().includes(tag.toLowerCase())));
+  const endIndex = (() => {
+    let idx = -1;
+    parts.forEach((part, i) => {
+      if (
+        subTags.some(tag => part.toLowerCase().includes(tag.toLowerCase())) ||
+        audioTags.some(tag => part.toLowerCase().includes(tag.toLowerCase())) ||
+        codecTags.some(tag => part.toLowerCase().includes(tag.toLowerCase()))
+      ) idx = i;
     });
+    return idx;
+  })();
 
-    if (resp && resp.data && resp.data.url) {
-      let finalUrl = resp.data.url;
-      if (typeof finalUrl === 'string' && finalUrl.includes('workers.dev')) {
-        const parts = finalUrl.split('/');
-        const fn = parts[parts.length - 1];
-        parts[parts.length - 1] = fn.replace(/ /g, '%20');
-        finalUrl = parts.join('/');
+  if (startIndex !== -1 && endIndex !== -1 && endIndex >= startIndex) {
+    return parts.slice(startIndex, endIndex + 1).join('.');
+  } else if (startIndex !== -1) {
+    return parts.slice(startIndex).join('.');
+  } else {
+    return parts.slice(-3).join('.');
+  }
+}
+
+function getIndexQuality(str) {
+  if (!str) return 0;
+  const m = str.match(/(\d{3,4})[pP]/);
+  if (m && m[1]) return parseInt(m[1], 10);
+  return 0;
+}
+
+// Enhanced extraction for Driveleech/Driveseed pages, inspired by Kotlin logic
+async function extractFinalDownloadFromFilePage($, {
+  origin,
+  get,
+  post,
+  validate,
+  log = console,
+}) {
+  // Extract details from the DOM
+  let fileName = '';
+  let fileSize = '';
+  let qualityText = '';
+
+  // Try to find and extract file details
+  const listItems = $('li.list-group-item');
+  listItems.each((_, el) => {
+    const txt = $(el).text();
+    if (txt.toLowerCase().includes('name :')) fileName = txt.replace(/Name\s*:/i, '').trim();
+    if (txt.toLowerCase().includes('size :')) fileSize = txt.replace(/Size\s*:/i, '').trim();
+    qualityText = txt;
+  });
+
+  fileName = cleanTitle(fileName);
+  const labelExtras = [fileName && `[${fileName}]`, fileSize && `[${fileSize}]`].filter(Boolean).join('');
+  const qualityValue = getIndexQuality(qualityText);
+
+  let foundLink = null;
+  let foundLabel = null;
+  let foundType = null;
+  let foundQuality = qualityValue;
+
+  // Collect anchors to process in async context
+  const anchors = [];
+  $('div.text-center > a').each((_, el) => {
+    anchors.push({
+      text: $(el).text(),
+      href: $(el).attr('href'),
+    });
+  });
+  
+  for (const anchor of anchors) {
+    const text = anchor.text;
+    const href = anchor.href;
+    log.debug && log.debug(`[Driveleech-KotlinJS] Parsing anchor: text='${text}' href='${href}'`);
+    if (!href) continue;
+    if (/instant download/i.test(text) && !foundLink) {
+      foundType = 'Instant(Download)';
+      foundLabel = `Driveleech Instant(Download) ${labelExtras}`.trim();
+      foundQuality = qualityValue;
+      // Accept direct CDN link (http/https, no url= required)
+      if (/^https?:\/\//.test(href) && !href.includes('url=')) {
+        foundLink = href;
+        break;
       }
-      log.log('[LinkResolver] defaultTryInstantDownload: extracted API url');
-      return finalUrl;
+      // Otherwise only run old POST logic if url= is present
+      try {
+        const urlObj = new URL(href, origin);
+        const keys = new URLSearchParams(urlObj.search).get('url');
+        if (keys) {
+          const apiUrl = `${urlObj.origin}/api`;
+          const formData = new FormData();
+          formData.append('keys', keys);
+          if (post) {
+            const resp = await post(apiUrl, formData, {
+              headers: { ...formData.getHeaders(), 'x-token': urlObj.hostname }
+            });
+            if (resp && resp.data && resp.data.url && resp.data.url.startsWith('http')) {
+              foundLink = resp.data.url.replace(/\s/g, '%20');
+              break;
+            }
+          }
+        }
+      } catch (e) {
+        log.log(`[Driveleech-KotlinJS] Error fetching instant download: ${e.message}`);
+      }
+    } else if (/resume worker bot/i.test(text) && !foundLink) {
+      foundType = 'ResumeBot(VLC)';
+      foundLabel = `Driveleech ResumeBot(VLC) ${labelExtras}`.trim();
+      foundQuality = qualityValue;
+      if (href.startsWith('http')) {
+        foundLink = href;
+        break;
+      }
+    } else if (/direct links/i.test(text) && !foundLink) {
+      foundType = 'CF Type1';
+      foundLabel = `Driveleech CF Type1 ${labelExtras}`.trim();
+      foundQuality = qualityValue;
+      // Not implemented
+      // If implementing, put async/await req for '?type=1' here
+    } else if (/resume cloud/i.test(text) && !foundLink) {
+      foundType = 'ResumeCloud';
+      foundLabel = `Driveleech ResumeCloud ${labelExtras}`.trim();
+      foundQuality = qualityValue;
+      try {
+        const pageUrl = new URL(href, origin).href;
+        if (get) {
+          const res = await get(pageUrl);
+          if (res && res.data) {
+            const $$ = cheerio.load(res.data);
+            const link = $$('a.btn-success').attr('href');
+            if (link && link.startsWith('http')) {
+              foundLink = link;
+              break;
+            }
+          }
+        }
+      } catch (e) {
+        log.log(`[Driveleech-KotlinJS] Error fetching ResumeCloud: ${e.message}`);
+      }
+    } else if (/cloud download/i.test(text) && !foundLink) {
+      foundType = 'Cloud Download';
+      foundLabel = `Driveleech Cloud Download ${labelExtras}`.trim();
+      foundQuality = qualityValue;
+      if (href.startsWith('http')) {
+        foundLink = href;
+        break;
+      }
     }
-    return null;
-  } catch (e) {
-    log.log(`[LinkResolver] defaultTryInstantDownload error: ${e.message}`);
-    return null;
   }
+
+  if (!foundLink) {
+    const fallback = $(
+      'a[href*="workers.dev"], a[href*="workerseed"], a[href*="worker"], a[href*="driveleech.net/d/"], a[href*="driveseed.org/d/"]'
+    ).attr('href');
+    if (fallback && fallback.startsWith('http')) {
+      foundType = 'Direct';
+      foundLabel = `Driveleech Direct ${labelExtras}`.trim();
+      foundQuality = qualityValue;
+      foundLink = fallback;
+    }
+  }
+
+  if (foundLink) {
+    if (validate) {
+      const ok = await validate(foundLink);
+      if (!ok) {
+        log.log("[Driveleech-KotlinJS] Extracted link failed validation");
+        return null;
+      }
+    }
+    log.log(
+      `[Driveleech-KotlinJS] Extracted: url=${foundLink} label=${foundLabel || ''} quality=${foundQuality || ''}`
+    );
+    return {
+      url: foundLink,
+      label: foundLabel || '',
+      quality: foundQuality || 0,
+      fileName: fileName || '',
+      fileSize: fileSize || '',
+      type: foundType || '',
+    };
+  }
+  log.log('[Driveleech-KotlinJS] Nothing extracted');
+  return null;
 }
-
-async function defaultTryResumeCloud($, { origin, get, validate, log = console }) {
-  let resumeAnchor = $('a:contains("Resume Cloud"), a:contains("Cloud Resume Download"), a:contains("Resume Worker Bot"), a:contains("Worker")');
-  log.log(`[LinkResolver] defaultTryResumeCloud: found ${resumeAnchor.length} candidate button(s).`);
-
-  if (resumeAnchor.length === 0) {
-    // Try direct links on page
-    const direct = $('a[href*="workers.dev"], a[href*="workerseed"], a[href*="worker"], a[href*="driveleech.net/d/"], a[href*="driveseed.org/d/"]').attr('href');
-    if (direct) {
-      const ok = validate ? await validate(direct) : true;
-      if (ok) return direct;
-    }
-    return null;
-  }
-
-  const href = resumeAnchor.attr('href');
-  if (!href) return null;
-
-  if (href.startsWith('http') || href.includes('workers.dev')) {
-    const ok = validate ? await validate(href) : true;
-    return ok ? href : null;
-  }
-
-  try {
-    const resumeUrl = new URL(href, origin).href;
-    const res = await get(resumeUrl, { maxRedirects: 10 });
-    const $$ = cheerio.load(res.data);
-    let finalDownloadLink = $$('a.btn-success[href*="workers.dev"], a[href*="workerseed"], a[href*="worker"], a[href*="driveleech.net/d/"], a[href*="driveseed.org/d/"]').attr('href');
-    if (!finalDownloadLink) {
-      finalDownloadLink = $$('a[href*="workers.dev"], a[href*="workerseed"], a[href*="worker"], a[href*="driveleech.net/d/"], a[href*="driveseed.org/d/"]').first().attr('href');
-    }
-    if (!finalDownloadLink) return null;
-    const ok = validate ? await validate(finalDownloadLink) : true;
-    return ok ? finalDownloadLink : null;
-  } catch (e) {
-    log.log(`[LinkResolver] defaultTryResumeCloud error: ${e.message}`);
-    return null;
-  }
-}
-
-// --- Core steps ---
 
 async function followRedirectToFilePage({ redirectUrl, get, log = console }) {
   const res = await get(redirectUrl, { maxRedirects: 10 });
@@ -105,44 +220,6 @@ async function followRedirectToFilePage({ redirectUrl, get, log = console }) {
   return { $, finalFilePageUrl };
 }
 
-async function extractFinalDownloadFromFilePage($, {
-  origin,
-  get,
-  post,
-  validate,
-  log = console,
-  tryResumeCloud = defaultTryResumeCloud,
-  tryInstantDownload = defaultTryInstantDownload
-}) {
-  // Try known methods
-  const methods = [
-    async () => await tryResumeCloud($, { origin, get, validate, log }),
-    async () => await tryInstantDownload($, { post, origin, log })
-  ];
-
-  for (const fn of methods) {
-    try {
-      const url = await fn();
-      if (url) {
-        const ok = validate ? await validate(url) : true;
-        if (ok) return url;
-      }
-    } catch (e) {
-      log.log(`[LinkResolver] method error: ${e.message}`);
-    }
-  }
-
-  // Last resort: scan for plausible direct links
-  let direct = $('a[href*="workers.dev"], a[href*="workerseed"], a[href*="worker"], a[href*="driveleech.net/d/"], a[href*="driveseed.org/d/"]').attr('href');
-  if (direct) {
-    const ok = validate ? await validate(direct) : true;
-    if (ok) return direct;
-  }
-  return null;
-}
-
-// Resolve SID (tech.unblockedgames.world etc.) to intermediate redirect (driveleech/driveseed)
-// createSession(jar) must return an axios-like instance with get/post that respects proxy and cookie jar
 async function resolveSidToRedirect({ sidUrl, createSession, jar, log = console }) {
   const session = await createSession(jar);
   // Step 0
@@ -178,11 +255,11 @@ async function resolveSidToRedirect({ sidUrl, createSession, jar, log = console 
 }
 
 module.exports = {
-  defaultTryInstantDownload,
-  defaultTryResumeCloud,
-  followRedirectToFilePage,
+  cleanTitle,
+  getIndexQuality,
   extractFinalDownloadFromFilePage,
-  resolveSidToRedirect
+  followRedirectToFilePage,
+  resolveSidToRedirect,
 };
 
 

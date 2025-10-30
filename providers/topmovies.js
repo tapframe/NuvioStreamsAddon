@@ -7,6 +7,7 @@ const { URLSearchParams, URL } = require('url');
 const FormData = require('form-data');
 const { findBestMatch } = require('string-similarity');
 const RedisCache = require('../utils/redisCache');
+const { followRedirectToFilePage, extractFinalDownloadFromFilePage } = require('../utils/linkResolver');
 
 // Dynamic import for axios-cookiejar-support
 let axiosCookieJarSupport = null;
@@ -545,84 +546,6 @@ async function validateVideoUrl(url, timeout = 10000) {
     }
 }
 
-// Resolve driveleech link to final download URL
-async function resolveDriveleechLink(driveleechUrl) {
-    try {
-        console.log(`\nResolving Driveleech link: ${driveleechUrl}`);
-        
-        const response = await makeRequest(driveleechUrl, { maxRedirects: 10 });
-        let $ = cheerio.load(response.data);
-
-        // Check for JavaScript redirect
-        const scriptContent = $('script').html();
-        const redirectMatch = scriptContent && scriptContent.match(/window\.location\.replace\("([^"]+)"\)/);
-
-        if (redirectMatch && redirectMatch[1]) {
-            const newPath = redirectMatch[1];
-            const newUrl = new URL(newPath, 'https://driveleech.net/').href;
-            console.log(`  JS redirect found. Following to: ${newUrl}`);
-            const newResponse = await makeRequest(newUrl, { maxRedirects: 10 });
-            $ = cheerio.load(newResponse.data);
-        }
-
-        // Extract file size information
-        let sizeInfo = 'Unknown';
-        const sizeElement = $('li.list-group-item:contains("Size :")').text();
-        if (sizeElement) {
-            const sizeMatch = sizeElement.match(/Size\s*:\s*([0-9.,]+\s*[KMGT]B)/);
-            if (sizeMatch) {
-                sizeInfo = sizeMatch[1];
-            }
-        }
-
-        let movieTitle = null;
-        const nameElement = $('li.list-group-item:contains("Name :")');
-        if (nameElement.length > 0) {
-            movieTitle = nameElement.text().replace('Name :', '').trim();
-        } else {
-            const h5Title = $('div.card-header h5').clone().children().remove().end().text().trim();
-             if (h5Title) {
-                movieTitle = h5Title.replace(/\[.*\]/, '').trim();
-             }
-        }
-
-        // Try each download method in order until we find a working one
-        const downloadMethods = [
-            { name: 'Resume Cloud', func: tryResumeCloud },
-            { name: 'Instant Download', func: tryInstantDownload }
-        ];
-
-        for (const method of downloadMethods) {
-            try {
-                console.log(`[TopMovies] Trying ${method.name}...`);
-                const finalUrl = await method.func($);
-                
-                if (finalUrl) {
-                    // Validate the URL before using it
-                    const isValid = await validateVideoUrl(finalUrl);
-                    if (isValid) {
-                        console.log(`[TopMovies] ✓ Successfully resolved using ${method.name}`);
-                        return { url: finalUrl, size: sizeInfo, title: movieTitle };
-                    } else {
-                        console.log(`[TopMovies] ✗ ${method.name} returned invalid/broken URL, trying next method...`);
-                    }
-                } else {
-                    console.log(`[TopMovies] ✗ ${method.name} failed to resolve URL, trying next method...`);
-                }
-            } catch (error) {
-                console.log(`[TopMovies] ✗ ${method.name} threw error: ${error.message}, trying next method...`);
-            }
-        }
-
-        console.log('[TopMovies] ✗ All download methods failed.');
-        return null;
-
-    } catch (error) {
-        console.error(`Error resolving driveleech link: ${error.message}`);
-        return null;
-    }
-}
-
 // --- Caching Configuration ---
 const CACHE_ENABLED = process.env.DISABLE_CACHE !== 'true';
 const CACHE_DIR = process.env.VERCEL ? path.join('/tmp', '.topmovies_cache') : path.join(__dirname, '.cache', 'topmovies');
@@ -694,7 +617,7 @@ async function getTopMoviesStreams(tmdbId, mediaType = 'movie', season = null, e
   console.log(`[TopMovies] Attempting to fetch streams for TMDB ID: ${tmdbId}`);
 
   try {
-    const cacheKey = `topmovies_final_v14_${tmdbId}`;
+    const cacheKey = `topmovies_final_v15_${tmdbId}`;
     
     // 1. Check cache for intermediate links
     let cachedLinks = await getFromCache(cacheKey);
@@ -778,83 +701,38 @@ async function getTopMoviesStreams(tmdbId, mediaType = 'movie', season = null, e
     // 6. Process cached driveleech redirect URLs to get streaming links
     const streamPromises = cachedLinks.map(async (cachedLink) => {
       try {
-        console.log(`[TopMovies] Processing cached driveleech redirect: ${cachedLink.quality}`);
-        
-        // First, resolve the driveleech redirect URL to get the final file page URL
-        const response = await makeRequest(cachedLink.driveleechRedirectUrl, { maxRedirects: 10 });
-        let $ = cheerio.load(response.data);
+        console.log(`[TopMovies] [LinkResolver] Processing redirected file page: ${cachedLink.quality}`);
+        // 1. Follow the redirect chain to the file page using the shared utility
+        const { $, finalFilePageUrl } = await followRedirectToFilePage({
+          redirectUrl: cachedLink.driveleechRedirectUrl,
+          get: makeRequest,
+          log: console,
+        });
 
-        // Check for JavaScript redirect (window.location.replace)
-        const scriptContent = $('script').html();
-        const redirectMatch = scriptContent && scriptContent.match(/window\.location\.replace\("([^"]+)"\)/);
+        // 2. Use the shared extraction utility to get final download url and metadata
+        const fileInfo = await extractFinalDownloadFromFilePage($, {
+          origin: finalFilePageUrl,
+          get: makeRequest,
+          post: axiosInstance.post,
+          validate: validateVideoUrl,
+          log: console,
+        });
+        if (!fileInfo || !fileInfo.url) return null;
 
-        if (redirectMatch && redirectMatch[1]) {
-            const finalFilePageUrl = new URL(redirectMatch[1], 'https://driveleech.net/').href;
-            console.log(`[TopMovies] Resolved redirect to final file page: ${finalFilePageUrl}`);
-            
-            // Load the final file page
-            const finalResponse = await makeRequest(finalFilePageUrl, { maxRedirects: 10 });
-            $ = cheerio.load(finalResponse.data);
-        }
-
-        // Extract file size and title information
-        let sizeInfo = 'Unknown';
-        let movieTitle = null;
-        
-        const sizeElement = $('li.list-group-item:contains("Size :")').text();
-        if (sizeElement) {
-            const sizeMatch = sizeElement.match(/Size\s*:\s*([0-9.,]+\s*[KMGT]B)/);
-            if (sizeMatch) {
-                sizeInfo = sizeMatch[1];
-            }
-        }
-
-        const nameElement = $('li.list-group-item:contains("Name :")');
-        if (nameElement.length > 0) {
-            movieTitle = nameElement.text().replace('Name :', '').trim();
-        } else {
-            const h5Title = $('div.card-header h5').clone().children().remove().end().text().trim();
-             if (h5Title) {
-                movieTitle = h5Title.replace(/\[.*\]/, '').trim();
-             }
-        }
-
-        // Try download methods to get final streaming URL
-        const downloadMethods = [
-            { name: 'Resume Cloud', func: tryResumeCloud },
-            { name: 'Instant Download', func: tryInstantDownload }
-        ];
-
-        for (const method of downloadMethods) {
-            try {
-                const finalUrl = await method.func($);
-                
-                if (finalUrl) {
-                    const isValid = await validateVideoUrl(finalUrl);
-                    if (isValid) {
-                        const cleanQualityMatch = (cachedLink.quality || '').match(/(\\d{3,4}p|4K)/i);
-                        const cleanQuality = cleanQualityMatch ? cleanQualityMatch[0] : (cachedLink.quality || 'UNK');
-                        
-                        return {
-                          name: `TopMovies - ${cleanQuality}`,
-                          title: `${movieTitle || "Unknown Title"}\n${sizeInfo}`,
-                          url: finalUrl,
-                          quality: cachedLink.quality,
-                          size: sizeInfo,
-                          behaviorHints: {
-                            bingeGroup: `topmovies-${cleanQuality}`
-                          }
-                        };
-                    }
-                }
-            } catch (error) {
-                console.log(`[TopMovies] ${method.name} failed: ${error.message}`);
-            }
-        }
-        
-        return null;
+        // Compose stream object as before, using fileInfo
+        const cleanQuality = fileInfo.quality || (cachedLink.quality || 'UNK');
+        return {
+          name: `TopMovies - ${cleanQuality}`,
+          title: `${fileInfo.fileName || "Unknown Title"}\n${fileInfo.fileSize || ""}`.trim(),
+          url: fileInfo.url,
+          quality: cleanQuality,
+          size: fileInfo.fileSize,
+          behaviorHints: {
+            bingeGroup: `topmovies-${cleanQuality}`,
+          },
+        };
       } catch (error) {
-        console.error(`[TopMovies] Error processing cached link ${cachedLink.quality}: ${error.message}`);
+        console.error(`[TopMovies] [LinkResolver] Error processing link ${cachedLink.quality}: ${error.message}`);
         return null;
       }
     });
