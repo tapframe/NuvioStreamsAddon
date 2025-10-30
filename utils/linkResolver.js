@@ -114,7 +114,144 @@ async function extractFinalDownloadFromFilePage($, {
   tryResumeCloud = defaultTryResumeCloud,
   tryInstantDownload = defaultTryInstantDownload
 }) {
-  // Try known methods
+  // Driveseed/Driveleech-specific: mirror Extractor.kt button logic
+  const tryDriveseedButtons = async () => {
+    try {
+      const anchors = $('div.text-center > a');
+      if (!anchors || anchors.length === 0) return null;
+
+      const getFirstValid = async (candidates) => {
+        for (const url of candidates) {
+          if (!url) continue;
+          const ok = validate ? await validate(url) : true;
+          if (ok) return url;
+        }
+        return null;
+      };
+
+      // Instant Download
+      const instant = anchors.filter((i, el) => /Instant Download/i.test($(el).text()));
+      if (instant.length > 0) {
+        const href = $(instant[0]).attr('href');
+        if (href) {
+          // Use same logic as Kotlin: POST to <host>/api with x-token = host
+          try {
+            const urlObj = new URL(href, origin);
+            const keys = new URLSearchParams(urlObj.search).get('url');
+            if (keys) {
+              const apiUrl = `${urlObj.origin}/api`;
+              const formData = new FormData();
+              formData.append('keys', keys);
+              const resp = await post(apiUrl, formData, {
+                headers: { ...formData.getHeaders(), 'x-token': urlObj.hostname },
+              });
+              if (resp && resp.data && resp.data.url) {
+                return await getFirstValid([resp.data.url]);
+              }
+            }
+          } catch (e) {
+            log.log(`[LinkResolver] Instant Download error: ${e.message}`);
+          }
+        }
+      }
+
+      // Resume Worker Bot
+      const worker = anchors.filter((i, el) => /Resume Worker Bot/i.test($(el).text()));
+      if (worker.length > 0) {
+        const href = $(worker[0]).attr('href');
+        if (href) {
+          try {
+            const workerUrl = new URL(href, origin).href;
+            const res = await get(workerUrl);
+            const html = res.data || '';
+            const scripts = (html.match(/<script[\s\S]*?<\/script>/gi) || []);
+            const target = scripts.find(s => s.includes("formData.append('token'"));
+            const tokenMatch = target && target.match(/formData\.append\('token', '([^']+)'\)/);
+            const idMatch = target && target.match(/fetch\('\/download\?id=([^']+)',/);
+            if (tokenMatch && tokenMatch[1] && idMatch && idMatch[1]) {
+              const token = tokenMatch[1];
+              const id = idMatch[1];
+              const apiUrl = `${new URL(workerUrl).origin}/download?id=${id}`;
+              const formData = new FormData();
+              formData.append('token', token);
+              const resp = await post(apiUrl, formData, {
+                headers: {
+                  ...formData.getHeaders(),
+                  'x-requested-with': 'XMLHttpRequest',
+                  'Referer': workerUrl
+                }
+              });
+              if (resp && resp.data && resp.data.url) {
+                return await getFirstValid([resp.data.url]);
+              }
+            }
+          } catch (e) {
+            log.log(`[LinkResolver] Resume Worker Bot error: ${e.message}`);
+          }
+        }
+      }
+
+      // Direct Links (CF Type 1)
+      const directLinks = anchors.filter((i, el) => /Direct Links/i.test($(el).text()));
+      if (directLinks.length > 0) {
+        const href = $(directLinks[0]).attr('href');
+        if (href) {
+          try {
+            const cfUrl = new URL(href, origin);
+            // Kotlin hits ?type=1
+            const urlWithType = `${cfUrl.href}${cfUrl.search ? '&' : '?'}type=1`;
+            const res = await get(urlWithType);
+            const $$ = cheerio.load(res.data || '');
+            const btns = $$('.btn-success');
+            if (btns && btns.length > 0) {
+              const candidates = [];
+              btns.each((i, el) => {
+                const u = $$(el).attr('href');
+                if (u && /^https?:/i.test(u)) candidates.push(u);
+              });
+              const found = await getFirstValid(candidates);
+              if (found) return found;
+            }
+          } catch (e) {
+            log.log(`[LinkResolver] Direct Links error: ${e.message}`);
+          }
+        }
+      }
+
+      // Resume Cloud
+      const resumeCloud = anchors.filter((i, el) => /Resume Cloud|Cloud Resume Download/i.test($(el).text()));
+      if (resumeCloud.length > 0) {
+        const href = $(resumeCloud[0]).attr('href');
+        if (href) {
+          try {
+            const resumeUrl = new URL(href, origin).href;
+            const res = await get(resumeUrl);
+            const $$ = cheerio.load(res.data || '');
+            const link = $$('.btn-success').attr('href');
+            if (link && /^https?:/i.test(link)) {
+              return await getFirstValid([link]);
+            }
+          } catch (e) {
+            log.log(`[LinkResolver] Resume Cloud error: ${e.message}`);
+          }
+        }
+      }
+
+      return null;
+    } catch (e) {
+      log.log(`[LinkResolver] tryDriveseedButtons error: ${e.message}`);
+      return null;
+    }
+  };
+
+  // First attempt: Driveseed/Driveleech button flow
+  const dsUrl = await tryDriveseedButtons();
+  if (dsUrl) {
+    const ok = validate ? await validate(dsUrl) : true;
+    if (ok) return dsUrl;
+  }
+
+  // Fallback to known generic methods
   const methods = [
     async () => await tryResumeCloud($, { origin, get, validate, log }),
     async () => await tryInstantDownload($, { post, origin, log })

@@ -7,6 +7,7 @@ const { URLSearchParams, URL } = require('url');
 const FormData = require('form-data');
 const { findBestMatch } = require('string-similarity');
 const RedisCache = require('../utils/redisCache');
+const { followRedirectToFilePage, extractFinalDownloadFromFilePage } = require('../utils/linkResolver');
 
 // Dynamic import for axios-cookiejar-support
 let axiosCookieJarSupport = null;
@@ -694,7 +695,7 @@ async function getTopMoviesStreams(tmdbId, mediaType = 'movie', season = null, e
   console.log(`[TopMovies] Attempting to fetch streams for TMDB ID: ${tmdbId}`);
 
   try {
-    const cacheKey = `topmovies_final_v14_${tmdbId}`;
+    const cacheKey = `topmovies_final_v16_${tmdbId}`;
     
     // 1. Check cache for intermediate links
     let cachedLinks = await getFromCache(cacheKey);
@@ -779,80 +780,62 @@ async function getTopMoviesStreams(tmdbId, mediaType = 'movie', season = null, e
     const streamPromises = cachedLinks.map(async (cachedLink) => {
       try {
         console.log(`[TopMovies] Processing cached driveleech redirect: ${cachedLink.quality}`);
-        
-        // First, resolve the driveleech redirect URL to get the final file page URL
-        const response = await makeRequest(cachedLink.driveleechRedirectUrl, { maxRedirects: 10 });
-        let $ = cheerio.load(response.data);
+        // Resolve redirect to final file page using shared util
+        const resFollow = await followRedirectToFilePage({
+          redirectUrl: cachedLink.driveleechRedirectUrl,
+          get: (url, opts) => makeRequest(url, opts),
+          log: console
+        });
+        const $ = resFollow.$;
+        const finalFilePageUrl = resFollow.finalFilePageUrl;
+        console.log(`[TopMovies] Resolved redirect to final file page: ${finalFilePageUrl}`);
 
-        // Check for JavaScript redirect (window.location.replace)
-        const scriptContent = $('script').html();
-        const redirectMatch = scriptContent && scriptContent.match(/window\.location\.replace\("([^"]+)"\)/);
+        // Use shared util to extract the final URL from file page
+        const origin = new URL(finalFilePageUrl).origin;
+        const finalDownloadUrl = await extractFinalDownloadFromFilePage($, {
+          origin,
+          get: (url, opts) => makeRequest(url, opts),
+          post: (url, data, opts) => axios.post(TOPMOVIES_PROXY_URL ? `${TOPMOVIES_PROXY_URL}${encodeURIComponent(url)}` : url, data, opts),
+          validate: (url) => validateVideoUrl(url),
+          log: console
+        });
 
-        if (redirectMatch && redirectMatch[1]) {
-            const finalFilePageUrl = new URL(redirectMatch[1], 'https://driveleech.net/').href;
-            console.log(`[TopMovies] Resolved redirect to final file page: ${finalFilePageUrl}`);
-            
-            // Load the final file page
-            const finalResponse = await makeRequest(finalFilePageUrl, { maxRedirects: 10 });
-            $ = cheerio.load(finalResponse.data);
+        if (!finalDownloadUrl) {
+          console.log('[TopMovies] ✗ Could not extract final link for', cachedLink.quality);
+          return null;
         }
 
-        // Extract file size and title information
+        const cleanQualityMatch = (cachedLink.quality || '').match(/(\d{3,4}p|4K)/i);
+        const cleanQuality = cleanQualityMatch ? cleanQualityMatch[0] : (cachedLink.quality || 'UNK');
+
+        // Extract size and title for display (best-effort)
         let sizeInfo = 'Unknown';
         let movieTitle = null;
-        
         const sizeElement = $('li.list-group-item:contains("Size :")').text();
         if (sizeElement) {
-            const sizeMatch = sizeElement.match(/Size\s*:\s*([0-9.,]+\s*[KMGT]B)/);
-            if (sizeMatch) {
-                sizeInfo = sizeMatch[1];
-            }
+          const sizeMatch = sizeElement.match(/Size\s*:\s*([0-9.,]+\s*[KMGT]B)/);
+          if (sizeMatch) {
+            sizeInfo = sizeMatch[1];
+          }
         }
-
         const nameElement = $('li.list-group-item:contains("Name :")');
         if (nameElement.length > 0) {
-            movieTitle = nameElement.text().replace('Name :', '').trim();
+          movieTitle = nameElement.text().replace('Name :', '').trim();
         } else {
-            const h5Title = $('div.card-header h5').clone().children().remove().end().text().trim();
-             if (h5Title) {
-                movieTitle = h5Title.replace(/\[.*\]/, '').trim();
-             }
+          const h5Title = $('div.card-header h5').clone().children().remove().end().text().trim();
+          if (h5Title) {
+            movieTitle = h5Title.replace(/\[.*\]/, '').trim();
+          }
         }
 
-        // Try download methods to get final streaming URL
-        const downloadMethods = [
-            { name: 'Resume Cloud', func: tryResumeCloud },
-            { name: 'Instant Download', func: tryInstantDownload }
-        ];
-
-        for (const method of downloadMethods) {
-            try {
-                const finalUrl = await method.func($);
-                
-                if (finalUrl) {
-                    const isValid = await validateVideoUrl(finalUrl);
-                    if (isValid) {
-                        const cleanQualityMatch = (cachedLink.quality || '').match(/(\\d{3,4}p|4K)/i);
-                        const cleanQuality = cleanQualityMatch ? cleanQualityMatch[0] : (cachedLink.quality || 'UNK');
-                        
-                        return {
-                          name: `TopMovies - ${cleanQuality}`,
-                          title: `${movieTitle || "Unknown Title"}\n${sizeInfo}`,
-                          url: finalUrl,
-                          quality: cachedLink.quality,
-                          size: sizeInfo,
-                          behaviorHints: {
-                            bingeGroup: `topmovies-${cleanQuality}`
-                          }
-                        };
-                    }
-                }
-            } catch (error) {
-                console.log(`[TopMovies] ${method.name} failed: ${error.message}`);
-            }
-        }
-        
-        return null;
+        return {
+          name: `TopMovies - ${cleanQuality}`,
+          title: `${movieTitle || 'Unknown Title'}\n${sizeInfo}`,
+          url: finalDownloadUrl,
+          quality: cachedLink.quality,
+          size: sizeInfo,
+          behaviorHints: { bingeGroup: `topmovies-${cleanQuality}` }
+        };
       } catch (error) {
         console.error(`[TopMovies] Error processing cached link ${cachedLink.quality}: ${error.message}`);
         return null;
