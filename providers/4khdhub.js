@@ -4,6 +4,25 @@ const bytes = require('bytes');
 const levenshtein = require('fast-levenshtein');
 const rot13Cipher = require('rot13-cipher');
 const { URL } = require('url');
+const path = require('path');
+const fs = require('fs').promises;
+const RedisCache = require('../utils/redisCache');
+
+// Cache configuration
+const CACHE_ENABLED = process.env.DISABLE_CACHE !== 'true';
+const CACHE_DIR = process.env.VERCEL ? path.join('/tmp', '.4khdhub_cache') : path.join(__dirname, '.cache', '4khdhub');
+const redisCache = new RedisCache('4KHDHub');
+
+// Helper to ensure cache directory exists
+const ensureCacheDir = async () => {
+    if (!CACHE_ENABLED) return;
+    try {
+        await fs.mkdir(CACHE_DIR, { recursive: true });
+    } catch (error) {
+        console.error(`[4KHDHub] Error creating cache directory: ${error.message}`);
+    }
+};
+ensureCacheDir();
 
 const BASE_URL = 'https://4khdhub.fans';
 const TMDB_API_KEY = '439c478a771f35c05022f9feabcca01c';
@@ -31,11 +50,14 @@ async function fetchText(url, options = {}) {
 // Fetch TMDB Details
 async function getTmdbDetails(tmdbId, type) {
     try {
-        const url = `https://api.themoviedb.org/3/${type === 'series' ? 'tv' : 'movie'}/${tmdbId}?api_key=${TMDB_API_KEY}`;
+        const isSeries = type === 'series' || type === 'tv';
+        const url = `https://api.themoviedb.org/3/${isSeries ? 'tv' : 'movie'}/${tmdbId}?api_key=${TMDB_API_KEY}`;
+        console.log(`[4KHDHub] Fetching TMDB details from: ${url}`);
         const response = await axios.get(url);
         const data = response.data;
+        // ...
 
-        if (type === 'series' || type === 'tv') {
+        if (isSeries) {
             return {
                 title: data.name,
                 year: data.first_air_date ? parseInt(data.first_air_date.split('-')[0]) : 0
@@ -54,6 +76,19 @@ async function getTmdbDetails(tmdbId, type) {
 
 // FourKHDHub Logic
 async function fetchPageUrl(name, year, isSeries) {
+    const cacheKey = `search_${name.replace(/[^a-z0-9]/gi, '_')}_${year}`;
+    // [4KHDHub] Checking cache for key: ${cacheKey} (Enabled: ${CACHE_ENABLED})
+
+    if (CACHE_ENABLED) {
+        const cached = await redisCache.getFromCache(cacheKey, '', CACHE_DIR);
+        if (cached) {
+            // [4KHDHub] Cache HIT for search: ${name}
+            return cached.data || cached;
+        } else {
+            // [4KHDHub] Cache MISS for search: ${name}
+        }
+    }
+
     const searchUrl = `${BASE_URL}/?s=${encodeURIComponent(`${name} ${year}`)}`;
     const html = await fetchText(searchUrl);
     if (!html) return null;
@@ -91,10 +126,20 @@ async function fetchPageUrl(name, year, isSeries) {
         })
         .get();
 
-    return matchingCards.length > 0 ? matchingCards[0] : null;
+    const result = matchingCards.length > 0 ? matchingCards[0] : null;
+    if (CACHE_ENABLED && result) {
+        await redisCache.saveToCache(cacheKey, { data: result }, '', CACHE_DIR, 86400); // 1 day TTL
+    }
+    return result;
 }
 
 async function resolveRedirectUrl(redirectUrl) {
+    const cacheKey = `redirect_${redirectUrl.replace(/[^a-z0-9]/gi, '')}`;
+    if (CACHE_ENABLED) {
+        const cached = await redisCache.getFromCache(cacheKey, '', CACHE_DIR);
+        if (cached) return cached.data || cached;
+    }
+
     const redirectHtml = await fetchText(redirectUrl);
     if (!redirectHtml) return null;
 
@@ -110,7 +155,11 @@ async function resolveRedirectUrl(redirectUrl) {
         const redirectData = JSON.parse(step4);
 
         if (redirectData && redirectData.o) {
-            return atob(redirectData.o);
+            const resolved = atob(redirectData.o);
+            if (CACHE_ENABLED) {
+                await redisCache.saveToCache(cacheKey, { data: resolved }, '', CACHE_DIR, 86400 * 3); // 3 days
+            }
+            return resolved;
         }
     } catch (e) {
         console.error(`[4KHDHub] Error resolving redirect: ${e.message}`);
@@ -121,12 +170,25 @@ async function resolveRedirectUrl(redirectUrl) {
 async function extractSourceResults($, el) {
     const localHtml = $(el).html();
     const sizeMatch = localHtml.match(/([\d.]+ ?[GM]B)/);
-    const heightMatch = localHtml.match(/\d{3,}p/);
+    let heightMatch = localHtml.match(/\d{3,}p/);
+
+    const title = $(el).find('.file-title, .episode-file-title').text().trim();
+
+    // If quality detection failed from HTML, try the title
+    if (!heightMatch) {
+        heightMatch = title.match(/(\d{3,4})p/i);
+    }
+
+    // Fallback for "4K"
+    let height = heightMatch ? parseInt(heightMatch[0]) : 0;
+    if (height === 0 && (title.includes('4K') || title.includes('4k') || localHtml.includes('4K') || localHtml.includes('4k'))) {
+        height = 2160;
+    }
 
     const meta = {
         bytes: sizeMatch ? bytes.parse(sizeMatch[1]) : 0,
-        height: heightMatch ? parseInt(heightMatch[0]) : 0,
-        title: $(el).find('.file-title, .episode-file-title').text().trim()
+        height: height,
+        title: title
     };
 
     // Check for HubCloud link
@@ -164,6 +226,12 @@ async function extractSourceResults($, el) {
 // HubCloud Extractor Logic
 async function extractHubCloud(hubCloudUrl, baseMeta) {
     if (!hubCloudUrl) return [];
+
+    const cacheKey = `hubcloud_${hubCloudUrl.replace(/[^a-z0-9]/gi, '')}`;
+    if (CACHE_ENABLED) {
+        const cached = await redisCache.getFromCache(cacheKey, '', CACHE_DIR);
+        if (cached) return cached.data || cached;
+    }
 
     const headers = { Referer: hubCloudUrl }; // or should it be the previous page? User's code uses meta.referer ?? url.href. HubCloud.ts says Referer: meta.referer ?? url.href.
     // In extractInternal(ctx, url, meta): const headers = { Referer: meta.referer ?? url.href };
@@ -217,6 +285,10 @@ async function extractHubCloud(hubCloudUrl, baseMeta) {
         }
     });
 
+    if (CACHE_ENABLED && results.length > 0) {
+        await redisCache.saveToCache(cacheKey, { data: results }, '', CACHE_DIR, 3600); // 1 hour TTL
+    }
+
     return results;
 }
 
@@ -227,7 +299,8 @@ async function get4KHDHubStreams(tmdbId, type, season = null, episode = null) {
     const { title, year } = tmdbDetails;
     console.log(`[4KHDHub] Search: ${title} (${year})`);
 
-    const pageUrl = await fetchPageUrl(title, year, type === 'series');
+    const isSeries = type === 'series' || type === 'tv';
+    const pageUrl = await fetchPageUrl(title, year, isSeries);
     if (!pageUrl) {
         console.log(`[4KHDHub] Page not found`);
         return [];
@@ -240,7 +313,7 @@ async function get4KHDHubStreams(tmdbId, type, season = null, episode = null) {
 
     let itemsToProcess = [];
 
-    if (type === 'series' && season && episode) {
+    if (isSeries && season && episode) { // Use isSeries here
         // Find specific season and episode
         const seasonStr = `S${String(season).padStart(2, '0')}`;
         const episodeStr = `Episode-${String(episode).padStart(2, '0')}`;
@@ -278,6 +351,7 @@ async function get4KHDHubStreams(tmdbId, type, season = null, episode = null) {
                         name: `4KHDHub - ${link.source} ${sourceResult.meta.height ? sourceResult.meta.height + 'p' : ''}`,
                         title: `${link.meta.title}\n${bytes.format(link.meta.bytes || 0)}`,
                         url: link.url,
+                        quality: sourceResult.meta.height ? `${sourceResult.meta.height}p` : undefined,
                         behaviorHints: {
                             bingeGroup: `4khdhub-${link.source}`
                         }
