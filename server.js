@@ -7,10 +7,25 @@ const path = require('path');
 const cors = require('cors');
 const crypto = require('crypto'); // For generating a simple hash for personalized manifest ID
 const axios = require('axios'); // Added axios for HTTP requests
+const { AsyncLocalStorage } = require('async_hooks');
 // body-parser is not strictly needed if we remove the POST /api/set-cookie endpoint and don't have other JSON POST bodies to parse for now.
 // const bodyParser = require('body-parser'); 
 
 const app = express();
+
+// AsyncLocalStorage for per-request context isolation
+// This ensures cookies don't leak between concurrent requests
+const requestContext = new AsyncLocalStorage();
+
+// Helper to get current request config (safe for concurrent requests)
+function getRequestConfig() {
+    const store = requestContext.getStore();
+    return store?.config || {};
+}
+
+// Export for use in addon.js
+global.getRequestConfig = getRequestConfig;
+global.requestContext = requestContext;
 
 // REMOVE: User cookies directory and related fs operations
 // const USER_COOKIES_DIR = path.join(__dirname, '.user_cookies');
@@ -36,8 +51,8 @@ app.get('*configure', (req, res) => {
 });
 
 // Middleware to extract user-supplied cookie, region, and providers from request query
-// and make them available globally for the current request.
-app.use(async (req, res, next) => {
+// and make them available in a request-scoped context (isolated per request)
+app.use((req, res, next) => {
     // Extract from query parameters (legacy format)
     const userSuppliedCookie = req.query.cookie;
     const userRegionPreference = req.query.region;
@@ -80,8 +95,8 @@ app.use(async (req, res, next) => {
         }
     }
 
-    // Initialize global for THIS request
-    global.currentRequestConfig = {}; 
+    // Build request-specific config (isolated per request)
+    const requestConfig = {};
 
     // Prioritize path parameters over query parameters
     const cookie = pathParams.cookie || userSuppliedCookie;
@@ -94,28 +109,28 @@ app.use(async (req, res, next) => {
 
     if (cookie) {
         try {
-            global.currentRequestConfig.cookie = decodeURIComponent(cookie);
+            requestConfig.cookie = decodeURIComponent(cookie);
         } catch (e) { 
             console.error(`[server.js] Error decoding cookie from request: ${cookie}`, e.message);
         }
     }
     if (region) {
-        global.currentRequestConfig.region = region.toUpperCase();
+        requestConfig.region = region.toUpperCase();
     }
     if (providers) {
-        global.currentRequestConfig.providers = providers;
+        requestConfig.providers = providers;
     }
     if (minQualities) {
         try {
             const decodedQualities = decodeURIComponent(minQualities);
-            global.currentRequestConfig.minQualities = JSON.parse(decodedQualities);
+            requestConfig.minQualities = JSON.parse(decodedQualities);
         } catch (e) {
             console.error(`[server.js] Error parsing min_qualities from request: ${minQualities}`, e.message);
         }
     }
     if (scraperApiKey) {
         try {
-            global.currentRequestConfig.scraper_api_key = decodeURIComponent(scraperApiKey);
+            requestConfig.scraper_api_key = decodeURIComponent(scraperApiKey);
         } catch (e) {
             console.error(`[server.js] Error decoding scraper_api_key from request: ${scraperApiKey}`, e.message);
         }
@@ -127,7 +142,7 @@ app.use(async (req, res, next) => {
             const parsed = JSON.parse(decodedCookies);
             if (Array.isArray(parsed)) {
                 // Store as array of strings
-                global.currentRequestConfig.cookies = parsed.filter(c => typeof c === 'string' && c.trim().length > 0);
+                requestConfig.cookies = parsed.filter(c => typeof c === 'string' && c.trim().length > 0);
             }
         } catch (e) {
             console.error(`[server.js] Error parsing cookies array from request: ${cookiesParam}`, e.message);
@@ -136,20 +151,20 @@ app.use(async (req, res, next) => {
     if (excludeCodecs) {
         try {
             const decodedExcludeCodecs = decodeURIComponent(excludeCodecs);
-            global.currentRequestConfig.excludeCodecs = JSON.parse(decodedExcludeCodecs);
+            requestConfig.excludeCodecs = JSON.parse(decodedExcludeCodecs);
         } catch (e) {
             console.error(`[server.js] Error parsing exclude_codecs from request: ${excludeCodecs}`, e.message);
         }
     }
 
-    if (Object.keys(global.currentRequestConfig).length > 0) {
+    if (Object.keys(requestConfig).length > 0) {
         // Mask sensitive information in logs
-        const configForLog = {...global.currentRequestConfig};
+        const configForLog = {...requestConfig};
         if (configForLog.cookie) configForLog.cookie = '[PRESENT: ****]';
         if (configForLog.scraper_api_key) configForLog.scraper_api_key = '[PRESENT: ****]';
         if (configForLog.cookies) configForLog.cookies = `[${configForLog.cookies.length} cookies]`;
         
-        console.log(`[server.js] Set global.currentRequestConfig for this request: ${JSON.stringify(configForLog)}`);
+        console.log(`[server.js] Request config for this request: ${JSON.stringify(configForLog)}`);
         
         // Debug logging for stream requests (mask sensitive)
         if (req.path.includes('stream') || req.url.includes('stream')) {
@@ -187,14 +202,18 @@ app.use(async (req, res, next) => {
         console.log(`Incoming request: ${maskedUrl}`);
     }
 
-    // Crucial: Clean up after the request is done
-    res.on('finish', () => {
-        if (global.currentRequestConfig) {
-            delete global.currentRequestConfig;
-        }
+    // Run the rest of the request within AsyncLocalStorage context for isolation
+    // This ensures each request has its own isolated config that won't leak to other requests
+    requestContext.run({ config: requestConfig }, () => {
+        // Also set on req for direct access in middleware
+        req.nuvioConfig = requestConfig;
+        
+        // Set global.currentRequestConfig for backward compatibility with addon.js
+        // This is safe because we're within the AsyncLocalStorage context
+        global.currentRequestConfig = requestConfig;
+        
+        next();
     });
-
-    next();
 });
 
 // REMOVE: API endpoint for setting a custom cookie (/api/set-cookie)

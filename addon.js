@@ -842,6 +842,27 @@ builder.defineStreamHandler(async (args) => {
     let userCookie = requestSpecificConfig.cookie || null; // Already decoded by server.js
     let userScraperApiKey = requestSpecificConfig.scraper_api_key || null; // NEW: Get ScraperAPI Key
     
+    // Combine single cookie + cookies array into unified list for ShowBox
+    // This ensures both single cookie and multi-cookie setups work
+    const cookiesFromArray = Array.isArray(requestSpecificConfig.cookies) ? requestSpecificConfig.cookies : [];
+    const allCookies = [];
+    
+    // Add single cookie first (priority)
+    if (userCookie && userCookie.trim()) {
+        allCookies.push(userCookie.trim());
+    }
+    
+    // Add cookies from array (deduplicate)
+    for (const c of cookiesFromArray) {
+        if (c && c.trim() && !allCookies.includes(c.trim())) {
+            allCookies.push(c.trim());
+        }
+    }
+    
+    if (allCookies.length > 0) {
+        console.log(`[addon.js] Combined ${allCookies.length} unique cookie(s) for ShowBox`);
+    }
+    
     // Log the request information in a more detailed way
     console.log(`Stream request for Stremio type: '${type}', id: '${id}'`);
     
@@ -850,11 +871,13 @@ builder.defineStreamHandler(async (args) => {
         selectedProvidersArray = requestSpecificConfig.providers.split(',').map(p => p.trim().toLowerCase());
     }
     
-    // Detect presence of cookies array as a signal of personal cookies, too
-    const hasCookiesArray = Array.isArray(requestSpecificConfig.cookies) && requestSpecificConfig.cookies.length > 0;
+    // Detect presence of cookies (single or array)
+    const hasCookiesArray = cookiesFromArray.length > 0;
+    const hasAnyCookies = allCookies.length > 0;
     console.log(`Effective request details: ${JSON.stringify({
         regionPreference: userRegionPreference || 'none',
-        hasCookie: !!userCookie || hasCookiesArray || !!global.currentRequestUserCookie,
+        hasCookie: hasAnyCookies,
+        cookieCount: allCookies.length,
         selectedProviders: selectedProvidersArray ? selectedProvidersArray.join(', ') : 'all'
     })}`);
     
@@ -864,10 +887,9 @@ builder.defineStreamHandler(async (args) => {
         console.log(`[addon.js] No region preference found in global config.`);
     }
     
-    if (userCookie || hasCookiesArray || global.currentRequestUserCookie) {
-        const cookieSource = userCookie ? 'single' : (global.currentRequestUserCookie ? 'selected-best' : 'array');
-        const cookieLen = userCookie ? userCookie.length : (global.currentRequestUserCookie ? String(global.currentRequestUserCookie).length : 0);
-        console.log(`[addon.js] Using personal cookie (${cookieSource}); length: ${cookieLen}`);
+    if (hasAnyCookies) {
+        const cookieSource = userCookie ? 'single' : 'array';
+        console.log(`[addon.js] Using personal cookie(s): ${allCookies.length} cookie(s) available (source: ${cookieSource})`);
     } else {
         console.log(`[addon.js] No cookie found in global config.`);
     }
@@ -878,7 +900,7 @@ builder.defineStreamHandler(async (args) => {
         console.log('[addon.js] No specific providers selected by user in global config, will attempt all.');
     }
 
-    if (type !== 'movie' && type !== 'series') {
+    if (type !== 'movie' && type !== 'series' && type !== 'tv') {
         return { streams: [] };
     }
     
@@ -897,7 +919,7 @@ builder.defineStreamHandler(async (args) => {
         console.log(`  Received TMDB ID directly: ${tmdbId} for type ${tmdbTypeFromId}`);
         
         // Check for season and episode
-        if (idParts.length >= 4 && type === 'series') {
+        if (idParts.length >= 4 && (type === 'series' || type === 'tv')) {
             seasonNum = parseInt(idParts[2], 10);
             episodeNum = parseInt(idParts[3], 10);
             console.log(`  Parsed season ${seasonNum}, episode ${episodeNum} from Stremio ID`);
@@ -908,7 +930,7 @@ builder.defineStreamHandler(async (args) => {
         const imdbParts = id.split(':');
         let baseImdbId = id; // Default to full ID for movies
 
-        if (imdbParts.length >= 3 && type === 'series') {
+        if (imdbParts.length >= 3 && (type === 'series' || type === 'tv')) {
             seasonNum = parseInt(imdbParts[1], 10);
             episodeNum = parseInt(imdbParts[2], 10);
             baseImdbId = imdbParts[0]; // Use only the IMDb ID part for conversion
@@ -1058,7 +1080,8 @@ builder.defineStreamHandler(async (args) => {
             for (let attempt = 1; attempt <= MAX_SHOWBOX_RETRIES; attempt++) {
                 try {
                     console.log(`[ShowBox] Attempt ${attempt}/${MAX_SHOWBOX_RETRIES}`);
-                    const streams = await getStreamsFromTmdbId(tmdbTypeFromId, tmdbId, seasonNum, episodeNum, userRegionPreference, userCookie, userScraperApiKey);
+                    // Pass allCookies array to ShowBox - it will select the best cookie with fallback
+                    const streams = await getStreamsFromTmdbId(tmdbTypeFromId, tmdbId, seasonNum, episodeNum, userRegionPreference, allCookies, userScraperApiKey);
                     
             if (streams && streams.length > 0) {
                         console.log(`[ShowBox] Successfully fetched ${streams.length} streams on attempt ${attempt}.`);
@@ -1814,7 +1837,7 @@ builder.defineStreamHandler(async (args) => {
         let providerDisplayName = stream.provider; // Default to the existing provider name
         if (stream.provider === 'ShowBox') {
             providerDisplayName = 'ShowBox';
-            if (userCookie || hasCookiesArray || global.currentRequestUserCookie) {
+            if (hasAnyCookies) {
                 providerDisplayName += ' ⚡';
             } else {
                 providerDisplayName += ' (SLOW)';
@@ -2023,7 +2046,7 @@ builder.defineStreamHandler(async (args) => {
             }
             
             // Build quota remaining info for ShowBox/PStream when a personal cookie was selected (on next line)
-            if ((stream.provider === 'ShowBox' || stream.provider === 'PStream') && (userCookie || hasCookiesArray || global.currentRequestUserCookie)) {
+            if ((stream.provider === 'ShowBox' || stream.provider === 'PStream') && hasAnyCookies) {
                 const remainingMb = global.currentRequestUserCookieRemainingMB;
                 if (typeof remainingMb === 'number' && remainingMb >= 0) {
                     const remainingGb = remainingMb >= 1024 ? `${(remainingMb / 1024).toFixed(2)} GB` : `${Math.round(remainingMb)} MB`;
@@ -2043,8 +2066,8 @@ ${titleSecondLine}` : displayTitle;
             finalTitle += `${quotaLine}`;
         }
 
-        // Add warning for ShowBox if no personal cookie is present (single, array, or selected best)
-        if (stream.provider === 'ShowBox' && !(userCookie || hasCookiesArray || global.currentRequestUserCookie)) {
+        // Add warning for ShowBox if no personal cookie is present
+        if (stream.provider === 'ShowBox' && !hasAnyCookies) {
             const warningMessage = "⚠️ Slow? Add personal FebBox cookie in addon config for faster streaming.";
             finalTitle += `
 ${warningMessage}`;
