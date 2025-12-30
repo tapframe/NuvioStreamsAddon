@@ -67,16 +67,16 @@ app.use((req, res, next) => {
     if (req.path !== '/manifest.json' && !req.path.endsWith('/manifest.json')) {
         // Split path into segments, ignoring empty strings
         const pathSegments = req.path.split('/').filter(segment => segment);
-        
+
         // If the last segment is manifest.json, remove it for processing
         if (pathSegments.length > 0 && pathSegments[pathSegments.length - 1] === 'manifest.json') {
             pathSegments.pop();
         }
-        
+
         // If the segments contain 'stream', we need to extract only the path parameters before it
         const streamIndex = pathSegments.indexOf('stream');
         const paramSegments = streamIndex !== -1 ? pathSegments.slice(0, streamIndex) : pathSegments;
-        
+
         // Process each path segment as a parameter
         paramSegments.forEach(segment => {
             const paramParts = segment.split('=');
@@ -87,7 +87,7 @@ app.use((req, res, next) => {
         });
 
         if (Object.keys(pathParams).length > 0) {
-            const maskedPathParams = {...pathParams};
+            const maskedPathParams = { ...pathParams };
             if (maskedPathParams.cookie) maskedPathParams.cookie = '[MASKED]';
             if (maskedPathParams.cookies) maskedPathParams.cookies = '[MASKED_ARRAY]';
             if (maskedPathParams.scraper_api_key) maskedPathParams.scraper_api_key = '[MASKED]';
@@ -110,7 +110,7 @@ app.use((req, res, next) => {
     if (cookie) {
         try {
             requestConfig.cookie = decodeURIComponent(cookie);
-        } catch (e) { 
+        } catch (e) {
             console.error(`[server.js] Error decoding cookie from request: ${cookie}`, e.message);
         }
     }
@@ -159,19 +159,19 @@ app.use((req, res, next) => {
 
     if (Object.keys(requestConfig).length > 0) {
         // Mask sensitive information in logs
-        const configForLog = {...requestConfig};
+        const configForLog = { ...requestConfig };
         if (configForLog.cookie) configForLog.cookie = '[PRESENT: ****]';
         if (configForLog.scraper_api_key) configForLog.scraper_api_key = '[PRESENT: ****]';
         if (configForLog.cookies) configForLog.cookies = `[${configForLog.cookies.length} cookies]`;
-        
+
         console.log(`[server.js] Request config for this request: ${JSON.stringify(configForLog)}`);
-        
+
         // Debug logging for stream requests (mask sensitive)
         if (req.path.includes('stream') || req.url.includes('stream')) {
             const maskedUrlForLog = (req.url || '').replace(/(cookie=|cookies=|scraper_api_key=)[^&/]+/g, '$1[MASKED]');
             const maskedPathParamsForLog = (() => {
                 try {
-                    const clone = {...pathParams};
+                    const clone = { ...pathParams };
                     if (clone.cookie) clone.cookie = '[MASKED]';
                     if (clone.cookies) clone.cookies = '[MASKED_ARRAY]';
                     if (clone.scraper_api_key) clone.scraper_api_key = '[MASKED]';
@@ -180,7 +180,7 @@ app.use((req, res, next) => {
             })();
             const maskedQueryForLog = (() => {
                 try {
-                    const clone = {...req.query};
+                    const clone = { ...req.query };
                     if (clone.cookie) clone.cookie = '[MASKED]';
                     if (clone.cookies) clone.cookies = '[MASKED_ARRAY]';
                     if (clone.scraper_api_key) clone.scraper_api_key = '[MASKED]';
@@ -196,7 +196,7 @@ app.use((req, res, next) => {
     const fullUrl = req.originalUrl || req.url;
     let maskedUrl = fullUrl.replace(/cookie=([^&/]+)/g, 'cookie=[MASKED]');
     maskedUrl = maskedUrl.replace(/scraper_api_key=([^&/]+)/g, 'scraper_api_key=[MASKED]');
-    
+
     // Only log for relevant paths to reduce noise
     if (req.path.includes('/manifest.json') || req.path.startsWith('/stream')) {
         console.log(`Incoming request: ${maskedUrl}`);
@@ -207,11 +207,10 @@ app.use((req, res, next) => {
     requestContext.run({ config: requestConfig }, () => {
         // Also set on req for direct access in middleware
         req.nuvioConfig = requestConfig;
-        
-        // Set global.currentRequestConfig for backward compatibility with addon.js
-        // This is safe because we're within the AsyncLocalStorage context
+
+
         global.currentRequestConfig = requestConfig;
-        
+
         next();
     });
 });
@@ -290,8 +289,8 @@ app.post('/api/validate-cookie', async (req, res) => {
             let message = 'Failed to load test share page.';
             if (sharePageResponse.status === 301 || sharePageResponse.status === 302) {
                 const location = sharePageResponse.headers.location || '';
-                message = location.includes('/login') || location.includes('/passport') 
-                    ? 'Redirected to login page.' 
+                message = location.includes('/login') || location.includes('/passport')
+                    ? 'Redirected to login page.'
                     : `Redirected from share page (${location}).`;
             } else {
                 message = `Share page access error: Status ${sharePageResponse.status}.`;
@@ -299,7 +298,7 @@ app.post('/api/validate-cookie', async (req, res) => {
             console.log(`[validate-cookie] Step 1 FAILED: ${message}`);
             return res.json({ isValid: false, message });
         }
-        
+
         const htmlContent = sharePageResponse.data;
         console.log('[validate-cookie] Step 1 SUCCESS: Share page accessed.');
 
@@ -326,7 +325,7 @@ app.post('/api/validate-cookie', async (req, res) => {
         } else {
             // Fallback: try to get share_key from the test URL itself
             const urlParts = FEBBOX_TEST_SHARE_URL.split('/');
-            const potentialKey = urlParts[urlParts.length -1];
+            const potentialKey = urlParts[urlParts.length - 1];
             if (/^[a-zA-Z0-9-]+$/.test(potentialKey)) shareKey = potentialKey;
         }
 
@@ -353,20 +352,20 @@ app.post('/api/validate-cookie', async (req, res) => {
         });
 
         if (playerResponse.data && typeof playerResponse.data === 'string') {
-            if (playerResponse.data.includes('sources = [') || 
+            if (playerResponse.data.includes('sources = [') ||
                 (playerResponse.data.includes('http') && (playerResponse.data.includes('.mp4') || playerResponse.data.includes('.m3u8')))) {
                 console.log('[validate-cookie] Step 3 SUCCESS: Player sources found. Cookie is VALID.');
                 return res.json({ isValid: true, message: 'Cookie successfully fetched video sources.' });
             }
         }
-        
+
         // If we reach here, player did not return expected sources
         let playerResponseMessage = 'Player did not return valid video sources.';
         if (playerResponse.data && typeof playerResponse.data === 'object') {
-             // FebBox often returns JSON like {code: -1, msg: "user not found"}
-            playerResponseMessage = playerResponse.data.msg || JSON.stringify(playerResponse.data).substring(0,100);
+            // FebBox often returns JSON like {code: -1, msg: "user not found"}
+            playerResponseMessage = playerResponse.data.msg || JSON.stringify(playerResponse.data).substring(0, 100);
         } else if (playerResponse.data && typeof playerResponse.data === 'string') {
-            playerResponseMessage = `Player returned: ${playerResponse.data.substring(0,100)}...`;
+            playerResponseMessage = `Player returned: ${playerResponse.data.substring(0, 100)}...`;
         }
 
         console.log(`[validate-cookie] Step 3 FAILED: ${playerResponseMessage}`);
@@ -405,12 +404,14 @@ app.post('/api/febbox-flow', async (req, res) => {
             return res.status(200).json({ ok: false, message: `Unexpected response (status ${resp.status})` });
         }
         const flow = resp.data.data.flow;
-        return res.json({ ok: true, flow: {
-            traffic_limit_mb: flow.traffic_limit_mb,
-            traffic_usage_mb: flow.traffic_usage_mb,
-            reset_at: flow.reset_at,
-            is_vip: flow.is_vip
-        }});
+        return res.json({
+            ok: true, flow: {
+                traffic_limit_mb: flow.traffic_limit_mb,
+                traffic_usage_mb: flow.traffic_usage_mb,
+                reset_at: flow.reset_at,
+                is_vip: flow.is_vip
+            }
+        });
     } catch (e) {
         return res.status(500).json({ ok: false, message: e.message });
     }
@@ -420,24 +421,24 @@ app.post('/api/febbox-flow', async (req, res) => {
 app.use((req, res, next) => {
     const userCookie = req.query.cookie;
     const userRegionPreference = req.query.region ? req.query.region.toUpperCase() : null;
-    
+
     // Set these values as globals for backward compatibility
     global.currentRequestUserCookie = userCookie || null;
     global.currentRequestRegionPreference = userRegionPreference || null;
-    
+
     // Log the cookie and region preference for debugging
     if (req.path === '/manifest.json' || req.path === '/stream') {
         console.log(`Request to ${req.path}: User cookie provided: ${userCookie ? 'Yes (length: ' + userCookie.length + ')' : 'No'}`);
         console.log(`Request to ${req.path}: Region preference: ${userRegionPreference || 'None'}`);
-        
+
         // Log the full URL with cookie masked for privacy
         const fullUrl = req.protocol + '://' + req.get('host') + req.originalUrl;
-        const maskedUrl = userCookie ? 
-            fullUrl.replace(userCookie, '***COOKIE-MASKED***') : 
+        const maskedUrl = userCookie ?
+            fullUrl.replace(userCookie, '***COOKIE-MASKED***') :
             fullUrl;
         console.log(`Full request URL: ${maskedUrl}`);
     }
-    
+
     // Also extract from stremio-addon-sdk config that might be passed in the request body
     if (req.path === '/stream' && req.body && req.body.config) {
         // If not already set from query params, try to get from config
@@ -447,12 +448,12 @@ app.use((req, res, next) => {
         if (!global.currentRequestRegionPreference && req.body.config.region) {
             global.currentRequestRegionPreference = req.body.config.region.toUpperCase();
         }
-        
+
         // Add these directly to the config so addon.js can access them
         req.body.config.cookie = global.currentRequestUserCookie;
         req.body.config.region = global.currentRequestRegionPreference;
     }
-    
+
     next();
 });
 
@@ -460,7 +461,7 @@ app.use((req, res, next) => {
 app.use((req, res, next) => {
     // Check if this is a stream request with path-based parameters
     const pathMatch = req.path.match(/^\/(.*?)\/stream\/([^\/]+)\/([^\/]+)\.json$/);
-    
+
     if (pathMatch) {
         const [, pathParams, type, id] = pathMatch;
         console.log(`[server.js] Detected path-based stream request: ${req.path.replace(/(cookie=|cookies=|scraper_api_key=)[^/&]+/g, '$1[MASKED]')}`);
@@ -470,14 +471,14 @@ app.use((req, res, next) => {
             .replace(/(cookies=)[^/&]+/g, '$1[MASKED_ARRAY]')
             .replace(/(scraper_api_key=)[^/&]+/g, '$1[MASKED]');
         console.log(`[server.js] Path params: ${maskedParamsStr}, Type: ${type}, ID: ${id}`);
-        
+
         // Rewrite the URL to the standard format that the SDK expects
         const originalQuery = req.url.includes('?') ? req.url.substring(req.url.indexOf('?')) : '';
         req.url = `/stream/${type}/${id}.json${originalQuery}`;
-        
+
         console.log(`[server.js] Rewritten URL: ${req.url}`);
     }
-    
+
     next();
 });
 
@@ -544,7 +545,7 @@ app.get('*manifest.json', async (req, res) => {
             personalizedManifest.isRegionPersonalized = true; // Custom flag for UI
             console.log(`[Manifest] Region ${userRegion} applied to name, description, and config.`);
         }
-        
+
         // Keep original description if not modified by region
         if (!userRegion) {
             personalizedManifest.description = originalManifest.description;
@@ -633,14 +634,14 @@ const { getRouter } = require('stremio-addon-sdk');
 // Custom router to make the user-supplied cookie available to the addon sdk handlers
 const createCustomRouter = (currentAddonInterface) => {
     const originalRouter = getRouter(currentAddonInterface);
-    
+
     return (req, res, next) => {
         // Make cookie available if provided
         if (req.userCookie) {
             global.currentRequestUserCookie = req.userCookie;
             console.log(`[server.js] Setting user cookie for this request (length: ${req.userCookie.length})`);
         }
-        
+
         // Make region preference available if provided
         if (req.userRegion) {
             global.currentRequestRegionPreference = req.userRegion;
@@ -649,14 +650,14 @@ const createCustomRouter = (currentAddonInterface) => {
             // Reset for safety
             global.currentRequestRegionPreference = null;
         }
-        
+
         res.on('finish', () => {
             // Clean up the global variables after the request is handled
             global.currentRequestUserCookie = null;
             global.currentRequestRegionPreference = null;
             console.log(`[server.js] Cleared cookie and region preference after request processing`);
         });
-        
+
         return originalRouter(req, res, next);
     };
 };
@@ -669,10 +670,10 @@ app.use((req, res, next) => {
     const originalEnd = res.end;
 
     // Override the end function to clean up globals after response is sent
-    res.end = function() {
+    res.end = function () {
         // Call the original end function with all arguments
         originalEnd.apply(res, arguments);
-        
+
         // Clean up global variables 
         if (global.currentRequestUserCookie || global.currentRequestRegionPreference) {
             console.log('Cleaning up global cookie and region preference after request');
@@ -680,26 +681,26 @@ app.use((req, res, next) => {
             global.currentRequestRegionPreference = null;
         }
     };
-    
+
     next();
 });
 
 // Add a new endpoint to check region status and fallbacks
 app.get('/api/region-status', (req, res) => {
-  const status = {
-    regionAvailability: global.regionAvailabilityStatus || {},
-    usedFallback: global.usedRegionFallback || null,
-    lastRequestedRegion: global.lastRequestedRegion || null
-  };
-  
-  // Reset the fallback notification after it's been fetched once
-  if (global.usedRegionFallback) {
-    const fallbackInfo = {...global.usedRegionFallback};
-    global.usedRegionFallback = null;
-    status.usedFallback = fallbackInfo;
-  }
-  
-  res.json(status);
+    const status = {
+        regionAvailability: global.regionAvailabilityStatus || {},
+        usedFallback: global.usedRegionFallback || null,
+        lastRequestedRegion: global.lastRequestedRegion || null
+    };
+
+    // Reset the fallback notification after it's been fetched once
+    if (global.usedRegionFallback) {
+        const fallbackInfo = { ...global.usedRegionFallback };
+        global.usedRegionFallback = null;
+        status.usedFallback = fallbackInfo;
+    }
+
+    res.json(status);
 });
 
 const PORT = process.env.PORT || 7777;

@@ -245,15 +245,15 @@ const convertImdbToTmdb = async (imdbId, regionPreference = null, expectedType =
  */
 const checkCookieQuota = async (cookie) => {
     try {
-        const headers = { 
-            'Cookie': cookie.startsWith('ui=') ? cookie : `ui=${cookie}`, 
+        const headers = {
+            'Cookie': cookie.startsWith('ui=') ? cookie : `ui=${cookie}`,
             'Accept': 'application/json, text/javascript, */*; q=0.01',
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         };
-        const resp = await axios.get('https://www.febbox.com/console/user_cards', { 
-            headers, 
-            timeout: 8000, 
-            validateStatus: () => true 
+        const resp = await axios.get('https://www.febbox.com/console/user_cards', {
+            headers,
+            timeout: 8000,
+            validateStatus: () => true
         });
         if (resp.status === 200 && resp.data && resp.data.data && resp.data.data.flow) {
             const flow = resp.data.data.flow;
@@ -282,43 +282,43 @@ const selectBestCookie = async (cookies) => {
     } else if (Array.isArray(cookies)) {
         cookieArray = cookies.filter(c => c && typeof c === 'string' && c.trim()).map(c => c.trim());
     }
-    
+
     if (cookieArray.length === 0) {
         return { cookie: null, remainingMB: -1 };
     }
-    
+
     // If only one cookie, use it directly (optionally check quota)
     if (cookieArray.length === 1) {
         const quotaResult = await checkCookieQuota(cookieArray[0]);
-        global.currentRequestUserCookie = quotaResult.cookie;
-        global.currentRequestUserCookieRemainingMB = quotaResult.ok ? quotaResult.remainingMB : undefined;
+        // global.currentRequestUserCookie = quotaResult.cookie; // REMOVED: Thread-unsafe
+        // global.currentRequestUserCookieRemainingMB = quotaResult.ok ? quotaResult.remainingMB : undefined; // REMOVED: Thread-unsafe
         console.log(`[ShowBox] Using single cookie${quotaResult.ok ? ` (${quotaResult.remainingMB} MB remaining)` : ' (quota check skipped/failed)'}`);
         return { cookie: quotaResult.cookie, remainingMB: quotaResult.remainingMB };
     }
-    
+
     // Multiple cookies - try to check quota for all in parallel
     console.log(`[ShowBox] Checking quota for ${cookieArray.length} cookies...`);
     const quotaPromises = cookieArray.map(c => checkCookieQuota(c));
     const results = await Promise.all(quotaPromises);
-    
+
     // Separate successful quota checks from failed ones
     const successfulChecks = results.filter(r => r.ok);
     const failedChecks = results.filter(r => !r.ok);
-    
+
     if (successfulChecks.length > 0) {
         // Sort by remaining quota descending and pick the best
         successfulChecks.sort((a, b) => b.remainingMB - a.remainingMB);
         const best = successfulChecks[0];
-        global.currentRequestUserCookie = best.cookie;
-        global.currentRequestUserCookieRemainingMB = best.remainingMB;
+        // global.currentRequestUserCookie = best.cookie; // REMOVED: Thread-unsafe
+        // global.currentRequestUserCookieRemainingMB = best.remainingMB; // REMOVED: Thread-unsafe
         console.log(`[ShowBox] Selected best cookie by quota: ${best.remainingMB} MB remaining (out of ${successfulChecks.length} valid cookies)`);
         return { cookie: best.cookie, remainingMB: best.remainingMB };
     }
-    
+
     // All quota checks failed - use the first cookie anyway (fallback)
     const fallbackCookie = cookieArray[0];
-    global.currentRequestUserCookie = fallbackCookie;
-    global.currentRequestUserCookieRemainingMB = undefined;
+    // global.currentRequestUserCookie = fallbackCookie; // REMOVED: Thread-unsafe
+    // global.currentRequestUserCookieRemainingMB = undefined; // REMOVED: Thread-unsafe
     console.log(`[ShowBox] All quota checks failed, using first cookie as fallback`);
     return { cookie: fallbackCookie, remainingMB: -1 };
 };
@@ -341,11 +341,11 @@ const getStreamsFromTmdbId = async (tmdbType, tmdbId, seasonNum = null, episodeN
     try {
         // Select the best cookie from available cookies (single or array)
         const { cookie: selectedCookie, remainingMB } = await selectBestCookie(cookies);
-        
+
         // Build API URL
         let apiUrl;
         const oss = regionPreference || 'USA7'; // Default to USA7 if no region preference
-        
+
         if (tmdbType === 'tv' || tmdbType === 'series') {
             if (seasonNum === null || episodeNum === null) {
                 console.log(`[ShowBox] TV show requires both season and episode numbers`);

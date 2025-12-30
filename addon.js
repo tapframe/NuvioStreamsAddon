@@ -774,7 +774,8 @@ builder.defineStreamHandler(async (args) => {
     const { type, id, config: sdkConfig } = args;
 
     // Read config from global set by server.js middleware
-    const requestSpecificConfig = global.currentRequestConfig || {};
+    // Use getRequestConfig() (AsyncLocalStorage) for thread safety, fall back to global legacy variable
+    const requestSpecificConfig = (global.getRequestConfig ? global.getRequestConfig() : null) || global.currentRequestConfig || {};
     // Mask sensitive fields for logs
     const maskedForLog = (() => {
         try {
