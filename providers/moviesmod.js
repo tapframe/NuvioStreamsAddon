@@ -30,15 +30,26 @@ function escapeRegExp(string) {
 // --- Proxy Configuration ---
 const MOVIESMOD_PROXY_URL = process.env.MOVIESMOD_PROXY_URL;
 if (MOVIESMOD_PROXY_URL) {
-  console.log(`[MoviesMod] Proxy support enabled: ${MOVIESMOD_PROXY_URL}`);
+    console.log(`[MoviesMod] Proxy support enabled: ${MOVIESMOD_PROXY_URL}`);
 } else {
-  console.log('[MoviesMod] No proxy configured, using direct connections');
+    console.log('[MoviesMod] No proxy configured, using direct connections');
 }
 
 // --- Domain Fetching ---
-let moviesModDomain = 'https://moviesmod.chat'; // Fallback domain
+let moviesModDomain = 'https://moviesmod.build'; // Fallback domain (verified working)
 let domainCacheTimestamp = 0;
 const DOMAIN_CACHE_TTL = 4 * 60 * 60 * 1000; // 4 hours
+
+// Helper to verify domain is reachable
+async function verifyDomain(domain, timeout = 5000) {
+    try {
+        await axios.head(domain, { timeout, maxRedirects: 3 });
+        return true;
+    } catch (error) {
+        console.warn(`[MoviesMod] Domain ${domain} is not reachable: ${error.message}`);
+        return false;
+    }
+}
 
 async function getMoviesModDomain() {
     const now = Date.now();
@@ -50,9 +61,22 @@ async function getMoviesModDomain() {
         console.log('[MoviesMod] Fetching latest domain...');
         const response = await makeRequest('https://raw.githubusercontent.com/phisher98/TVVVV/refs/heads/main/domains.json', { timeout: 10000 });
         if (response.data && response.data.moviesmod) {
-            moviesModDomain = response.data.moviesmod;
-            domainCacheTimestamp = now;
-            console.log(`[MoviesMod] Updated domain to: ${moviesModDomain}`);
+            const remoteDomain = response.data.moviesmod;
+            // Verify the remote domain is reachable before switching
+            if (await verifyDomain(remoteDomain)) {
+                moviesModDomain = remoteDomain;
+                domainCacheTimestamp = now;
+                console.log(`[MoviesMod] Updated domain to: ${moviesModDomain}`);
+            } else {
+                console.warn(`[MoviesMod] Remote domain ${remoteDomain} is not reachable, keeping fallback.`);
+                // Try to verify fallback domain
+                const fallbackDomain = 'https://moviesmod.build';
+                if (await verifyDomain(fallbackDomain)) {
+                    moviesModDomain = fallbackDomain;
+                    domainCacheTimestamp = now;
+                    console.log(`[MoviesMod] Using verified fallback domain: ${moviesModDomain}`);
+                }
+            }
         } else {
             console.warn('[MoviesMod] Domain JSON fetched, but "moviesmod" key was not found. Using fallback.');
         }
@@ -110,88 +134,88 @@ ensureCacheDir();
 
 // Proxy wrapper function
 const makeRequest = async (url, options = {}) => {
-  if (MOVIESMOD_PROXY_URL) {
-    // Route through proxy
-    const proxiedUrl = `${MOVIESMOD_PROXY_URL}${encodeURIComponent(url)}`;
-    console.log(`[MoviesMod] Making proxied request to: ${url}`);
-    return axios.get(proxiedUrl, options);
-  } else {
-    // Direct request
-    console.log(`[MoviesMod] Making direct request to: ${url}`);
-    return axios.get(url, options);
-  }
+    if (MOVIESMOD_PROXY_URL) {
+        // Route through proxy
+        const proxiedUrl = `${MOVIESMOD_PROXY_URL}${encodeURIComponent(url)}`;
+        console.log(`[MoviesMod] Making proxied request to: ${url}`);
+        return axios.get(proxiedUrl, options);
+    } else {
+        // Direct request
+        console.log(`[MoviesMod] Making direct request to: ${url}`);
+        return axios.get(url, options);
+    }
 };
 
 // Helper function to create a proxied session for SID resolution
 const createProxiedSession = async (jar) => {
-  const { wrapper } = await getAxiosCookieJarSupport();
-  
-  const sessionConfig = {
-    jar,
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36',
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-      'Accept-Language': 'en-US,en;q=0.5',
-      'Connection': 'keep-alive',
-      'Upgrade-Insecure-Requests': '1'
-    }
-  };
+    const { wrapper } = await getAxiosCookieJarSupport();
 
-  const session = wrapper(axios.create(sessionConfig));
-
-  // Helper function to extract cookies from jar for a given URL
-  const getCookiesForUrl = async (url) => {
-    try {
-      const cookies = await jar.getCookies(url);
-      return cookies.map(cookie => `${cookie.key}=${cookie.value}`).join('; ');
-    } catch (error) {
-      console.error(`[MoviesMod] Error getting cookies for ${url}: ${error.message}`);
-      return '';
-    }
-  };
-
-  // If proxy is enabled, wrap the session methods to use proxy
-  if (MOVIESMOD_PROXY_URL) {
-    console.log(`[MoviesMod] Creating SID session with proxy: ${MOVIESMOD_PROXY_URL}`);
-    const originalGet = session.get.bind(session);
-    const originalPost = session.post.bind(session);
-
-    session.get = async (url, options = {}) => {
-      const proxiedUrl = `${MOVIESMOD_PROXY_URL}${encodeURIComponent(url)}`;
-      console.log(`[MoviesMod] Making proxied SID GET request to: ${url}`);
-      
-      // Extract cookies from jar and add to headers
-      const cookieString = await getCookiesForUrl(url);
-      if (cookieString) {
-        console.log(`[MoviesMod] Adding cookies to proxied request: ${cookieString}`);
-        options.headers = {
-          ...options.headers,
-          'Cookie': cookieString
-        };
-      }
-      
-      return originalGet(proxiedUrl, options);
+    const sessionConfig = {
+        jar,
+        headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1'
+        }
     };
 
-    session.post = async (url, data, options = {}) => {
-      const proxiedUrl = `${MOVIESMOD_PROXY_URL}${encodeURIComponent(url)}`;
-      console.log(`[MoviesMod] Making proxied SID POST request to: ${url}`);
-      
-      // Extract cookies from jar and add to headers
-      const cookieString = await getCookiesForUrl(url);
-      if (cookieString) {
-        console.log(`[MoviesMod] Adding cookies to proxied request: ${cookieString}`);
-        options.headers = {
-          ...options.headers,
-          'Cookie': cookieString
-        };
-      }
-      
-      return originalPost(proxiedUrl, data, options);
-    };
-  }
+    const session = wrapper(axios.create(sessionConfig));
 
-  return session;
+    // Helper function to extract cookies from jar for a given URL
+    const getCookiesForUrl = async (url) => {
+        try {
+            const cookies = await jar.getCookies(url);
+            return cookies.map(cookie => `${cookie.key}=${cookie.value}`).join('; ');
+        } catch (error) {
+            console.error(`[MoviesMod] Error getting cookies for ${url}: ${error.message}`);
+            return '';
+        }
+    };
+
+    // If proxy is enabled, wrap the session methods to use proxy
+    if (MOVIESMOD_PROXY_URL) {
+        console.log(`[MoviesMod] Creating SID session with proxy: ${MOVIESMOD_PROXY_URL}`);
+        const originalGet = session.get.bind(session);
+        const originalPost = session.post.bind(session);
+
+        session.get = async (url, options = {}) => {
+            const proxiedUrl = `${MOVIESMOD_PROXY_URL}${encodeURIComponent(url)}`;
+            console.log(`[MoviesMod] Making proxied SID GET request to: ${url}`);
+
+            // Extract cookies from jar and add to headers
+            const cookieString = await getCookiesForUrl(url);
+            if (cookieString) {
+                console.log(`[MoviesMod] Adding cookies to proxied request: ${cookieString}`);
+                options.headers = {
+                    ...options.headers,
+                    'Cookie': cookieString
+                };
+            }
+
+            return originalGet(proxiedUrl, options);
+        };
+
+        session.post = async (url, data, options = {}) => {
+            const proxiedUrl = `${MOVIESMOD_PROXY_URL}${encodeURIComponent(url)}`;
+            console.log(`[MoviesMod] Making proxied SID POST request to: ${url}`);
+
+            // Extract cookies from jar and add to headers
+            const cookieString = await getCookiesForUrl(url);
+            if (cookieString) {
+                console.log(`[MoviesMod] Adding cookies to proxied request: ${cookieString}`);
+                options.headers = {
+                    ...options.headers,
+                    'Cookie': cookieString
+                };
+            }
+
+            return originalPost(proxiedUrl, data, options);
+        };
+    }
+
+    return session;
 };
 
 // Helper function to extract quality from text
@@ -820,7 +844,7 @@ async function validateVideoUrl(url, timeout = 10000) {
 
     try {
         console.log(`[MoviesMod] Validating URL: ${url.substring(0, 100)}...`);
-        
+
         // Use proxy for URL validation if enabled
         let response;
         if (MOVIESMOD_PROXY_URL) {
@@ -860,9 +884,9 @@ async function validateVideoUrl(url, timeout = 10000) {
 // Parallel URL validation for multiple URLs
 async function validateUrlsParallel(urls, timeout = 10000) {
     if (!urls || urls.length === 0) return [];
-    
+
     console.log(`[MoviesMod] Validating ${urls.length} URLs in parallel...`);
-    
+
     const validationPromises = urls.map(async (url) => {
         try {
             // Use proxy for URL validation if enabled
@@ -894,28 +918,28 @@ async function validateUrlsParallel(urls, timeout = 10000) {
     });
 
     const results = await Promise.allSettled(validationPromises);
-    const validationResults = results.map(r => 
+    const validationResults = results.map(r =>
         r.status === 'fulfilled' ? r.value : { url: 'unknown', isValid: false, error: 'Promise rejected' }
     );
 
     const validCount = validationResults.filter(r => r.isValid).length;
     console.log(`[MoviesMod] ✓ Parallel validation complete: ${validCount}/${urls.length} URLs valid`);
-    
+
     return validationResults;
 }
 
 // Parallel episode processing for TV shows
 async function processEpisodesParallel(finalFilePageLinks, episodeNum = null) {
     if (!finalFilePageLinks || finalFilePageLinks.length === 0) return [];
-    
+
     console.log(`[MoviesMod] Processing ${finalFilePageLinks.length} episode links in parallel...`);
-    
+
     const episodePromises = finalFilePageLinks.map(async (link) => {
         try {
             // Extract episode information from server name
             const serverName = link.server.toLowerCase();
             let extractedEpisodeNum = null;
-            
+
             // Try multiple episode patterns
             const episodePatterns = [
                 /episode\s+(\d+)/i,
@@ -923,7 +947,7 @@ async function processEpisodesParallel(finalFilePageLinks, episodeNum = null) {
                 /e(\d+)/i,
                 /\b(\d+)\b/
             ];
-            
+
             for (const pattern of episodePatterns) {
                 const match = serverName.match(pattern);
                 if (match) {
@@ -931,7 +955,7 @@ async function processEpisodesParallel(finalFilePageLinks, episodeNum = null) {
                     break;
                 }
             }
-            
+
             return {
                 ...link,
                 episodeInfo: {
@@ -950,18 +974,18 @@ async function processEpisodesParallel(finalFilePageLinks, episodeNum = null) {
             };
         }
     });
-    
+
     const processedLinks = await Promise.all(episodePromises);
-    
+
     // Filter for specific episode if requested
     if (episodeNum !== null) {
-        const filteredLinks = processedLinks.filter(link => 
+        const filteredLinks = processedLinks.filter(link =>
             link.episodeInfo?.episode === episodeNum
         );
         console.log(`[MoviesMod] ✓ Parallel episode processing: Found ${filteredLinks.length} matches for episode ${episodeNum}`);
         return filteredLinks;
     }
-    
+
     console.log(`[MoviesMod] ✓ Parallel episode processing complete: ${processedLinks.length} episodes processed`);
     return processedLinks;
 }
@@ -969,9 +993,9 @@ async function processEpisodesParallel(finalFilePageLinks, episodeNum = null) {
 // Parallel SID link resolution for multiple SID links
 async function resolveSIDLinksParallel(sidUrls) {
     if (!sidUrls || sidUrls.length === 0) return [];
-    
+
     console.log(`[MoviesMod] Resolving ${sidUrls.length} SID links in parallel...`);
-    
+
     const sidPromises = sidUrls.map(async (sidUrl) => {
         try {
             const resolvedUrl = await resolveTechUnblockedLink(sidUrl);
@@ -981,15 +1005,15 @@ async function resolveSIDLinksParallel(sidUrls) {
             return { originalUrl: sidUrl, resolvedUrl: null, success: false, error: error.message };
         }
     });
-    
+
     const results = await Promise.allSettled(sidPromises);
-    const resolvedResults = results.map(r => 
+    const resolvedResults = results.map(r =>
         r.status === 'fulfilled' ? r.value : { originalUrl: 'unknown', resolvedUrl: null, success: false, error: 'Promise rejected' }
     );
-    
+
     const successCount = resolvedResults.filter(r => r.success).length;
     console.log(`[MoviesMod] ✓ Parallel SID resolution complete: ${successCount}/${sidUrls.length} SID links resolved`);
-    
+
     return resolvedResults;
 }
 
