@@ -1,12 +1,20 @@
 {
   "id": "org.nuvio.streams",
-  "version": "0.5.10",
+  "version": "0.5.13",
   "name": "Nuvio Streams | Elfhosted",
   "description": "Stremio addon for high-quality streaming links.",
   "logo": "https://raw.githubusercontent.com/tapframe/NuvioStreaming/refs/heads/appstore/assets/titlelogo.png",
-  "resources": ["stream"],
-  "types": ["movie", "series"],
-  "idPrefixes": ["tt", "tmdb"],
+  "resources": [
+    "stream"
+  ],
+  "types": [
+    "movie",
+    "series"
+  ],
+  "idPrefixes": [
+    "tt",
+    "tmdb"
+  ],
   "catalogs": [],
   "behaviorHints": {
     "adult": false,
@@ -15,5 +23,6 @@
   },
   "stremioAddonsConfig": {
     "issuer": "https://stremio-addons.net",
-    "signature": "eyJhbGciOiJkaXIiLCJlbmMiOiJBMTI4Q0JDLUhTMjU2In0..2YiTzY5hiYNywrpyMgv9Vg.vtorJ0blJ2dja5h7HSdL2eg0Hho7g8nJJnX2HbjJXSqzOU64niitT3FQItz9Q0rtF2sIswFcm842XgAnih0vPCTksxPwlkfDqolZcCjirQMl5hhcSzxJo88Mvonq2dxG.OYTTCCQcFthlmdn6c117CQ"}
-} 
+    "signature": "eyJhbGciOiJkaXIiLCJlbmMiOiJBMTI4Q0JDLUhTMjU2In0..2YiTzY5hiYNywrpyMgv9Vg.vtorJ0blJ2dja5h7HSdL2eg0Hho7g8nJJnX2HbjJXSqzOU64niitT3FQItz9Q0rtF2sIswFcm842XgAnih0vPCTksxPwlkfDqolZcCjirQMl5hhcSzxJo88Mvonq2dxG.OYTTCCQcFthlmdn6c117CQ"
+  }
+}

@@ -433,7 +433,7 @@
             background: linear-gradient(135deg, #ff7a00, #ff0050);
         }
 
-        
+
 
         .hollymovie-icon {
             background: linear-gradient(135deg, #e50914, #831010);
@@ -444,9 +444,9 @@
             /* Blue gradient for Soaper TV */
         }
 
-        
 
-        
+
+
 
         .coming-soon-icon {
             background: linear-gradient(135deg, #6742d9, #9f7aea);
@@ -939,19 +939,57 @@
             }
 
             /* Cookie section mobile fixes */
-            .cookie-form { grid-template-columns: 1fr !important; width: 100%; }
-            .cookie-form .button-group { flex-direction: column; width: 100%; }
-            .cookie-input { min-width: 0; }
-            .cookie-input-container { display: grid; grid-template-columns: 1fr !important; }
-            .inline-check-btn { width: 100%; margin-top: 0.5rem; }
+            .cookie-form {
+                grid-template-columns: 1fr !important;
+                width: 100%;
+            }
+
+            .cookie-form .button-group {
+                flex-direction: column;
+                width: 100%;
+            }
+
+            .cookie-input {
+                min-width: 0;
+            }
+
+            .cookie-input-container {
+                display: grid;
+                grid-template-columns: 1fr !important;
+            }
+
+            .inline-check-btn {
+                width: 100%;
+                margin-top: 0.5rem;
+            }
 
             /* Multi-cookie list cards should stack and wrap on small screens */
-            #multiCookieList { overflow-x: hidden; overflow-y: auto; max-height: 320px; }
-            #multiCookieList > div { flex-direction: column !important; align-items: stretch !important; }
-            #multiCookieList > div > div { min-width: 0; }
-            #multiCookieList > div > div:last-child { justify-content: space-between; }
-            #multiCookieList button { width: 100%; }
-            #multiCookieList * { word-break: break-word; }
+            #multiCookieList {
+                overflow-x: hidden;
+                overflow-y: auto;
+                max-height: 320px;
+            }
+
+            #multiCookieList>div {
+                flex-direction: column !important;
+                align-items: stretch !important;
+            }
+
+            #multiCookieList>div>div {
+                min-width: 0;
+            }
+
+            #multiCookieList>div>div:last-child {
+                justify-content: space-between;
+            }
+
+            #multiCookieList button {
+                width: 100%;
+            }
+
+            #multiCookieList * {
+                word-break: break-word;
+            }
         }
 
         /* Nuvio App Card Styles - Enhanced Eye-catching Version */
@@ -1013,7 +1051,9 @@
         }
 
         @keyframes breathe {
-            0%, 100% {
+
+            0%,
+            100% {
                 transform: scale(1.02);
             }
 
@@ -1819,11 +1859,16 @@
             /* Blue gradient for TopMovies */
         }
 
-        
+
 
         .khdhub-icon {
             background: linear-gradient(135deg, #1e3c72, #2a5298);
             /* Blue gradient for 4KHDHub */
+        }
+
+        .hdhub4u-icon {
+            background: linear-gradient(135deg, #00c6ff, #0072ff);
+            /* Light blue gradient for HDHub4u */
         }
 
         .moviesdrive-icon {
@@ -2049,6 +2094,11 @@
                         <div class="provider-name">4KHDHub</div>
                         <span class="provider-detail">4K/HD Content</span>
                     </div>
+                    <div class="provider-item">
+                        <div class="provider-icon hdhub4u-icon">🎬</div>
+                        <div class="provider-name">HDHub4u</div>
+                        <span class="provider-detail">HD Content with Multiple Sources</span>
+                    </div>
                 </div>
 
                 <div class="providers">
@@ -2068,7 +2118,9 @@
                     </div>
                     <div class="disclaimer-content"
                         style="justify-content: center; margin-top: 0.5rem; text-align: center;">
-                        <p>Some providers are disabled by default due to server overload: <strong>MoviesMod</strong>, <strong>MoviesDrive</strong>.</p>
+                        <p>Some providers are disabled by default due to server overload: <strong>MoviesMod</strong>,
+                            <strong>MoviesDrive</strong>.
+                        </p>
                     </div>
                 </div>
 
@@ -2142,14 +2194,14 @@
                                 </div>
                             </div>
                         </div>
-                        
+
                         <div class="provider-checkbox-item"
                             style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
-                        
-                    </div>
-                    
-                    <div class="provider-checkbox-item"
-                        style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
+
+                        </div>
+
+                        <div class="provider-checkbox-item"
+                            style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
                             <div style="display: flex; align-items: center;">
                                 <input type="checkbox" id="providerVidzee" name="providerSelect" value="vidzee"
                                     checked="" style="margin-right: 0.5rem; accent-color: var(--primary);">
@@ -2267,11 +2319,13 @@
                         <div class="provider-checkbox-item"
                             style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
                             <div style="display: flex; align-items: center; opacity: 0.7;">
-                                <input type="checkbox" id="providerMoviesdrive" name="providerSelect" value="moviesdrive"
-                                    style="margin-right: 0.5rem; accent-color: var(--primary);" disabled>
+                                <input type="checkbox" id="providerMoviesdrive" name="providerSelect"
+                                    value="moviesdrive" style="margin-right: 0.5rem; accent-color: var(--primary);"
+                                    disabled>
                                 <label for="providerMoviesdrive" style="font-size: 0.9rem;">MoviesDrive <span
                                         style="font-size: 0.75rem; color: var(--text-light);">(~9.0s)</span> <span
-                                        style="font-size: 0.75rem; color: var(--text-light);">Disabled by default</span></label>
+                                        style="font-size: 0.75rem; color: var(--text-light);">Disabled by
+                                        default</span></label>
                             </div>
                             <select id="qualityMoviesdrive" name="providerQuality" data-provider="moviesdrive"
                                 class="provider-sort-select">
@@ -2297,12 +2351,29 @@
                                 <option value="4k">4K+</option>
                             </select>
                         </div>
+                        <div class="provider-checkbox-item"
+                            style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
+                            <div style="display: flex; align-items: center;">
+                                <input type="checkbox" id="providerHdhub4u" name="providerSelect" value="hdhub4u"
+                                    checked="" style="margin-right: 0.5rem; accent-color: var(--primary);">
+                                <label for="providerHdhub4u" style="font-size: 0.9rem;">HDHub4u <span
+                                        style="font-size: 0.75rem; color: var(--text-light);">(~8s)</span> <span
+                                        style="font-size: 0.75rem; color: #0072ff;">HD</span></label>
+                            </div>
+                            <select id="qualityHdhub4u" name="providerQuality" data-provider="hdhub4u"
+                                class="provider-sort-select">
+                                <option value="all">All</option>
+                                <option value="720p">720p+</option>
+                                <option value="1080p">1080p+</option>
+                                <option value="4k">4K+</option>
+                            </select>
+                        </div>
 
                         <h2
                             style="margin-top: 1.25rem; margin-bottom: 0.75rem; color: var(--text-light); font-size: 0.95rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem;">
                             Regional & Specialty Providers</h2>
 
-                        
+
                         <div class="provider-checkbox-item"
                             style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
                             <div style="display: flex; align-items: center;">
@@ -2319,9 +2390,9 @@
                                 <option value="1080p">1080p+</option>
                             </select>
                         </div>
-                        
-                        
-                        
+
+
+
 
                         <div class="provider-info-note"
                             style="margin-top: 0.75rem; margin-bottom: 0.75rem; padding: 0.5rem; font-size: 0.8rem;">
@@ -2349,7 +2420,7 @@
                 <div class="scraper-api-key-container full-width" style="margin-top: 1.5rem; display: none;">
                     <div
                         style="background-color: rgba(15, 15, 15, 0.7); border-radius: 0.6rem; padding: 1rem; border: 1px solid var(--border);">
-                        
+
                         <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
                             <input type="text" id="scraperApiKeyInput" placeholder="Enter your ScraperAPI key"
                                 class="cookie-input" style="flex-grow: 1; min-width: 150px;">
@@ -2358,7 +2429,7 @@
                             <button id="howToGetScraperApiKeyBtn" class="how-to-get-btn" style="flex-shrink: 0;">How to
                                 Get</button>
                         </div>
-                        
+
                     </div>
                 </div>
                 <!-- End ScraperAPI Key Input -->
@@ -2416,17 +2487,25 @@
 
                         <!-- Multi-Cookie Manager (Quota-Aware) -->
                         <div class="cookie-form" style="margin-top: 0.75rem;">
-                            <div class="full-width" style="grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between;">
-                                <h3 style="font-size: 0.95rem; font-weight: 600; margin: 0;">Multi-Cookie Manager (Beta)</h3>
-                                <small style="color: var(--text-light);">Add multiple FebBox ui tokens; auto-selects by remaining quota.</small>
+                            <div class="full-width"
+                                style="grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between;">
+                                <h3 style="font-size: 0.95rem; font-weight: 600; margin: 0;">Multi-Cookie Manager (Beta)
+                                </h3>
+                                <small style="color: var(--text-light);">Add multiple FebBox ui tokens; auto-selects by
+                                    remaining quota.</small>
                             </div>
-                            <div class="cookie-input-container" style="grid-column: 1 / -1; display: grid; grid-template-columns: 1fr auto; gap: 0.5rem; align-items: center;">
-                                <input type="text" id="multiCookieInput" placeholder="Paste another ui token" class="cookie-input" style="grid-column: 1 / 2;">
-                                <button id="addMultiCookieBtn" class="btn btn-secondary" style="grid-column: 2 / 3; white-space: nowrap;">Add Cookie</button>
+                            <div class="cookie-input-container"
+                                style="grid-column: 1 / -1; display: grid; grid-template-columns: 1fr auto; gap: 0.5rem; align-items: center;">
+                                <input type="text" id="multiCookieInput" placeholder="Paste another ui token"
+                                    class="cookie-input" style="grid-column: 1 / 2;">
+                                <button id="addMultiCookieBtn" class="btn btn-secondary"
+                                    style="grid-column: 2 / 3; white-space: nowrap;">Add Cookie</button>
                             </div>
-                            <div class="full-width" style="grid-column: 1 / -1; display: flex; align-items: center; gap: 0.5rem; margin-top: 0.25rem;">
+                            <div class="full-width"
+                                style="grid-column: 1 / -1; display: flex; align-items: center; gap: 0.5rem; margin-top: 0.25rem;">
                                 <span style="font-size: 0.85rem; color: var(--text-light);">Region:</span>
-                                <select id="regionSelectorMulti" class="cookie-input" style="max-width: 220px; padding: 0.4rem 0.6rem;">
+                                <select id="regionSelectorMulti" class="cookie-input"
+                                    style="max-width: 220px; padding: 0.4rem 0.6rem;">
                                     <option value="USA7">US East</option>
                                     <option value="USA6">US West</option>
                                     <option value="USA5">US Middle</option>
@@ -2440,11 +2519,17 @@
                                     <option value="SZ">China</option>
                                 </select>
                             </div>
-                            <div class="full-width" style="grid-column: 1 / -1; display: flex; gap: 0.5rem; margin-top: 0.5rem;">
-                                <button id="validateAllCookiesBtn" class="btn" style="background: rgba(0,163,255,0.15); border: 1px solid rgba(0,163,255,0.3); color: var(--primary);">Validate All</button>
-                                <button id="applyMultiCookiesBtn" class="btn" style="background: rgba(0,193,110,0.15); border: 1px solid rgba(0,193,110,0.3); color: var(--secondary);">Apply Cookies</button>
+                            <div class="full-width"
+                                style="grid-column: 1 / -1; display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+                                <button id="validateAllCookiesBtn" class="btn"
+                                    style="background: rgba(0,163,255,0.15); border: 1px solid rgba(0,163,255,0.3); color: var(--primary);">Validate
+                                    All</button>
+                                <button id="applyMultiCookiesBtn" class="btn"
+                                    style="background: rgba(0,193,110,0.15); border: 1px solid rgba(0,193,110,0.3); color: var(--secondary);">Apply
+                                    Cookies</button>
                             </div>
-                            <div id="multiCookieList" class="full-width" style="grid-column: 1 / -1; margin-top: 0.5rem; display: grid; gap: 0.5rem;"></div>
+                            <div id="multiCookieList" class="full-width"
+                                style="grid-column: 1 / -1; margin-top: 0.5rem; display: grid; gap: 0.5rem;"></div>
                         </div>
 
                         <p class="server-selection-note"
@@ -2523,7 +2608,8 @@
                 <div class="new-badge">Beta</div>
                 <div class="catalog-logo nuvio-app-logo">📱</div>
                 <h3 class="catalog-title">Nuvio Streaming App</h3>
-                <p class="catalog-desc">Like Nuvio addon? Get more provider support at Nuvio's own app with internal providers! Currently in beta - test it out with many built-in providers for iOS and Android.</p>
+                <p class="catalog-desc">Like Nuvio addon? Get more provider support at Nuvio's own app with internal
+                    providers! Currently in beta - test it out with many built-in providers for iOS and Android.</p>
                 <a href="https://tapframe.github.io/NuvioStreaming/" target="_blank"
                     class="install-catalog-btn nuvio-app-btn">Learn More</a>
             </div>
@@ -2615,7 +2701,7 @@
             </div>
         </div>
         <div class="tutorial-warning">
-            
+
             <p style="margin-top: 10px; font-style: italic;"><strong>Disclaimer:</strong> This project is not associated
                 with ScraperAPI in any way. The ScraperAPI service is utilized here solely as a technical means to
                 facilitate the scraping of links, which is necessary for accessing content from certain providers on
@@ -2969,7 +3055,7 @@
             if (regionSelector) {
                 // Always enable the region selector regardless of cookie validity
                 regionSelector.disabled = false;
-                
+
                 // If cookie is not valid, still set a default region
                 if (!isCookieValid) {
                     // Look for USA7 first, then any USA option
@@ -3022,7 +3108,7 @@
             }
         }
 
-        
+
 
         // --- NEW: Centralized function to regenerate the personalized manifest URL ---
         async function regeneratePersonalizedManifest() {
@@ -3255,7 +3341,7 @@
             showboxCheckbox.addEventListener('change', () => {
                 updateCookieSectionState();
                 updateQualityDropdownStates();
-                
+
                 // Instead of direct toast, let user click "Apply" or "Set Cookie" or blur API key
                 // toast.textContent = `Provider selection changed. ${showboxCheckbox.checked ? 'ShowBox enabled, cookie section available.' : 'ShowBox disabled, cookie section disabled.'} Click "Apply Selection" to update manifest.`;
                 // toast.classList.add('show');
