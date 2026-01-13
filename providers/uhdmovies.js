@@ -982,6 +982,94 @@ async function validateVideoUrl(url, timeout = 10000) {
   return false;
 }
 
+// Function to resolve cdn.video-leech.pro redirects to final Google Drive URLs
+async function resolveVideoLeechRedirect(videoLeechUrl) {
+  try {
+    console.log(`[UHDMovies] Resolving video-leech redirect: ${videoLeechUrl.substring(0, 80)}...`);
+    
+    // Use HEAD request to get redirect location without downloading content
+    let response;
+    if (UHDMOVIES_PROXY_URL) {
+      const proxiedUrl = `${UHDMOVIES_PROXY_URL}${encodeURIComponent(videoLeechUrl)}`;
+      response = await axiosInstance.head(proxiedUrl, {
+        maxRedirects: 5,
+        validateStatus: () => true, // Accept all status codes
+        timeout: 15000
+      });
+    } else {
+      response = await axiosInstance.head(videoLeechUrl, {
+        maxRedirects: 5,
+        validateStatus: () => true, // Accept all status codes
+        timeout: 15000
+      });
+    }
+    
+    // Check Location header for redirect
+    if (response.headers && response.headers.location) {
+      const location = response.headers.location;
+      console.log(`[UHDMovies] Found redirect location: ${location.substring(0, 100)}...`);
+      
+      if (location.includes('video-seed.pro')) {
+        // Extract Google Drive URL from the ?url= parameter
+        try {
+          const urlParams = new URLSearchParams(new URL(location).search);
+          const gdriveUrl = urlParams.get('url');
+          
+          if (gdriveUrl && gdriveUrl.includes('video-downloads.googleusercontent.com')) {
+            const decodedUrl = decodeURIComponent(gdriveUrl);
+            console.log(`[UHDMovies] ✓ Extracted Google Drive URL from video-seed.pro redirect`);
+            return decodedUrl;
+          }
+        } catch (parseError) {
+          console.log(`[UHDMovies] Error parsing redirect URL: ${parseError.message}`);
+        }
+      }
+    }
+    
+    // Try following the redirect chain with GET request if HEAD didn't work
+    try {
+      let getResponse;
+      if (UHDMOVIES_PROXY_URL) {
+        const proxiedUrl = `${UHDMOVIES_PROXY_URL}${encodeURIComponent(videoLeechUrl)}`;
+        getResponse = await axiosInstance.get(proxiedUrl, {
+          maxRedirects: 5,
+          validateStatus: () => true,
+          timeout: 15000
+        });
+      } else {
+        getResponse = await axiosInstance.get(videoLeechUrl, {
+          maxRedirects: 5,
+          validateStatus: () => true,
+          timeout: 15000
+        });
+      }
+      
+      // Check the final request URL after redirects
+      const finalUrl = getResponse.request?.res?.responseUrl || getResponse.request?.responseURL;
+      if (finalUrl && finalUrl.includes('video-seed.pro')) {
+        const urlParams = new URLSearchParams(new URL(finalUrl).search);
+        const gdriveUrl = urlParams.get('url');
+        if (gdriveUrl && gdriveUrl.includes('video-downloads.googleusercontent.com')) {
+          const decodedUrl = decodeURIComponent(gdriveUrl);
+          console.log(`[UHDMovies] ✓ Extracted Google Drive URL from GET redirect chain`);
+          return decodedUrl;
+        }
+      }
+    } catch (getError) {
+      console.log(`[UHDMovies] GET redirect follow failed: ${getError.message}`);
+    }
+    
+    // If we can't extract Google Drive URL, return original URL (it might work directly)
+    console.log(`[UHDMovies] Could not extract Google Drive URL, returning original URL`);
+    return videoLeechUrl;
+    
+  } catch (error) {
+    console.error(`[UHDMovies] Error resolving video-leech redirect: ${error.message}`);
+    // Return original URL on error
+    return videoLeechUrl;
+  }
+}
+
 // Function to follow redirect links and get the final download URL with size info
 async function getFinalLink(redirectUrl) {
   try {
@@ -1615,13 +1703,23 @@ async function getUHDMoviesStreams(tmdbId, mediaType = 'movie', season = null, e
 
         // Use shared util to extract final download URL from file page
         const origin = new URL(finalFilePageUrl).origin;
-        const finalUrl = await extractFinalDownloadFromFilePage($, {
+        let finalUrl = await extractFinalDownloadFromFilePage($, {
           origin,
           get: (url, opts) => makeRequest(url, opts),
           post: (url, data, opts) => axiosInstance.post(url.startsWith('http') ? (UHDMOVIES_PROXY_URL ? `${UHDMOVIES_PROXY_URL}${encodeURIComponent(url)}` : url) : url, data, opts),
           validate: (url) => validateVideoUrl(url),
           log: console
         });
+
+        // If the URL is a cdn.video-leech.pro link, resolve it to get the final Google Drive URL
+        if (finalUrl && finalUrl.includes('cdn.video-leech.pro')) {
+          console.log(`[UHDMovies] Detected cdn.video-leech.pro URL, resolving redirect to Google Drive...`);
+          const resolvedUrl = await resolveVideoLeechRedirect(finalUrl);
+          if (resolvedUrl && resolvedUrl !== finalUrl) {
+            console.log(`[UHDMovies] ✓ Resolved to Google Drive URL: ${resolvedUrl.substring(0, 100)}...`);
+            finalUrl = resolvedUrl;
+          }
+        }
 
         if (finalUrl) {
           const rawQuality = linkInfo.rawQuality || '';
