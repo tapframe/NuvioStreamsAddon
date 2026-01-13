@@ -310,7 +310,8 @@ async function extractDownloadLinks(moviePageUrl) {
                 });
             } else if (header.is('h4')) {
                 // Movie Logic
-                const linkElement = blockContent.find('a[href*="modrefer.in"]').first();
+                // Look for links with modrefer.in, links.modpro.blog, or posts.modpro.blog
+                const linkElement = blockContent.find('a[href*="modrefer.in"], a[href*="links.modpro.blog"], a[href*="posts.modpro.blog"]').first();
                 if (linkElement.length > 0) {
                     const link = linkElement.attr('href');
                     const cleanQuality = extractQuality(headerText);
@@ -408,15 +409,22 @@ async function resolveIntermediateLink(initialUrl, refererUrl, quality) {
 
             return finalLinks;
 
-        } else if (urlObject.hostname.includes('episodes.modpro.blog')) {
+        } else if (urlObject.hostname.includes('episodes.modpro.blog') || 
+                   urlObject.hostname.includes('links.modpro.blog') || 
+                   urlObject.hostname.includes('posts.modpro.blog')) {
             const { data } = await makeRequest(initialUrl, { headers: { 'Referer': refererUrl } });
             const $ = cheerio.load(data);
             const finalLinks = [];
 
-            $('.entry-content a[href*="driveseed.org"], .entry-content a[href*="tech.unblockedgames.world"], .entry-content a[href*="tech.creativeexpressionsblog.com"], .entry-content a[href*="tech.examzculture.in"]').each((i, el) => {
+            // Look for download links in entry-content or main content area
+            $('.entry-content a[href*="driveseed.org"], .entry-content a[href*="tech.unblockedgames.world"], .entry-content a[href*="tech.creativeexpressionsblog.com"], .entry-content a[href*="tech.examzculture.in"], article a[href*="driveseed.org"], article a[href*="tech.unblockedgames.world"], article a[href*="tech.creativeexpressionsblog.com"], article a[href*="tech.examzculture.in"]').each((i, el) => {
                 const link = $(el).attr('href');
                 const text = $(el).text().trim();
-                if (link && text && !text.toLowerCase().includes('batch')) {
+                // Filter out comment section links and other non-download links
+                if (link && text && 
+                    !text.toLowerCase().includes('batch') && 
+                    !text.toLowerCase().includes('comment') &&
+                    !text.toLowerCase().includes('our comment')) {
                     finalLinks.push({
                         server: text.replace(/\s+/g, ' '),
                         url: link,
@@ -881,6 +889,94 @@ async function validateVideoUrl(url, timeout = 10000) {
     }
 }
 
+// Function to resolve cdn.video-leech.pro redirects to final Google Drive URLs
+async function resolveVideoLeechRedirect(videoLeechUrl) {
+    try {
+        console.log(`[MoviesMod] Resolving video-leech redirect: ${videoLeechUrl.substring(0, 80)}...`);
+        
+        // Use HEAD request to get redirect location without downloading content
+        let response;
+        if (MOVIESMOD_PROXY_URL) {
+            const proxiedUrl = `${MOVIESMOD_PROXY_URL}${encodeURIComponent(videoLeechUrl)}`;
+            response = await axios.head(proxiedUrl, {
+                maxRedirects: 5,
+                validateStatus: () => true, // Accept all status codes
+                timeout: 15000
+            });
+        } else {
+            response = await axios.head(videoLeechUrl, {
+                maxRedirects: 5,
+                validateStatus: () => true, // Accept all status codes
+                timeout: 15000
+            });
+        }
+        
+        // Check Location header for redirect
+        if (response.headers && response.headers.location) {
+            const location = response.headers.location;
+            console.log(`[MoviesMod] Found redirect location: ${location.substring(0, 100)}...`);
+            
+            if (location.includes('video-seed.pro')) {
+                // Extract Google Drive URL from the ?url= parameter
+                try {
+                    const urlParams = new URLSearchParams(new URL(location).search);
+                    const gdriveUrl = urlParams.get('url');
+                    
+                    if (gdriveUrl && gdriveUrl.includes('video-downloads.googleusercontent.com')) {
+                        const decodedUrl = decodeURIComponent(gdriveUrl);
+                        console.log(`[MoviesMod] ✓ Extracted Google Drive URL from video-seed.pro redirect`);
+                        return decodedUrl;
+                    }
+                } catch (parseError) {
+                    console.log(`[MoviesMod] Error parsing redirect URL: ${parseError.message}`);
+                }
+            }
+        }
+        
+        // Try following the redirect chain with GET request if HEAD didn't work
+        try {
+            let getResponse;
+            if (MOVIESMOD_PROXY_URL) {
+                const proxiedUrl = `${MOVIESMOD_PROXY_URL}${encodeURIComponent(videoLeechUrl)}`;
+                getResponse = await axios.get(proxiedUrl, {
+                    maxRedirects: 5,
+                    validateStatus: () => true,
+                    timeout: 15000
+                });
+            } else {
+                getResponse = await axios.get(videoLeechUrl, {
+                    maxRedirects: 5,
+                    validateStatus: () => true,
+                    timeout: 15000
+                });
+            }
+            
+            // Check the final request URL after redirects
+            const finalUrl = getResponse.request?.res?.responseUrl || getResponse.request?.responseURL;
+            if (finalUrl && finalUrl.includes('video-seed.pro')) {
+                const urlParams = new URLSearchParams(new URL(finalUrl).search);
+                const gdriveUrl = urlParams.get('url');
+                if (gdriveUrl && gdriveUrl.includes('video-downloads.googleusercontent.com')) {
+                    const decodedUrl = decodeURIComponent(gdriveUrl);
+                    console.log(`[MoviesMod] ✓ Extracted Google Drive URL from GET redirect chain`);
+                    return decodedUrl;
+                }
+            }
+        } catch (getError) {
+            console.log(`[MoviesMod] GET redirect follow failed: ${getError.message}`);
+        }
+        
+        // If we can't extract Google Drive URL, return original URL (it might work directly)
+        console.log(`[MoviesMod] Could not extract Google Drive URL, returning original URL`);
+        return videoLeechUrl;
+        
+    } catch (error) {
+        console.error(`[MoviesMod] Error resolving video-leech redirect: ${error.message}`);
+        // Return original URL on error
+        return videoLeechUrl;
+    }
+}
+
 // Parallel URL validation for multiple URLs
 async function validateUrlsParallel(urls, timeout = 10000) {
     if (!urls || urls.length === 0) return [];
@@ -1242,13 +1338,23 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
                         if (fileName) processedFileNames.add(fileName);
                         // Use shared util to extract the final URL from file page
                         const origin = new URL(finalFilePageUrl).origin;
-                        const finalDownloadUrl = await extractFinalDownloadFromFilePage($, {
+                        let finalDownloadUrl = await extractFinalDownloadFromFilePage($, {
                             origin,
                             get: (url, opts) => makeRequest(url, opts),
                             post: (url, data, opts) => axios.post(MOVIESMOD_PROXY_URL ? `${MOVIESMOD_PROXY_URL}${encodeURIComponent(url)}` : url, data, opts),
                             validate: (url) => validateVideoUrl(url),
                             log: console
                         });
+
+                        // If the URL is a cdn.video-leech.pro link, resolve it to get the final Google Drive URL
+                        if (finalDownloadUrl && finalDownloadUrl.includes('cdn.video-leech.pro')) {
+                            console.log(`[MoviesMod] Detected cdn.video-leech.pro URL, resolving redirect to Google Drive...`);
+                            const resolvedUrl = await resolveVideoLeechRedirect(finalDownloadUrl);
+                            if (resolvedUrl && resolvedUrl !== finalDownloadUrl) {
+                                console.log(`[MoviesMod] ✓ Resolved to Google Drive URL: ${resolvedUrl.substring(0, 100)}...`);
+                                finalDownloadUrl = resolvedUrl;
+                            }
+                        }
 
                         if (!finalDownloadUrl) {
                             console.log(`[MoviesMod] ✗ Could not extract final link for ${quality}`);
