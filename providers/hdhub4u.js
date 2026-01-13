@@ -12,6 +12,11 @@ const fs = require('fs').promises;
 const path = require('path');
 const RedisCache = require('../utils/redisCache');
 
+// Debug logging flag - set DEBUG=true to enable verbose logging
+const DEBUG = process.env.DEBUG === 'true' || process.env.HDHUB4U_DEBUG === 'true';
+const log = DEBUG ? console.log : () => {};
+const logWarn = DEBUG ? console.warn : () => {};
+
 // Create an https agent to ignore SSL certificate errors
 const agent = new https.Agent({
     rejectUnauthorized: false
@@ -22,7 +27,7 @@ const DOMAINS_URL = "https://raw.githubusercontent.com/phisher98/TVVVV/refs/head
 
 // --- Caching Configuration ---
 const CACHE_ENABLED = process.env.DISABLE_CACHE !== 'true';
-console.log(`[HDHub4u Cache] Internal cache is ${CACHE_ENABLED ? 'enabled' : 'disabled'}.`);
+log(`[HDHub4u Cache] Internal cache is ${CACHE_ENABLED ? 'enabled' : 'disabled'}.`);
 const CACHE_DIR = process.env.VERCEL ? path.join('/tmp', '.hdhub4u_cache') : path.join(__dirname, '.cache', 'hdhub4u');
 const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
 
@@ -47,11 +52,11 @@ const getFromCache = async (key) => {
     // Try Redis cache first, then fallback to file system
     const cachedData = await redisCache.getFromCache(key, '', CACHE_DIR);
     if (cachedData) {
-        console.log(`[HDHub4u Cache] HIT for key: ${key}`);
+        log(`[HDHub4u Cache] HIT for key: ${key}`);
         return cachedData.data || cachedData; // Support both new format (data field) and legacy format
     }
 
-    console.log(`[HDHub4u Cache] MISS for key: ${key}`);
+    log(`[HDHub4u Cache] MISS for key: ${key}`);
     return null;
 };
 
@@ -64,7 +69,7 @@ const saveToCache = async (key, data) => {
 
     // Save to both Redis and file system
     await redisCache.saveToCache(key, cacheData, '', CACHE_DIR);
-    console.log(`[HDHub4u Cache] SAVED for key: ${key}`);
+    log(`[HDHub4u Cache] SAVED for key: ${key}`);
 };
 
 // Initialize cache directory on startup
@@ -73,9 +78,9 @@ ensureCacheDir();
 // --- Proxy Configuration ---
 const HDHUB4U_PROXY_URL = process.env.HDHUB4U_PROXY_URL;
 if (HDHUB4U_PROXY_URL) {
-    console.log(`[HDHub4u] Proxy support enabled: ${HDHUB4U_PROXY_URL}`);
+    log(`[HDHub4u] Proxy support enabled: ${HDHUB4U_PROXY_URL}`);
 } else {
-    console.log('[HDHub4u] No proxy configured, using direct connections');
+    log('[HDHub4u] No proxy configured, using direct connections');
 }
 
 /**
@@ -87,7 +92,7 @@ async function fetchAndUpdateDomain() {
         if (response.data && response.data.HDHUB4u) {
             const newDomain = response.data.HDHUB4u;
             if (newDomain !== MAIN_URL) {
-                console.log(`[HDHub4u] Updating domain from ${MAIN_URL} to ${newDomain}`);
+                log(`[HDHub4u] Updating domain from ${MAIN_URL} to ${newDomain}`);
                 MAIN_URL = newDomain;
                 HEADERS.Referer = `${MAIN_URL}/`;
             }
@@ -107,7 +112,7 @@ const HEADERS = {
 const makeRequest = async (url, options = {}) => {
     if (HDHUB4U_PROXY_URL) {
         const proxiedUrl = `${HDHUB4U_PROXY_URL}?url=${encodeURIComponent(url)}`;
-        console.log(`[HDHub4u] Using proxy for: ${url}`);
+        log(`[HDHub4u] Using proxy for: ${url}`);
         return axios.get(proxiedUrl, options);
     } else {
         return axios.get(url, options);
@@ -187,16 +192,16 @@ function cleanTitle(title) {
  */
 async function getRedirectLinks(url) {
     try {
-        console.log(`[HDHub4u] Processing redirect link: ${url}`);
+        log(`[HDHub4u] Processing redirect link: ${url}`);
         const response = await makeRequest(url, { headers: HEADERS, httpsAgent: agent });
         const doc = response.data;
 
         // Log response details for debugging
-        console.log(`[HDHub4u] Response status: ${response.status}`);
-        console.log(`[HDHub4u] Response headers:`, JSON.stringify(response.headers, null, 2));
-        console.log(`[HDHub4u] Page content length: ${doc.length}`);
-        console.log(`[HDHub4u] Page content preview (first 500 chars):`, doc.substring(0, 500));
-        console.log(`[HDHub4u] Page content preview (last 500 chars):`, doc.substring(Math.max(0, doc.length - 500)));
+        log(`[HDHub4u] Response status: ${response.status}`);
+        log(`[HDHub4u] Response headers:`, JSON.stringify(response.headers, null, 2));
+        log(`[HDHub4u] Page content length: ${doc.length}`);
+        log(`[HDHub4u] Page content preview (first 500 chars):`, doc.substring(0, 500));
+        log(`[HDHub4u] Page content preview (last 500 chars):`, doc.substring(Math.max(0, doc.length - 500)));
 
         const regex = /s\('o','([A-Za-z0-9+/=]+)'|ck\('_wp_http_\d+','([^']+)'/g;
         let combinedString = '';
@@ -207,23 +212,23 @@ async function getRedirectLinks(url) {
             if (extractedValue) {
                 combinedString += extractedValue;
                 matchCount++;
-                console.log(`[HDHub4u] Found match ${matchCount}: ${extractedValue.substring(0, 50)}...`);
+                log(`[HDHub4u] Found match ${matchCount}: ${extractedValue.substring(0, 50)}...`);
             }
         }
 
-        console.log(`[HDHub4u] Total matches found: ${matchCount}`);
-        console.log(`[HDHub4u] Combined string length: ${combinedString.length}`);
+        log(`[HDHub4u] Total matches found: ${matchCount}`);
+        log(`[HDHub4u] Combined string length: ${combinedString.length}`);
 
         if (!combinedString) {
             console.error("[HDHub4u] Could not find encoded strings in page.");
 
             // Check if this is an "Invalid Link" response from techyboy4u
             if (doc.trim() === "Invalid Link !!") {
-                console.log('[HDHub4u] Techyboy4u returned "Invalid Link" - link may be expired or blocked');
+                log('[HDHub4u] Techyboy4u returned "Invalid Link" - link may be expired or blocked');
                 return null; // Return null to indicate complete failure
             }
 
-            console.log('[HDHub4u] Searching for alternative patterns...');
+            log('[HDHub4u] Searching for alternative patterns...');
 
             // Try alternative patterns
             const altPatterns = [
@@ -242,9 +247,9 @@ async function getRedirectLinks(url) {
                 while ((altMatch = altRegex.exec(doc)) !== null) {
                     altMatches.push(altMatch[1]);
                 }
-                console.log(`[HDHub4u] Alternative pattern ${i + 1} (${altRegex}) found ${altMatches.length} matches`);
+                log(`[HDHub4u] Alternative pattern ${i + 1} (${altRegex}) found ${altMatches.length} matches`);
                 if (altMatches.length > 0) {
-                    console.log(`[HDHub4u] Sample matches:`, altMatches.slice(0, 3));
+                    log(`[HDHub4u] Sample matches:`, altMatches.slice(0, 3));
                 }
             }
 
@@ -286,13 +291,13 @@ async function loadExtractor(url, referer = MAIN_URL) {
 
     // Some links from the main site are redirectors that need to be resolved first.
     if (url.includes("?id=") || hostname.includes('techyboy4u')) {
-        console.log(`[HDHub4u] Processing redirect URL: ${url} (hostname: ${hostname})`);
+        log(`[HDHub4u] Processing redirect URL: ${url} (hostname: ${hostname})`);
         const finalLink = await getRedirectLinks(url);
         if (!finalLink) {
-            console.log(`[HDHub4u] Failed to resolve redirect link: ${url}`);
+            log(`[HDHub4u] Failed to resolve redirect link: ${url}`);
             return [];
         }
-        console.log(`[HDHub4u] Redirect resolved to: ${finalLink}`);
+        log(`[HDHub4u] Redirect resolved to: ${finalLink}`);
         return loadExtractor(finalLink, url);
     }
 
@@ -362,7 +367,7 @@ async function pixelDrainExtractor(link) {
                 }
             }
         } catch (e) {
-            console.warn(`[HDHub4u] Could not fetch file info for ${fileId}:`, e.message);
+            logWarn(`[HDHub4u] Could not fetch file info for ${fileId}:`, e.message);
         }
 
         const directUrl = `https://pixeldrain.com/api/file/${fileId}?download`;
@@ -605,9 +610,9 @@ async function search(query) {
     // Use /?s= (WordPress search) which returns static HTML
     // The /search.html?q= uses a JavaScript-based Typesense API which is blocked by Cloudflare for server requests
     const searchUrl = `${MAIN_URL}/?s=${encodeURIComponent(query)}`;
-    console.log(`[HDHub4u] Searching with URL: ${searchUrl}`);
+    log(`[HDHub4u] Searching with URL: ${searchUrl}`);
     const response = await makeRequest(searchUrl, { headers: HEADERS, httpsAgent: agent });
-    console.log(`[HDHub4u] Search response status: ${response.status}`);
+    log(`[HDHub4u] Search response status: ${response.status}`);
     const $ = cheerio.load(response.data);
 
     // Try multiple selectors for search results
@@ -685,9 +690,9 @@ async function search(query) {
         return true;
     });
 
-    console.log(`[HDHub4u] Parsed ${results.length} search results`);
+    log(`[HDHub4u] Parsed ${results.length} search results`);
     if (results.length > 0) {
-        console.log(`[HDHub4u] First result: ${results[0].title} - ${results[0].url}`);
+        log(`[HDHub4u] First result: ${results[0].title} - ${results[0].url}`);
     }
 
     return results;
@@ -699,9 +704,9 @@ async function search(query) {
 async function getDownloadLinks(mediaUrl) {
     await fetchAndUpdateDomain();
     HEADERS.Referer = `${MAIN_URL}/`;
-    console.log(`[HDHub4u] Fetching download links from: ${mediaUrl}`);
+    log(`[HDHub4u] Fetching download links from: ${mediaUrl}`);
     const response = await makeRequest(mediaUrl, { headers: HEADERS, httpsAgent: agent });
-    console.log(`[HDHub4u] Download page response status: ${response.status}`);
+    log(`[HDHub4u] Download page response status: ${response.status}`);
     const $ = cheerio.load(response.data);
 
     const typeRaw = $('h1.page-title span').text();
@@ -740,10 +745,10 @@ async function getDownloadLinks(mediaUrl) {
 
             if (text.match(/1080|720|4K|2160/i) && href) {
                 if (href.includes('techyboy4u.com')) {
-                    console.log(`[HDHub4u] Found techyboy4u quality redirect link: ${href} (text: ${text})`);
+                    log(`[HDHub4u] Found techyboy4u quality redirect link: ${href} (text: ${text})`);
                     initialLinks.push({ url: href, isQualityRedirect: true, priority: 1 });
                 } else {
-                    console.log(`[HDHub4u] Found alternative quality link: ${href} (text: ${text})`);
+                    log(`[HDHub4u] Found alternative quality link: ${href} (text: ${text})`);
                     initialLinks.push({ url: href, isQualityRedirect: false, priority: 2 });
                 }
             }
@@ -816,7 +821,7 @@ async function getDownloadLinks(mediaUrl) {
         });
     }
 
-    console.log(`[HDHub4u] Found ${initialLinks.length} initial hoster links. Now extracting...`);
+    log(`[HDHub4u] Found ${initialLinks.length} initial hoster links. Now extracting...`);
 
     const allFinalLinks = [];
     const promises = initialLinks.map(async (linkInfo) => {
@@ -910,59 +915,59 @@ function formatBytes(bytes, decimals = 2) {
  */
 async function getHDHub4uStreams(tmdbId, mediaType, title, year = null, seasonNum = null, episodeNum = null) {
     try {
-        console.log(`[HDHub4u] ===== STARTING STREAM FETCH =====`);
-        console.log(`[HDHub4u] Fetching streams for "${title}" (${year}) - TMDB ${mediaType}/${tmdbId}${seasonNum ? `, S${seasonNum}E${episodeNum}` : ''}`);
-        console.log(`[HDHub4u] TMDB ID: ${tmdbId}`);
-        console.log(`[HDHub4u] Current domain: ${MAIN_URL}`);
+        log(`[HDHub4u] ===== STARTING STREAM FETCH =====`);
+        log(`[HDHub4u] Fetching streams for "${title}" (${year}) - TMDB ${mediaType}/${tmdbId}${seasonNum ? `, S${seasonNum}E${episodeNum}` : ''}`);
+        log(`[HDHub4u] TMDB ID: ${tmdbId}`);
+        log(`[HDHub4u] Current domain: ${MAIN_URL}`);
 
         // Update domain before starting
         await fetchAndUpdateDomain();
 
         // Define cache key
         const cacheKey = `hdhub4u_final_v1_${mediaType}_${tmdbId}${seasonNum ? `_s${seasonNum}` : ''}${episodeNum ? `_e${episodeNum}` : ''}`;
-        console.log(`[HDHub4u] Cache key: ${cacheKey}`);
+        log(`[HDHub4u] Cache key: ${cacheKey}`);
 
         // Try to get from cache first
         const cachedData = await getFromCache(cacheKey);
         if (cachedData && cachedData.length > 0) {
-            console.log(`[HDHub4u] Returning ${cachedData.length} cached streams`);
+            log(`[HDHub4u] Returning ${cachedData.length} cached streams`);
             return cachedData;
         } else if (cachedData && cachedData.length === 0) {
-            console.log(`[HDHub4u] Cache contains empty data for ${cacheKey}. Refetching from source.`);
+            log(`[HDHub4u] Cache contains empty data for ${cacheKey}. Refetching from source.`);
         }
 
         // Use the title parameter passed from addon.js (no need for redundant TMDB call)
         if (!title) {
-            console.log(`[HDHub4u] No title provided for ${mediaType}/${tmdbId}`);
+            log(`[HDHub4u] No title provided for ${mediaType}/${tmdbId}`);
             return [];
         }
 
         // Search strategy: search for just the title first (more results), then filter by season
         // This works better than searching with "season X" appended
         let searchQuery = title;
-        console.log(`[HDHub4u] Searching for: "${searchQuery}"`);
+        log(`[HDHub4u] Searching for: "${searchQuery}"`);
 
         // Search for content
         let searchResults = await search(searchQuery);
-        console.log(`[HDHub4u] Search returned ${searchResults.length} results for query: ${searchQuery}`);
+        log(`[HDHub4u] Search returned ${searchResults.length} results for query: ${searchQuery}`);
 
         // If no results, try with year appended
         if (searchResults.length === 0 && year) {
             searchQuery = `${title} ${year}`;
-            console.log(`[HDHub4u] Retrying search with year: "${searchQuery}"`);
+            log(`[HDHub4u] Retrying search with year: "${searchQuery}"`);
             searchResults = await search(searchQuery);
-            console.log(`[HDHub4u] Retry search returned ${searchResults.length} results`);
+            log(`[HDHub4u] Retry search returned ${searchResults.length} results`);
         }
 
         if (searchResults.length === 0) {
-            console.log(`[HDHub4u] No search results found for "${title}"`);
+            log(`[HDHub4u] No search results found for "${title}"`);
             await saveToCache(cacheKey, []);
             return [];
         }
 
         // Log first few search results
         searchResults.slice(0, 5).forEach((result, index) => {
-            console.log(`[HDHub4u] Search result ${index + 1}: ${result.title} - ${result.url}`);
+            log(`[HDHub4u] Search result ${index + 1}: ${result.title} - ${result.url}`);
         });
 
         // Find best match - for TV shows, prioritize season match
@@ -973,11 +978,11 @@ async function getHDHub4uStreams(tmdbId, mediaType, title, year = null, seasonNu
             const seasonMatches = searchResults.filter(r => seasonPattern.test(r.title));
 
             if (seasonMatches.length > 0) {
-                console.log(`[HDHub4u] Found ${seasonMatches.length} results matching Season ${seasonNum}`);
+                log(`[HDHub4u] Found ${seasonMatches.length} results matching Season ${seasonNum}`);
                 bestMatch = seasonMatches[0];
             } else {
                 // No exact season match, use title similarity
-                console.log(`[HDHub4u] No exact season match found, using title similarity`);
+                log(`[HDHub4u] No exact season match found, using title similarity`);
                 const titles = searchResults.map(r => r.title);
                 const match = findBestMatch(title.toLowerCase(), titles.map(t => t.toLowerCase()));
                 if (match.bestMatch.rating > 0.3) {
@@ -998,15 +1003,15 @@ async function getHDHub4uStreams(tmdbId, mediaType, title, year = null, seasonNu
             }
         }
 
-        console.log(`[HDHub4u] ===== SELECTED MEDIA =====`);
-        console.log(`[HDHub4u] Selected: "${bestMatch.title}" - ${bestMatch.url}`);
-        console.log(`[HDHub4u] ===== EXTRACTING DOWNLOAD LINKS =====`);
+        log(`[HDHub4u] ===== SELECTED MEDIA =====`);
+        log(`[HDHub4u] Selected: "${bestMatch.title}" - ${bestMatch.url}`);
+        log(`[HDHub4u] ===== EXTRACTING DOWNLOAD LINKS =====`);
 
         // Get download links
         const { finalLinks, isMovie } = await getDownloadLinks(bestMatch.url);
 
         if (finalLinks.length === 0) {
-            console.log(`[HDHub4u] No download links found`);
+            log(`[HDHub4u] No download links found`);
             await saveToCache(cacheKey, []);
             return [];
         }
@@ -1159,7 +1164,7 @@ async function getHDHub4uStreams(tmdbId, mediaType, title, year = null, seasonNu
 
         // Validate links in parallel for each group
         const validationPromises = Array.from(streamGroups.entries()).map(async ([groupKey, groupStreams]) => {
-            console.log(`[HDHub4u] Validating ${groupStreams.length} links for ${groupKey}...`);
+            log(`[HDHub4u] Validating ${groupStreams.length} links for ${groupKey}...`);
 
             // Create validation promises for all streams in this group
             const streamValidations = groupStreams.map(async (stream, index) => {
@@ -1176,7 +1181,7 @@ async function getHDHub4uStreams(tmdbId, mediaType, title, year = null, seasonNu
                         // Extract actual filename from headers or URL
                         const actualFilename = extractFilename(response.headers, stream.url);
 
-                        console.log(`[HDHub4u] ✓ Link ${index + 1} validated for ${groupKey}${actualFilename ? ` - Filename: ${actualFilename}` : ''}`);
+                        log(`[HDHub4u] ✓ Link ${index + 1} validated for ${groupKey}${actualFilename ? ` - Filename: ${actualFilename}` : ''}`);
 
                         return {
                             ...stream,
@@ -1186,7 +1191,7 @@ async function getHDHub4uStreams(tmdbId, mediaType, title, year = null, seasonNu
                         };
                     }
                 } catch (error) {
-                    console.log(`[HDHub4u] ✗ Link ${index + 1} failed for ${groupKey}: ${error.message}`);
+                    log(`[HDHub4u] ✗ Link ${index + 1} failed for ${groupKey}: ${error.message}`);
                 }
                 return null;
             });
@@ -1210,7 +1215,7 @@ async function getHDHub4uStreams(tmdbId, mediaType, title, year = null, seasonNu
 
                 return selectedStream;
             } else if (groupStreams.length > 0) {
-                console.log(`[HDHub4u] No working links found for ${groupKey}, using first as fallback`);
+                log(`[HDHub4u] No working links found for ${groupKey}, using first as fallback`);
                 const fallbackStream = groupStreams[0];
 
                 // Try to extract filename for fallback stream too
@@ -1234,7 +1239,7 @@ async function getHDHub4uStreams(tmdbId, mediaType, title, year = null, seasonNu
         });
 
         // Wait for all group validations to complete
-        console.log(`[HDHub4u] Starting parallel validation of ${streamGroups.size} groups...`);
+        log(`[HDHub4u] Starting parallel validation of ${streamGroups.size} groups...`);
         const validationResults = await Promise.all(validationPromises);
         const uniqueStreams = validationResults.filter(stream => stream !== null);
 
@@ -1245,7 +1250,7 @@ async function getHDHub4uStreams(tmdbId, mediaType, title, year = null, seasonNu
             return qualityB - qualityA;
         });
 
-        console.log(`[HDHub4u] Successfully extracted ${uniqueStreams.length} validated streams from ${streams.length} total streams (${streamGroups.size} unique quality/source combinations)`);
+        log(`[HDHub4u] Successfully extracted ${uniqueStreams.length} validated streams from ${streams.length} total streams (${streamGroups.size} unique quality/source combinations)`);
 
         // Cache the results
         await saveToCache(cacheKey, uniqueStreams);

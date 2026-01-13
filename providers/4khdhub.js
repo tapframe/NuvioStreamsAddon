@@ -8,6 +8,11 @@ const path = require('path');
 const fs = require('fs').promises;
 const RedisCache = require('../utils/redisCache');
 
+// Debug logging flag - set DEBUG=true to enable verbose logging
+const DEBUG = process.env.DEBUG === 'true' || process.env['4KHDHUB_DEBUG'] === 'true';
+const log = DEBUG ? console.log : () => {};
+const logWarn = DEBUG ? console.warn : () => {};
+
 // Cache configuration
 const CACHE_ENABLED = process.env.DISABLE_CACHE !== 'true';
 const CACHE_DIR = process.env.VERCEL ? path.join('/tmp', '.4khdhub_cache') : path.join(__dirname, '.cache', '4khdhub');
@@ -52,7 +57,7 @@ async function getTmdbDetails(tmdbId, type) {
     try {
         const isSeries = type === 'series' || type === 'tv';
         const url = `https://api.themoviedb.org/3/${isSeries ? 'tv' : 'movie'}/${tmdbId}?api_key=${TMDB_API_KEY}`;
-        console.log(`[4KHDHub] Fetching TMDB details from: ${url}`);
+        log(`[4KHDHub] Fetching TMDB details from: ${url}`);
         const response = await axios.get(url);
         const data = response.data;
         // ...
@@ -297,15 +302,15 @@ async function get4KHDHubStreams(tmdbId, type, season = null, episode = null) {
     if (!tmdbDetails) return [];
 
     const { title, year } = tmdbDetails;
-    console.log(`[4KHDHub] Search: ${title} (${year})`);
+    log(`[4KHDHub] Search: ${title} (${year})`);
 
     const isSeries = type === 'series' || type === 'tv';
     const pageUrl = await fetchPageUrl(title, year, isSeries);
     if (!pageUrl) {
-        console.log(`[4KHDHub] Page not found`);
+        log(`[4KHDHub] Page not found`);
         return [];
     }
-    console.log(`[4KHDHub] Found page: ${pageUrl}`);
+    log(`[4KHDHub] Found page: ${pageUrl}`);
 
     const html = await fetchText(pageUrl);
     if (!html) return [];
@@ -335,7 +340,7 @@ async function get4KHDHubStreams(tmdbId, type, season = null, episode = null) {
         });
     }
 
-    console.log(`[4KHDHub] Processing ${itemsToProcess.length} items`);
+    log(`[4KHDHub] Processing ${itemsToProcess.length} items`);
 
     const streams = [];
 
@@ -343,7 +348,7 @@ async function get4KHDHubStreams(tmdbId, type, season = null, episode = null) {
         try {
             const sourceResult = await extractSourceResults($, item);
             if (sourceResult && sourceResult.url) {
-                console.log(`[4KHDHub] Extracting from HubCloud: ${sourceResult.url}`);
+                log(`[4KHDHub] Extracting from HubCloud: ${sourceResult.url}`);
                 const extractedLinks = await extractHubCloud(sourceResult.url, sourceResult.meta);
 
                 for (const link of extractedLinks) {

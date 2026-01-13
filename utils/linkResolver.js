@@ -2,13 +2,17 @@ const cheerio = require('cheerio');
 const { URL, URLSearchParams } = require('url');
 const FormData = require('form-data');
 
+// Debug logging flag - set DEBUG=true to enable verbose logging
+const DEBUG = process.env.DEBUG === 'true' || process.env.LINKRESOLVER_DEBUG === 'true';
+const defaultLog = DEBUG ? console : { log: () => {}, warn: () => {} };
+
 // Shared helpers for resolving driveseed/driveleech style redirects and extracting final download URLs.
 // This util is proxy-agnostic: providers must inject their own network functions and validators.
 // All functions accept injected dependencies so proxy, cookies, and caching stay in provider code.
 
 // --- Default extractors (can be used directly or replaced by providers) ---
 
-async function defaultTryInstantDownload($, { post, origin, log = console }) {
+async function defaultTryInstantDownload($, { post, origin, log = defaultLog }) {
   const allInstant = $('a:contains("Instant Download"), a:contains("Instant")');
   log.log(`[LinkResolver] defaultTryInstantDownload: found ${allInstant.length} matching anchor(s).`);
   const instantLink = allInstant.attr('href');
@@ -71,7 +75,7 @@ async function defaultTryInstantDownload($, { post, origin, log = console }) {
   }
 }
 
-async function defaultTryResumeCloud($, { origin, get, validate, log = console }) {
+async function defaultTryResumeCloud($, { origin, get, validate, log = defaultLog }) {
   let resumeAnchor = $('a:contains("Resume Cloud"), a:contains("Cloud Resume Download"), a:contains("Resume Worker Bot"), a:contains("Worker")');
   log.log(`[LinkResolver] defaultTryResumeCloud: found ${resumeAnchor.length} candidate button(s).`);
 
@@ -112,7 +116,7 @@ async function defaultTryResumeCloud($, { origin, get, validate, log = console }
 
 // --- Core steps ---
 
-async function followRedirectToFilePage({ redirectUrl, get, log = console }) {
+async function followRedirectToFilePage({ redirectUrl, get, log = defaultLog }) {
   const res = await get(redirectUrl, { maxRedirects: 10 });
   let $ = cheerio.load(res.data);
   const scriptContent = $('script').html();
@@ -133,7 +137,7 @@ async function extractFinalDownloadFromFilePage($, {
   get,
   post,
   validate,
-  log = console,
+  log = defaultLog,
   tryResumeCloud = defaultTryResumeCloud,
   tryInstantDownload = defaultTryInstantDownload
 }) {
@@ -324,7 +328,7 @@ async function extractFinalDownloadFromFilePage($, {
 
 // Resolve SID (tech.unblockedgames.world etc.) to intermediate redirect (driveleech/driveseed)
 // createSession(jar) must return an axios-like instance with get/post that respects proxy and cookie jar
-async function resolveSidToRedirect({ sidUrl, createSession, jar, log = console }) {
+async function resolveSidToRedirect({ sidUrl, createSession, jar, log = defaultLog }) {
   const session = await createSession(jar);
   // Step 0
   const step0 = await session.get(sidUrl);

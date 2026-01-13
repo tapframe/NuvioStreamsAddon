@@ -3,6 +3,11 @@ const Redis = require('ioredis');
 const fs = require('fs').promises;
 const path = require('path');
 
+// Debug logging flag - set DEBUG=true to enable verbose logging
+const DEBUG = process.env.DEBUG === 'true' || process.env.REDIS_CACHE_DEBUG === 'true';
+const log = DEBUG ? console.log : () => {};
+const logWarn = DEBUG ? console.warn : () => {};
+
 // Redis Cache Utility for NuvioStreams Providers
 class RedisCache {
     constructor(providerName = 'Generic') {
@@ -15,7 +20,7 @@ class RedisCache {
     initializeRedis() {
         if (process.env.USE_REDIS_CACHE === 'true') {
             try {
-                console.log(`[${this.providerName} Cache] Initializing Redis. REDIS_URL from env: ${process.env.REDIS_URL ? 'exists and has value' : 'MISSING or empty'}`);
+                log(`[${this.providerName} Cache] Initializing Redis. REDIS_URL from env: ${process.env.REDIS_URL ? 'exists and has value' : 'MISSING or empty'}`);
                 if (!process.env.REDIS_URL) {
                     throw new Error(`REDIS_URL environment variable is not set or is empty for ${this.providerName} Redis.`);
                 }
@@ -46,7 +51,7 @@ class RedisCache {
                 });
 
                 this.redisClient.on('connect', () => {
-                    console.log(`[${this.providerName} Cache] Successfully connected to Redis server.`);
+                    log(`[${this.providerName} Cache] Successfully connected to Redis server.`);
                     
                     // Redis Keep-Alive for managed services like Upstash
                     if (this.redisKeepAliveInterval) {
@@ -56,7 +61,7 @@ class RedisCache {
                         try {
                             await this.redisClient.ping();
                         } catch (pingError) {
-                            console.warn(`[${this.providerName} Cache] Redis keep-alive ping failed: ${pingError.message}`);
+                            logWarn(`[${this.providerName} Cache] Redis keep-alive ping failed: ${pingError.message}`);
                         }
                     }, 4 * 60 * 1000); // 4 minutes
                 });
@@ -66,7 +71,7 @@ class RedisCache {
                 });
 
                 this.redisClient.on('close', () => {
-                    console.log(`[${this.providerName} Cache] Redis connection closed.`);
+                    log(`[${this.providerName} Cache] Redis connection closed.`);
                     if (this.redisKeepAliveInterval) {
                         clearInterval(this.redisKeepAliveInterval);
                         this.redisKeepAliveInterval = null;
@@ -78,13 +83,13 @@ class RedisCache {
                 this.redisClient = null;
             }
         } else {
-            console.log(`[${this.providerName} Cache] Redis cache is disabled (USE_REDIS_CACHE is not 'true'). Using file system cache only.`);
+            log(`[${this.providerName} Cache] Redis cache is disabled (USE_REDIS_CACHE is not 'true'). Using file system cache only.`);
         }
     }
 
     async getFromCache(cacheKey, subDir = '', cacheDir = null) {
         if (process.env.DISABLE_CACHE === 'true') {
-            console.log(`[${this.providerName} Cache] CACHE DISABLED: Skipping read for ${path.join(subDir, cacheKey)}`);
+            log(`[${this.providerName} Cache] CACHE DISABLED: Skipping read for ${path.join(subDir, cacheKey)}`);
             return null;
         }
 
@@ -95,19 +100,19 @@ class RedisCache {
             try {
                 const redisData = await this.redisClient.get(fullCacheKey);
                 if (redisData !== null) {
-                    console.log(`[${this.providerName} Cache] REDIS CACHE HIT for: ${fullCacheKey}`);
+                    log(`[${this.providerName} Cache] REDIS CACHE HIT for: ${fullCacheKey}`);
                     try {
                         return JSON.parse(redisData);
                     } catch (e) {
                         return redisData;
                     }
                 }
-                console.log(`[${this.providerName} Cache] REDIS CACHE MISS for: ${fullCacheKey}`);
+                log(`[${this.providerName} Cache] REDIS CACHE MISS for: ${fullCacheKey}`);
             } catch (redisError) {
-                console.warn(`[${this.providerName} Cache] REDIS CACHE READ ERROR for ${fullCacheKey}: ${redisError.message}. Falling back to file system cache.`);
+                logWarn(`[${this.providerName} Cache] REDIS CACHE READ ERROR for ${fullCacheKey}: ${redisError.message}. Falling back to file system cache.`);
             }
         } else if (this.redisClient) {
-            console.log(`[${this.providerName} Cache] Redis client not ready (status: ${this.redisClient.status}). Skipping Redis read for ${fullCacheKey}, trying file system.`);
+            log(`[${this.providerName} Cache] Redis client not ready (status: ${this.redisClient.status}). Skipping Redis read for ${fullCacheKey}, trying file system.`);
         }
 
         // Fallback to file system cache
@@ -115,15 +120,15 @@ class RedisCache {
             const cachePath = path.join(cacheDir, subDir, `${cacheKey}.json`);
             try {
                 const fileData = await fs.readFile(cachePath, 'utf-8');
-                console.log(`[${this.providerName} Cache] FILE SYSTEM CACHE HIT for: ${path.join(subDir, cacheKey)}`);
+                log(`[${this.providerName} Cache] FILE SYSTEM CACHE HIT for: ${path.join(subDir, cacheKey)}`);
                 
                 // If Redis is available, populate Redis for next time (permanent cache)
                 if (this.redisClient && this.redisClient.status === 'ready') {
                     try {
                         await this.redisClient.set(fullCacheKey, fileData);
-                        console.log(`[${this.providerName} Cache] Populated REDIS CACHE from FILE SYSTEM for: ${fullCacheKey} (PERMANENT - no expiration)`);
+                        log(`[${this.providerName} Cache] Populated REDIS CACHE from FILE SYSTEM for: ${fullCacheKey} (PERMANENT - no expiration)`);
                     } catch (redisSetError) {
-                        console.warn(`[${this.providerName} Cache] REDIS CACHE SET ERROR (after file read) for ${fullCacheKey}: ${redisSetError.message}`);
+                        logWarn(`[${this.providerName} Cache] REDIS CACHE SET ERROR (after file read) for ${fullCacheKey}: ${redisSetError.message}`);
                     }
                 }
                 
@@ -134,9 +139,9 @@ class RedisCache {
                 }
             } catch (error) {
                 if (error.code !== 'ENOENT') {
-                    console.warn(`[${this.providerName} Cache] FILE SYSTEM CACHE READ ERROR for ${cacheKey}: ${error.message}`);
+                    logWarn(`[${this.providerName} Cache] FILE SYSTEM CACHE READ ERROR for ${cacheKey}: ${error.message}`);
                 } else {
-                    console.log(`[${this.providerName} Cache] FILE SYSTEM CACHE MISS for: ${path.join(subDir, cacheKey)}`);
+                    log(`[${this.providerName} Cache] FILE SYSTEM CACHE MISS for: ${path.join(subDir, cacheKey)}`);
                 }
                 return null;
             }
@@ -147,7 +152,7 @@ class RedisCache {
 
     async saveToCache(cacheKey, content, subDir = '', cacheDir = null, ttlSeconds = null) {
         if (process.env.DISABLE_CACHE === 'true') {
-            console.log(`[${this.providerName} Cache] CACHE DISABLED: Skipping write for ${path.join(subDir, cacheKey)}`);
+            log(`[${this.providerName} Cache] CACHE DISABLED: Skipping write for ${path.join(subDir, cacheKey)}`);
             return;
         }
 
@@ -159,16 +164,16 @@ class RedisCache {
             try {
                 if (ttlSeconds) {
                     await this.redisClient.setex(fullCacheKey, ttlSeconds, dataToSave);
-                    console.log(`[${this.providerName} Cache] SAVED TO REDIS CACHE: ${fullCacheKey} (TTL: ${ttlSeconds}s)`);
+                    log(`[${this.providerName} Cache] SAVED TO REDIS CACHE: ${fullCacheKey} (TTL: ${ttlSeconds}s)`);
                 } else {
                     await this.redisClient.set(fullCacheKey, dataToSave);
-                    console.log(`[${this.providerName} Cache] SAVED TO REDIS CACHE: ${fullCacheKey} (PERMANENT - no expiration)`);
+                    log(`[${this.providerName} Cache] SAVED TO REDIS CACHE: ${fullCacheKey} (PERMANENT - no expiration)`);
                 }
             } catch (redisError) {
-                console.warn(`[${this.providerName} Cache] REDIS CACHE WRITE ERROR for ${fullCacheKey}: ${redisError.message}. Proceeding with file system cache.`);
+                logWarn(`[${this.providerName} Cache] REDIS CACHE WRITE ERROR for ${fullCacheKey}: ${redisError.message}. Proceeding with file system cache.`);
             }
         } else if (this.redisClient) {
-            console.log(`[${this.providerName} Cache] Redis client not ready (status: ${this.redisClient.status}). Skipping Redis write for ${fullCacheKey}.`);
+            log(`[${this.providerName} Cache] Redis client not ready (status: ${this.redisClient.status}). Skipping Redis write for ${fullCacheKey}.`);
         }
 
         // Always save to file system cache as a fallback
@@ -178,9 +183,9 @@ class RedisCache {
                 await this.ensureCacheDir(fullSubDir);
                 const cachePath = path.join(fullSubDir, `${cacheKey}.json`);
                 await fs.writeFile(cachePath, dataToSave, 'utf-8');
-                console.log(`[${this.providerName} Cache] SAVED TO FILE SYSTEM CACHE: ${path.join(subDir, cacheKey)}`);
+                log(`[${this.providerName} Cache] SAVED TO FILE SYSTEM CACHE: ${path.join(subDir, cacheKey)}`);
             } catch (error) {
-                console.warn(`[${this.providerName} Cache] FILE SYSTEM CACHE WRITE ERROR for ${cacheKey}: ${error.message}`);
+                logWarn(`[${this.providerName} Cache] FILE SYSTEM CACHE WRITE ERROR for ${cacheKey}: ${error.message}`);
             }
         }
     }
@@ -196,7 +201,7 @@ class RedisCache {
             await fs.mkdir(dirPath, { recursive: true });
         } catch (error) {
             if (error.code !== 'EEXIST') {
-                console.warn(`[${this.providerName} Cache] Warning: Could not create cache directory ${dirPath}: ${error.message}`);
+                logWarn(`[${this.providerName} Cache] Warning: Could not create cache directory ${dirPath}: ${error.message}`);
             }
         }
     }

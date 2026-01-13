@@ -11,11 +11,16 @@ const fs = require('fs').promises;
 const path = require('path');
 const RedisCache = require('../utils/redisCache');
 
+// Debug logging flag - set DEBUG=true to enable verbose logging
+const DEBUG = process.env.DEBUG === 'true' || process.env.MOVIESDRIVE_DEBUG === 'true';
+const log = DEBUG ? console.log : () => {};
+const logWarn = DEBUG ? console.warn : () => {};
+
 // Using Cheerio for HTML parsing (more memory efficient than JSDOM)
 
 // Cache configuration
 const CACHE_ENABLED = process.env.DISABLE_CACHE !== 'true';
-console.log(`[MoviesDrive] Internal cache is ${CACHE_ENABLED ? 'enabled' : 'disabled'}.`);
+log(`[MoviesDrive] Internal cache is ${CACHE_ENABLED ? 'enabled' : 'disabled'}.`);
 const CACHE_DIR = process.env.VERCEL ? path.join('/tmp', '.moviesdrive_cache') : path.join(__dirname, '.cache', 'moviesdrive');
 
 // Initialize Redis cache
@@ -107,7 +112,7 @@ function makeRequest(url, callback, allowRedirects = true) {
 function getBaseUrl(callback) {
     makeRequest('https://raw.githubusercontent.com/SaurabhKaperwan/Utils/refs/heads/main/urls.json', (err, data) => {
         if (err) {
-            console.log('Using default URL');
+            log('Using default URL');
             callback(mainUrl);
             return;
         }
@@ -116,11 +121,11 @@ function getBaseUrl(callback) {
             const newUrl = json.moviesdrive;
             if (newUrl) {
                 mainUrl = newUrl;
-                console.log('Updated base URL to:', mainUrl);
+                log('Updated base URL to:', mainUrl);
             }
             callback(mainUrl);
         } catch (e) {
-            console.log('Error parsing URLs JSON, using default');
+            log('Error parsing URLs JSON, using default');
             callback(mainUrl);
         }
     });
@@ -134,15 +139,15 @@ async function searchContent(query, callback) {
         // Check cache first
         let cachedResults = await getFromCache(cacheKey);
         if (cachedResults && cachedResults.length > 0) {
-            console.log(`[MoviesDrive] Cache HIT for search: ${query}. Using ${cachedResults.length} cached results.`);
+            log(`[MoviesDrive] Cache HIT for search: ${query}. Using ${cachedResults.length} cached results.`);
             callback(cachedResults);
             return;
         }
 
         if (cachedResults && cachedResults.length === 0) {
-            console.log(`[MoviesDrive] Cache contains empty data for search: ${query}. Refetching from source.`);
+            log(`[MoviesDrive] Cache contains empty data for search: ${query}. Refetching from source.`);
         } else {
-            console.log(`[MoviesDrive] Cache MISS for search: ${query}. Fetching from source.`);
+            log(`[MoviesDrive] Cache MISS for search: ${query}. Fetching from source.`);
         }
 
         const searchResults = [];
@@ -200,7 +205,7 @@ async function searchContent(query, callback) {
                     searchPage(page + 1);
                 } else {
                     // Cache the final results
-                    console.log(`[MoviesDrive] Caching ${searchResults.length} search results for: ${query}`);
+                    log(`[MoviesDrive] Caching ${searchResults.length} search results for: ${query}`);
                     saveToCache(cacheKey, searchResults);
                     callback(searchResults);
                 }
@@ -608,9 +613,9 @@ function findBestMatch(query, searchResults) {
     scoredResults.sort((a, b) => b.score - a.score);
 
     // Log top matches for debugging
-    console.log('Top search matches:');
+    log('Top search matches:');
     scoredResults.slice(0, 3).forEach((result, index) => {
-        console.log(`${index + 1}. ${result.title} (Score: ${result.score.toFixed(1)})`);
+        log(`${index + 1}. ${result.title} (Score: ${result.score.toFixed(1)})`);
     });
 
     return scoredResults[0];
@@ -737,16 +742,16 @@ async function extractStreamingLinks(url, callback, episodeInfo = null) {
         // Check cache for intermediate download links (not final streaming links)
         let cachedDownloadLinks = await getFromCache(cacheKey);
         if (cachedDownloadLinks && cachedDownloadLinks.length > 0) {
-            console.log(`[MoviesDrive] Cache HIT for download links: ${url}. Using ${cachedDownloadLinks.length} cached download links.`);
+            log(`[MoviesDrive] Cache HIT for download links: ${url}. Using ${cachedDownloadLinks.length} cached download links.`);
             // Process cached download links to get fresh streaming links
             processDownloadLinks(cachedDownloadLinks, callback, episodeInfo);
             return;
         }
 
         if (cachedDownloadLinks && cachedDownloadLinks.length === 0) {
-            console.log(`[MoviesDrive] Cache contains empty data for download links: ${url}. Refetching from source.`);
+            log(`[MoviesDrive] Cache contains empty data for download links: ${url}. Refetching from source.`);
         } else {
-            console.log(`[MoviesDrive] Cache MISS for download links: ${url}. Fetching from source.`);
+            log(`[MoviesDrive] Cache MISS for download links: ${url}. Fetching from source.`);
         }
 
         makeRequest(url, (err, html) => {
@@ -783,7 +788,7 @@ async function extractStreamingLinks(url, callback, episodeInfo = null) {
             }
 
             // Cache the download links (intermediate data, not final streaming links)
-            console.log(`[MoviesDrive] Caching ${downloadLinks.length} download links for: ${url}`);
+            log(`[MoviesDrive] Caching ${downloadLinks.length} download links for: ${url}`);
             saveToCache(cacheKey, downloadLinks);
 
             // Process download links to get fresh streaming links
@@ -808,13 +813,13 @@ function findStreamingLinks(query, callback) {
             .replace(/Season\s*\d{1,2}\s*Episode\s*\d{1,2}/i, '')
             .replace(/\d{1,2}x\d{1,2}/i, '')
             .trim();
-        console.log(`Searching for series: "${searchQuery}" and filtering for S${episodeInfo.season.toString().padStart(2, '0')}E${episodeInfo.episode.toString().padStart(2, '0')}`);
+        log(`Searching for series: "${searchQuery}" and filtering for S${episodeInfo.season.toString().padStart(2, '0')}E${episodeInfo.episode.toString().padStart(2, '0')}`);
     }
 
     getBaseUrl((baseUrl) => {
         searchContent(searchQuery, (searchResults) => {
             if (searchResults.length === 0) {
-                console.log('No search results found');
+                log('No search results found');
                 callback([]);
                 return;
             }
@@ -822,12 +827,12 @@ function findStreamingLinks(query, callback) {
             // Find the best matching result based on title similarity
             const bestMatch = findBestMatch(searchQuery, searchResults);
             if (!bestMatch) {
-                console.log('No suitable match found');
+                log('No suitable match found');
                 callback([]);
                 return;
             }
 
-            console.log(`\nProcessing best match: ${bestMatch.title}\n`);
+            log(`\nProcessing best match: ${bestMatch.title}\n`);
 
             // Pass episode info to extractStreamingLinks for early filtering
             extractStreamingLinks(bestMatch.url, (streamingLinks) => {
@@ -861,21 +866,21 @@ async function getTMDBMetadata(tmdbId, mediaType) {
         if (CACHE_ENABLED) {
             const cachedData = await getFromCache(cacheKey);
             if (cachedData !== null) {
-                console.log(`[MoviesDrive] Cache hit for TMDB metadata: ${cacheKey}`);
+                log(`[MoviesDrive] Cache hit for TMDB metadata: ${cacheKey}`);
                 // If cached data is empty, refetch
                 if (!cachedData || Object.keys(cachedData).length === 0) {
-                    console.log(`[MoviesDrive] Cached TMDB data is empty, refetching: ${cacheKey}`);
+                    log(`[MoviesDrive] Cached TMDB data is empty, refetching: ${cacheKey}`);
                 } else {
                     return cachedData;
                 }
             } else {
-                console.log(`[MoviesDrive] Cache miss for TMDB metadata: ${cacheKey}`);
+                log(`[MoviesDrive] Cache miss for TMDB metadata: ${cacheKey}`);
             }
         }
 
         const tmdbApiKey = process.env.TMDB_API_KEY;
         if (!tmdbApiKey) {
-            console.warn('[MoviesDrive] TMDB API key not found, using TMDB ID only');
+            logWarn('[MoviesDrive] TMDB API key not found, using TMDB ID only');
             const result = null;
             if (CACHE_ENABLED) {
                 await saveToCache(cacheKey, result);
@@ -995,33 +1000,33 @@ function convertToStremioFormat(links, mediaType) {
 // Main function to get streams from MoviesDrive
 async function getMoviesDriveStreams(tmdbId, mediaType, season = null, episode = null) {
     try {
-        console.log(`[MoviesDrive] Fetching streams for TMDB ID: ${tmdbId}, Type: ${mediaType}`);
+        log(`[MoviesDrive] Fetching streams for TMDB ID: ${tmdbId}, Type: ${mediaType}`);
 
         // Get metadata from TMDB to construct search query
         const metadata = await getTMDBMetadata(tmdbId, mediaType);
         if (!metadata) {
-            console.log(`[MoviesDrive] Could not fetch metadata for TMDB ID: ${tmdbId}`);
+            log(`[MoviesDrive] Could not fetch metadata for TMDB ID: ${tmdbId}`);
             return [];
         }
 
         // Construct search query
         const searchQuery = constructSearchQuery(metadata, mediaType, season, episode);
         if (!searchQuery) {
-            console.log(`[MoviesDrive] Could not construct search query`);
+            log(`[MoviesDrive] Could not construct search query`);
             return [];
         }
 
-        console.log(`[MoviesDrive] Searching for: "${searchQuery}"`);
+        log(`[MoviesDrive] Searching for: "${searchQuery}"`);
 
         // Search for streaming links
         const links = await promisifyFindStreamingLinks(searchQuery);
 
         if (!links || links.length === 0) {
-            console.log(`[MoviesDrive] No streams found for query: "${searchQuery}"`);
+            log(`[MoviesDrive] No streams found for query: "${searchQuery}"`);
             return [];
         }
 
-        console.log(`[MoviesDrive] Found ${links.length} streaming links`);
+        log(`[MoviesDrive] Found ${links.length} streaming links`);
 
         // Convert to Stremio format
         const stremioStreams = convertToStremioFormat(links, mediaType);

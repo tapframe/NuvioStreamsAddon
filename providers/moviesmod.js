@@ -14,6 +14,11 @@ const { findBestMatch } = require('string-similarity');
 const RedisCache = require('../utils/redisCache');
 const { followRedirectToFilePage, extractFinalDownloadFromFilePage } = require('../utils/linkResolver');
 
+// Debug logging flag - set DEBUG=true to enable verbose logging
+const DEBUG = process.env.DEBUG === 'true' || process.env.MOVIESMOD_DEBUG === 'true';
+const log = DEBUG ? console.log : () => {};
+const logWarn = DEBUG ? console.warn : () => {};
+
 // Dynamic import for axios-cookiejar-support
 let axiosCookieJarSupport = null;
 const getAxiosCookieJarSupport = async () => {
@@ -30,9 +35,9 @@ function escapeRegExp(string) {
 // --- Proxy Configuration ---
 const MOVIESMOD_PROXY_URL = process.env.MOVIESMOD_PROXY_URL;
 if (MOVIESMOD_PROXY_URL) {
-    console.log(`[MoviesMod] Proxy support enabled: ${MOVIESMOD_PROXY_URL}`);
+    log(`[MoviesMod] Proxy support enabled: ${MOVIESMOD_PROXY_URL}`);
 } else {
-    console.log('[MoviesMod] No proxy configured, using direct connections');
+    log('[MoviesMod] No proxy configured, using direct connections');
 }
 
 // --- Domain Fetching ---
@@ -46,7 +51,7 @@ async function verifyDomain(domain, timeout = 5000) {
         await axios.head(domain, { timeout, maxRedirects: 3 });
         return true;
     } catch (error) {
-        console.warn(`[MoviesMod] Domain ${domain} is not reachable: ${error.message}`);
+        logWarn(`[MoviesMod] Domain ${domain} is not reachable: ${error.message}`);
         return false;
     }
 }
@@ -58,7 +63,7 @@ async function getMoviesModDomain() {
     }
 
     try {
-        console.log('[MoviesMod] Fetching latest domain...');
+        log('[MoviesMod] Fetching latest domain...');
         const response = await makeRequest('https://raw.githubusercontent.com/phisher98/TVVVV/refs/heads/main/domains.json', { timeout: 10000 });
         if (response.data && response.data.moviesmod) {
             const remoteDomain = response.data.moviesmod;
@@ -66,19 +71,19 @@ async function getMoviesModDomain() {
             if (await verifyDomain(remoteDomain)) {
                 moviesModDomain = remoteDomain;
                 domainCacheTimestamp = now;
-                console.log(`[MoviesMod] Updated domain to: ${moviesModDomain}`);
+                log(`[MoviesMod] Updated domain to: ${moviesModDomain}`);
             } else {
-                console.warn(`[MoviesMod] Remote domain ${remoteDomain} is not reachable, keeping fallback.`);
+                logWarn(`[MoviesMod] Remote domain ${remoteDomain} is not reachable, keeping fallback.`);
                 // Try to verify fallback domain
                 const fallbackDomain = 'https://moviesmod.build';
                 if (await verifyDomain(fallbackDomain)) {
                     moviesModDomain = fallbackDomain;
                     domainCacheTimestamp = now;
-                    console.log(`[MoviesMod] Using verified fallback domain: ${moviesModDomain}`);
+                    log(`[MoviesMod] Using verified fallback domain: ${moviesModDomain}`);
                 }
             }
         } else {
-            console.warn('[MoviesMod] Domain JSON fetched, but "moviesmod" key was not found. Using fallback.');
+            logWarn('[MoviesMod] Domain JSON fetched, but "moviesmod" key was not found. Using fallback.');
         }
     } catch (error) {
         console.error(`[MoviesMod] Failed to fetch latest domain, using fallback. Error: ${error.message}`);
@@ -88,7 +93,7 @@ async function getMoviesModDomain() {
 
 // --- Caching Configuration ---
 const CACHE_ENABLED = process.env.DISABLE_CACHE !== 'true';
-console.log(`[MoviesMod Cache] Internal cache is ${CACHE_ENABLED ? 'enabled' : 'disabled'}.`);
+log(`[MoviesMod Cache] Internal cache is ${CACHE_ENABLED ? 'enabled' : 'disabled'}.`);
 const CACHE_DIR = process.env.VERCEL ? path.join('/tmp', '.moviesmod_cache') : path.join(__dirname, '.cache', 'moviesmod');
 
 // Initialize Redis cache
@@ -137,11 +142,11 @@ const makeRequest = async (url, options = {}) => {
     if (MOVIESMOD_PROXY_URL) {
         // Route through proxy
         const proxiedUrl = `${MOVIESMOD_PROXY_URL}${encodeURIComponent(url)}`;
-        console.log(`[MoviesMod] Making proxied request to: ${url}`);
+        log(`[MoviesMod] Making proxied request to: ${url}`);
         return axios.get(proxiedUrl, options);
     } else {
         // Direct request
-        console.log(`[MoviesMod] Making direct request to: ${url}`);
+        log(`[MoviesMod] Making direct request to: ${url}`);
         return axios.get(url, options);
     }
 };
@@ -176,18 +181,18 @@ const createProxiedSession = async (jar) => {
 
     // If proxy is enabled, wrap the session methods to use proxy
     if (MOVIESMOD_PROXY_URL) {
-        console.log(`[MoviesMod] Creating SID session with proxy: ${MOVIESMOD_PROXY_URL}`);
+        log(`[MoviesMod] Creating SID session with proxy: ${MOVIESMOD_PROXY_URL}`);
         const originalGet = session.get.bind(session);
         const originalPost = session.post.bind(session);
 
         session.get = async (url, options = {}) => {
             const proxiedUrl = `${MOVIESMOD_PROXY_URL}${encodeURIComponent(url)}`;
-            console.log(`[MoviesMod] Making proxied SID GET request to: ${url}`);
+            log(`[MoviesMod] Making proxied SID GET request to: ${url}`);
 
             // Extract cookies from jar and add to headers
             const cookieString = await getCookiesForUrl(url);
             if (cookieString) {
-                console.log(`[MoviesMod] Adding cookies to proxied request: ${cookieString}`);
+                log(`[MoviesMod] Adding cookies to proxied request: ${cookieString}`);
                 options.headers = {
                     ...options.headers,
                     'Cookie': cookieString
@@ -199,12 +204,12 @@ const createProxiedSession = async (jar) => {
 
         session.post = async (url, data, options = {}) => {
             const proxiedUrl = `${MOVIESMOD_PROXY_URL}${encodeURIComponent(url)}`;
-            console.log(`[MoviesMod] Making proxied SID POST request to: ${url}`);
+            log(`[MoviesMod] Making proxied SID POST request to: ${url}`);
 
             // Extract cookies from jar and add to headers
             const cookieString = await getCookiesForUrl(url);
             if (cookieString) {
-                console.log(`[MoviesMod] Adding cookies to proxied request: ${cookieString}`);
+                log(`[MoviesMod] Adding cookies to proxied request: ${cookieString}`);
                 options.headers = {
                     ...options.headers,
                     'Cookie': cookieString
@@ -361,7 +366,7 @@ async function resolveIntermediateLink(initialUrl, refererUrl, quality) {
 
                     if (seasonIsMatch && allPartsMatch) {
                         episodePageLink = link.attr('href');
-                        console.log(`[MoviesMod] Found specific match for "${quality}" -> "${link.text().trim()}": ${episodePageLink}`);
+                        log(`[MoviesMod] Found specific match for "${quality}" -> "${link.text().trim()}": ${episodePageLink}`);
                         return false; // Break loop, we found our specific link
                     }
                 });
@@ -463,7 +468,7 @@ async function resolveIntermediateLink(initialUrl, refererUrl, quality) {
             });
             return finalLinks;
         } else {
-            console.warn(`[MoviesMod] Unknown hostname: ${urlObject.hostname}`);
+            logWarn(`[MoviesMod] Unknown hostname: ${urlObject.hostname}`);
             return [];
         }
     } catch (error) {
@@ -474,7 +479,7 @@ async function resolveIntermediateLink(initialUrl, refererUrl, quality) {
 
 // Function to resolve tech.unblockedgames.world links to driveleech URLs (adapted from UHDMovies)
 async function resolveTechUnblockedLink(sidUrl) {
-    console.log(`[MoviesMod] Resolving SID link: ${sidUrl}`);
+    log(`[MoviesMod] Resolving SID link: ${sidUrl}`);
     const { origin } = new URL(sidUrl);
     const jar = new CookieJar();
 
@@ -483,7 +488,7 @@ async function resolveTechUnblockedLink(sidUrl) {
 
     try {
         // Step 0: Get the _wp_http value
-        console.log("  [SID] Step 0: Fetching initial page...");
+        log("  [SID] Step 0: Fetching initial page...");
         const responseStep0 = await session.get(sidUrl);
         let $ = cheerio.load(responseStep0.data);
         const initialForm = $('#landing');
@@ -496,14 +501,14 @@ async function resolveTechUnblockedLink(sidUrl) {
         }
 
         // Step 1: POST to the first form's action URL
-        console.log("  [SID] Step 1: Submitting initial form...");
+        log("  [SID] Step 1: Submitting initial form...");
         const step1Data = new URLSearchParams({ '_wp_http': wp_http_step1 });
         const responseStep1 = await session.post(action_url_step1, step1Data, {
             headers: { 'Referer': sidUrl, 'Content-Type': 'application/x-www-form-urlencoded' }
         });
 
         // Step 2: Parse verification page for second form
-        console.log("  [SID] Step 2: Parsing verification page...");
+        log("  [SID] Step 2: Parsing verification page...");
         $ = cheerio.load(responseStep1.data);
         const verificationForm = $('#landing');
         const action_url_step2 = verificationForm.attr('action');
@@ -516,14 +521,14 @@ async function resolveTechUnblockedLink(sidUrl) {
         }
 
         // Step 3: POST to the verification URL
-        console.log("  [SID] Step 3: Submitting verification...");
+        log("  [SID] Step 3: Submitting verification...");
         const step2Data = new URLSearchParams({ '_wp_http2': wp_http2, 'token': token });
         const responseStep2 = await session.post(action_url_step2, step2Data, {
             headers: { 'Referer': responseStep1.request.res.responseUrl, 'Content-Type': 'application/x-www-form-urlencoded' }
         });
 
         // Step 4: Find dynamic cookie and link from JavaScript
-        console.log("  [SID] Step 4: Parsing final page for JS data...");
+        log("  [SID] Step 4: Parsing final page for JS data...");
         let finalLinkPath = null;
         let cookieName = null;
         let cookieValue = null;
@@ -546,11 +551,11 @@ async function resolveTechUnblockedLink(sidUrl) {
         }
 
         const finalUrl = new URL(finalLinkPath, origin).href;
-        console.log(`  [SID] Dynamic link found: ${finalUrl}`);
-        console.log(`  [SID] Dynamic cookie found: ${cookieName}`);
+        log(`  [SID] Dynamic link found: ${finalUrl}`);
+        log(`  [SID] Dynamic cookie found: ${cookieName}`);
 
         // Step 5: Set cookie and make final request
-        console.log("  [SID] Step 5: Setting cookie and making final request...");
+        log("  [SID] Step 5: Setting cookie and making final request...");
         await jar.setCookie(`${cookieName}=${cookieValue}`, origin);
 
         const finalResponse = await session.get(finalUrl, {
@@ -565,7 +570,7 @@ async function resolveTechUnblockedLink(sidUrl) {
             const urlMatch = content.match(/url=(.*)/i);
             if (urlMatch && urlMatch[1]) {
                 const driveleechUrl = urlMatch[1].replace(/"/g, "").replace(/'/g, "");
-                console.log(`  [SID] SUCCESS! Resolved Driveleech URL: ${driveleechUrl}`);
+                log(`  [SID] SUCCESS! Resolved Driveleech URL: ${driveleechUrl}`);
                 return driveleechUrl;
             }
         }
@@ -685,7 +690,7 @@ async function resolveResumeCloudLink(resumeUrl) {
 // Resolve Worker Seed link to final download URL
 async function resolveWorkerSeedLink(workerSeedUrl) {
     try {
-        console.log(`[MoviesMod] Resolving Worker-seed link: ${workerSeedUrl}`);
+        log(`[MoviesMod] Resolving Worker-seed link: ${workerSeedUrl}`);
 
         const jar = new CookieJar();
 
@@ -699,7 +704,7 @@ async function resolveWorkerSeedLink(workerSeedUrl) {
         }));
 
         // Step 1: GET the page to get the script content and cookies
-        console.log(`[MoviesMod] Step 1: Fetching page to get script content and cookies...`);
+        log(`[MoviesMod] Step 1: Fetching page to get script content and cookies...`);
         const { data: pageHtml } = await session.get(workerSeedUrl);
 
         // Step 2: Use regex to extract the token and the correct ID from the script
@@ -716,10 +721,10 @@ async function resolveWorkerSeedLink(workerSeedUrl) {
             console.error('[MoviesMod] Could not find the relevant script tag containing formData.append.');
 
             // Debug: Log available script content
-            console.log(`[MoviesMod] Found ${scriptTags.length} script tags. Checking for token patterns...`);
+            log(`[MoviesMod] Found ${scriptTags.length} script tags. Checking for token patterns...`);
             scriptTags.forEach((script, i) => {
                 if (script.includes('token') || script.includes('formData')) {
-                    console.log(`[MoviesMod] Script ${i} snippet:`, script.substring(0, 300));
+                    log(`[MoviesMod] Script ${i} snippet:`, script.substring(0, 300));
                 }
             });
 
@@ -731,18 +736,18 @@ async function resolveWorkerSeedLink(workerSeedUrl) {
 
         if (!tokenMatch || !tokenMatch[1] || !idMatch || !idMatch[1]) {
             console.error('[MoviesMod] Could not extract token or correct ID from the script.');
-            console.log('[MoviesMod] Script content snippet:', scriptContent.substring(0, 500));
+            log('[MoviesMod] Script content snippet:', scriptContent.substring(0, 500));
 
             // Try alternative patterns
             const altTokenMatch = scriptContent.match(/token['"]?\s*[:=]\s*['"]([^'"]+)['"]/);
             const altIdMatch = scriptContent.match(/id['"]?\s*[:=]\s*['"]([^'"]+)['"]/);
 
             if (altTokenMatch && altIdMatch) {
-                console.log('[MoviesMod] Found alternative patterns, trying those...');
+                log('[MoviesMod] Found alternative patterns, trying those...');
                 const token = altTokenMatch[1];
                 const id = altIdMatch[1];
-                console.log(`[MoviesMod] Alternative token: ${token.substring(0, 20)}...`);
-                console.log(`[MoviesMod] Alternative id: ${id}`);
+                log(`[MoviesMod] Alternative token: ${token.substring(0, 20)}...`);
+                log(`[MoviesMod] Alternative id: ${id}`);
 
                 // Continue with these values
                 return await makeWorkerSeedRequest(session, token, id, workerSeedUrl);
@@ -753,8 +758,8 @@ async function resolveWorkerSeedLink(workerSeedUrl) {
 
         const token = tokenMatch[1];
         const correctId = idMatch[1];
-        console.log(`[MoviesMod] Step 2: Extracted token: ${token.substring(0, 20)}...`);
-        console.log(`[MoviesMod] Step 2: Extracted correct ID: ${correctId}`);
+        log(`[MoviesMod] Step 2: Extracted token: ${token.substring(0, 20)}...`);
+        log(`[MoviesMod] Step 2: Extracted correct ID: ${correctId}`);
 
         return await makeWorkerSeedRequest(session, token, correctId, workerSeedUrl);
 
@@ -775,7 +780,7 @@ async function makeWorkerSeedRequest(session, token, correctId, workerSeedUrl) {
     const formData = new FormData();
     formData.append('token', token);
 
-    console.log(`[MoviesMod] Step 3: POSTing to endpoint: ${apiUrl} with extracted token.`);
+    log(`[MoviesMod] Step 3: POSTing to endpoint: ${apiUrl} with extracted token.`);
 
     // Use the session instance, which will automatically include the cookies
     const { data: apiResponse } = await session.post(apiUrl, formData, {
@@ -788,11 +793,11 @@ async function makeWorkerSeedRequest(session, token, correctId, workerSeedUrl) {
     });
 
     if (apiResponse && apiResponse.url) {
-        console.log(`[MoviesMod] SUCCESS! Final video link from Worker-seed API: ${apiResponse.url}`);
+        log(`[MoviesMod] SUCCESS! Final video link from Worker-seed API: ${apiResponse.url}`);
         return apiResponse.url;
     } else {
-        console.log('[MoviesMod] Worker-seed API did not return a URL. Full response:');
-        console.log(apiResponse);
+        log('[MoviesMod] Worker-seed API did not return a URL. Full response:');
+        log(apiResponse);
         return null;
     }
 }
@@ -811,7 +816,7 @@ async function resolveVideoSeedLink(videoSeedUrl) {
             let apiResponse;
             if (MOVIESMOD_PROXY_URL) {
                 const proxiedApiUrl = `${MOVIESMOD_PROXY_URL}${encodeURIComponent(apiUrl)}`;
-                console.log(`[MoviesMod] Making proxied POST request to VideoSeed API`);
+                log(`[MoviesMod] Making proxied POST request to VideoSeed API`);
                 apiResponse = await axios.post(proxiedApiUrl, formData, {
                     headers: {
                         ...formData.getHeaders(),
@@ -840,24 +845,24 @@ async function resolveVideoSeedLink(videoSeedUrl) {
 
 // Environment variable to control URL validation
 const URL_VALIDATION_ENABLED = process.env.DISABLE_URL_VALIDATION !== 'true';
-console.log(`[MoviesMod] URL validation is ${URL_VALIDATION_ENABLED ? 'enabled' : 'disabled'}.`);
+log(`[MoviesMod] URL validation is ${URL_VALIDATION_ENABLED ? 'enabled' : 'disabled'}.`);
 
 // Validate if a video URL is working (not 404 or broken)
 async function validateVideoUrl(url, timeout = 10000) {
     // Skip validation if disabled via environment variable
     if (!URL_VALIDATION_ENABLED) {
-        console.log(`[MoviesMod] URL validation disabled, skipping validation for: ${url.substring(0, 100)}...`);
+        log(`[MoviesMod] URL validation disabled, skipping validation for: ${url.substring(0, 100)}...`);
         return true;
     }
 
     try {
-        console.log(`[MoviesMod] Validating URL: ${url.substring(0, 100)}...`);
+        log(`[MoviesMod] Validating URL: ${url.substring(0, 100)}...`);
 
         // Use proxy for URL validation if enabled
         let response;
         if (MOVIESMOD_PROXY_URL) {
             const proxiedUrl = `${MOVIESMOD_PROXY_URL}${encodeURIComponent(url)}`;
-            console.log(`[MoviesMod] Making proxied HEAD request for validation to: ${url}`);
+            log(`[MoviesMod] Making proxied HEAD request for validation to: ${url}`);
             response = await axios.head(proxiedUrl, {
                 timeout,
                 headers: {
@@ -877,14 +882,14 @@ async function validateVideoUrl(url, timeout = 10000) {
 
         // Check if status is OK (200-299) or partial content (206)
         if (response.status >= 200 && response.status < 400) {
-            console.log(`[MoviesMod] ✓ URL validation successful (${response.status})`);
+            log(`[MoviesMod] ✓ URL validation successful (${response.status})`);
             return true;
         } else {
-            console.log(`[MoviesMod] ✗ URL validation failed with status: ${response.status}`);
+            log(`[MoviesMod] ✗ URL validation failed with status: ${response.status}`);
             return false;
         }
     } catch (error) {
-        console.log(`[MoviesMod] ✗ URL validation failed: ${error.message}`);
+        log(`[MoviesMod] ✗ URL validation failed: ${error.message}`);
         return false;
     }
 }
@@ -892,7 +897,7 @@ async function validateVideoUrl(url, timeout = 10000) {
 // Function to resolve cdn.video-leech.pro redirects to final Google Drive URLs
 async function resolveVideoLeechRedirect(videoLeechUrl) {
     try {
-        console.log(`[MoviesMod] Resolving video-leech redirect: ${videoLeechUrl.substring(0, 80)}...`);
+        log(`[MoviesMod] Resolving video-leech redirect: ${videoLeechUrl.substring(0, 80)}...`);
         
         // Use HEAD request to get redirect location without downloading content
         let response;
@@ -914,7 +919,7 @@ async function resolveVideoLeechRedirect(videoLeechUrl) {
         // Check Location header for redirect
         if (response.headers && response.headers.location) {
             const location = response.headers.location;
-            console.log(`[MoviesMod] Found redirect location: ${location.substring(0, 100)}...`);
+            log(`[MoviesMod] Found redirect location: ${location.substring(0, 100)}...`);
             
             if (location.includes('video-seed.pro')) {
                 // Extract Google Drive URL from the ?url= parameter
@@ -924,11 +929,11 @@ async function resolveVideoLeechRedirect(videoLeechUrl) {
                     
                     if (gdriveUrl && gdriveUrl.includes('video-downloads.googleusercontent.com')) {
                         const decodedUrl = decodeURIComponent(gdriveUrl);
-                        console.log(`[MoviesMod] ✓ Extracted Google Drive URL from video-seed.pro redirect`);
+                        log(`[MoviesMod] ✓ Extracted Google Drive URL from video-seed.pro redirect`);
                         return decodedUrl;
                     }
                 } catch (parseError) {
-                    console.log(`[MoviesMod] Error parsing redirect URL: ${parseError.message}`);
+                    log(`[MoviesMod] Error parsing redirect URL: ${parseError.message}`);
                 }
             }
         }
@@ -958,16 +963,16 @@ async function resolveVideoLeechRedirect(videoLeechUrl) {
                 const gdriveUrl = urlParams.get('url');
                 if (gdriveUrl && gdriveUrl.includes('video-downloads.googleusercontent.com')) {
                     const decodedUrl = decodeURIComponent(gdriveUrl);
-                    console.log(`[MoviesMod] ✓ Extracted Google Drive URL from GET redirect chain`);
+                    log(`[MoviesMod] ✓ Extracted Google Drive URL from GET redirect chain`);
                     return decodedUrl;
                 }
             }
         } catch (getError) {
-            console.log(`[MoviesMod] GET redirect follow failed: ${getError.message}`);
+            log(`[MoviesMod] GET redirect follow failed: ${getError.message}`);
         }
         
         // If we can't extract Google Drive URL, return original URL (it might work directly)
-        console.log(`[MoviesMod] Could not extract Google Drive URL, returning original URL`);
+        log(`[MoviesMod] Could not extract Google Drive URL, returning original URL`);
         return videoLeechUrl;
         
     } catch (error) {
@@ -981,7 +986,7 @@ async function resolveVideoLeechRedirect(videoLeechUrl) {
 async function validateUrlsParallel(urls, timeout = 10000) {
     if (!urls || urls.length === 0) return [];
 
-    console.log(`[MoviesMod] Validating ${urls.length} URLs in parallel...`);
+    log(`[MoviesMod] Validating ${urls.length} URLs in parallel...`);
 
     const validationPromises = urls.map(async (url) => {
         try {
@@ -1019,7 +1024,7 @@ async function validateUrlsParallel(urls, timeout = 10000) {
     );
 
     const validCount = validationResults.filter(r => r.isValid).length;
-    console.log(`[MoviesMod] ✓ Parallel validation complete: ${validCount}/${urls.length} URLs valid`);
+    log(`[MoviesMod] ✓ Parallel validation complete: ${validCount}/${urls.length} URLs valid`);
 
     return validationResults;
 }
@@ -1028,7 +1033,7 @@ async function validateUrlsParallel(urls, timeout = 10000) {
 async function processEpisodesParallel(finalFilePageLinks, episodeNum = null) {
     if (!finalFilePageLinks || finalFilePageLinks.length === 0) return [];
 
-    console.log(`[MoviesMod] Processing ${finalFilePageLinks.length} episode links in parallel...`);
+    log(`[MoviesMod] Processing ${finalFilePageLinks.length} episode links in parallel...`);
 
     const episodePromises = finalFilePageLinks.map(async (link) => {
         try {
@@ -1078,11 +1083,11 @@ async function processEpisodesParallel(finalFilePageLinks, episodeNum = null) {
         const filteredLinks = processedLinks.filter(link =>
             link.episodeInfo?.episode === episodeNum
         );
-        console.log(`[MoviesMod] ✓ Parallel episode processing: Found ${filteredLinks.length} matches for episode ${episodeNum}`);
+        log(`[MoviesMod] ✓ Parallel episode processing: Found ${filteredLinks.length} matches for episode ${episodeNum}`);
         return filteredLinks;
     }
 
-    console.log(`[MoviesMod] ✓ Parallel episode processing complete: ${processedLinks.length} episodes processed`);
+    log(`[MoviesMod] ✓ Parallel episode processing complete: ${processedLinks.length} episodes processed`);
     return processedLinks;
 }
 
@@ -1090,14 +1095,14 @@ async function processEpisodesParallel(finalFilePageLinks, episodeNum = null) {
 async function resolveSIDLinksParallel(sidUrls) {
     if (!sidUrls || sidUrls.length === 0) return [];
 
-    console.log(`[MoviesMod] Resolving ${sidUrls.length} SID links in parallel...`);
+    log(`[MoviesMod] Resolving ${sidUrls.length} SID links in parallel...`);
 
     const sidPromises = sidUrls.map(async (sidUrl) => {
         try {
             const resolvedUrl = await resolveTechUnblockedLink(sidUrl);
             return { originalUrl: sidUrl, resolvedUrl, success: !!resolvedUrl };
         } catch (error) {
-            console.log(`[MoviesMod] ✗ SID resolution failed for ${sidUrl}: ${error.message}`);
+            log(`[MoviesMod] ✗ SID resolution failed for ${sidUrl}: ${error.message}`);
             return { originalUrl: sidUrl, resolvedUrl: null, success: false, error: error.message };
         }
     });
@@ -1108,7 +1113,7 @@ async function resolveSIDLinksParallel(sidUrls) {
     );
 
     const successCount = resolvedResults.filter(r => r.success).length;
-    console.log(`[MoviesMod] ✓ Parallel SID resolution complete: ${successCount}/${sidUrls.length} SID links resolved`);
+    log(`[MoviesMod] ✓ Parallel SID resolution complete: ${successCount}/${sidUrls.length} SID links resolved`);
 
     return resolvedResults;
 }
@@ -1116,7 +1121,7 @@ async function resolveSIDLinksParallel(sidUrls) {
 // Main function to get streams for TMDB content
 async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeNum = null) {
     try {
-        console.log(`[MoviesMod] Fetching streams for TMDB ${mediaType}/${tmdbId}${seasonNum ? `, S${seasonNum}E${episodeNum}` : ''}`);
+        log(`[MoviesMod] Fetching streams for TMDB ${mediaType}/${tmdbId}${seasonNum ? `, S${seasonNum}E${episodeNum}` : ''}`);
 
         // Define a cache key based on the media type and ID. For series, cache per season.
         const cacheKey = `moviesmod_final_v17_${tmdbId}_${mediaType}${seasonNum ? `_s${seasonNum}` : ''}`;
@@ -1124,20 +1129,20 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
 
         // Ensure resolvedQualities is properly structured
         if (resolvedQualities && !Array.isArray(resolvedQualities)) {
-            console.log(`[MoviesMod] Cache data is not an array, attempting to extract data property:`, typeof resolvedQualities);
+            log(`[MoviesMod] Cache data is not an array, attempting to extract data property:`, typeof resolvedQualities);
             if (resolvedQualities.data && Array.isArray(resolvedQualities.data)) {
                 resolvedQualities = resolvedQualities.data;
             } else {
-                console.log(`[MoviesMod] Cache data structure is invalid, treating as cache miss`);
+                log(`[MoviesMod] Cache data structure is invalid, treating as cache miss`);
                 resolvedQualities = null;
             }
         }
 
         if (!resolvedQualities || resolvedQualities.length === 0) {
             if (resolvedQualities && resolvedQualities.length === 0) {
-                console.log(`[MoviesMod] Cache contains empty data for ${cacheKey}. Refetching from source.`);
+                log(`[MoviesMod] Cache contains empty data for ${cacheKey}. Refetching from source.`);
             } else {
-                console.log(`[MoviesMod Cache] MISS for key: ${cacheKey}. Fetching from source.`);
+                log(`[MoviesMod Cache] MISS for key: ${cacheKey}. Fetching from source.`);
             }
 
             // We need to fetch title and year from TMDB API
@@ -1151,7 +1156,7 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
             const year = mediaType === 'tv' ? tmdbDetails.first_air_date?.substring(0, 4) : tmdbDetails.release_date?.substring(0, 4);
             if (!title) throw new Error('Could not get title from TMDB');
 
-            console.log(`[MoviesMod] Found metadata: ${title} (${year})`);
+            log(`[MoviesMod] Found metadata: ${title} (${year})`);
             const searchResults = await searchMoviesMod(title);
             if (searchResults.length === 0) throw new Error(`No search results found for "${title}"`);
 
@@ -1159,7 +1164,7 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
             const titles = searchResults.map(r => r.title);
             const bestMatch = findBestMatch(title, titles);
 
-            console.log(`[MoviesMod] Best match for "${title}" is "${bestMatch.bestMatch.target}" with a rating of ${bestMatch.bestMatch.rating.toFixed(2)}`);
+            log(`[MoviesMod] Best match for "${title}" is "${bestMatch.bestMatch.target}" with a rating of ${bestMatch.bestMatch.rating.toFixed(2)}`);
 
             let selectedResult = null;
             // Set a minimum similarity threshold (e.g., 0.3) to avoid obviously wrong matches
@@ -1169,7 +1174,7 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
                 // Additional check for year if it's a movie
                 if (mediaType === 'movie' && year) {
                     if (!selectedResult.title.includes(year)) {
-                        console.warn(`[MoviesMod] Title match found, but year mismatch. Matched: "${selectedResult.title}", Expected year: ${year}. Discarding match.`);
+                        logWarn(`[MoviesMod] Title match found, but year mismatch. Matched: "${selectedResult.title}", Expected year: ${year}. Discarding match.`);
                         selectedResult = null; // Discard if year doesn't match
                     }
                 }
@@ -1177,7 +1182,7 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
 
             if (!selectedResult) {
                 // If no good match is found, try a stricter direct search using regex with word boundaries
-                console.log('[MoviesMod] Similarity match failed or was below threshold. Trying stricter name/year search with word boundaries...');
+                log('[MoviesMod] Similarity match failed or was below threshold. Trying stricter name/year search with word boundaries...');
                 const titleRegex = new RegExp(`\\b${escapeRegExp(title.toLowerCase())}\\b`);
 
                 if (mediaType === 'movie') {
@@ -1198,7 +1203,7 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
                 throw new Error(`No suitable search result found for "${title} (${year})". Best similarity match was too low or failed year check.`);
             }
 
-            console.log(`[MoviesMod] Selected: ${selectedResult.title}`);
+            log(`[MoviesMod] Selected: ${selectedResult.title}`);
             const downloadLinks = await extractDownloadLinks(selectedResult.url);
             if (downloadLinks.length === 0) throw new Error('No download links found');
 
@@ -1209,10 +1214,10 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
 
             // Filter out 480p links before processing
             relevantLinks = relevantLinks.filter(link => !link.quality.toLowerCase().includes('480p'));
-            console.log(`[MoviesMod] ${relevantLinks.length} links remaining after 480p filter.`);
+            log(`[MoviesMod] ${relevantLinks.length} links remaining after 480p filter.`);
 
             if (relevantLinks.length > 0) {
-                console.log(`[MoviesMod] Found ${relevantLinks.length} relevant quality links.`);
+                log(`[MoviesMod] Found ${relevantLinks.length} relevant quality links.`);
                 const qualityPromises = relevantLinks.map(async (link) => {
                     try {
                         const finalLinks = await resolveIntermediateLink(link.url, selectedResult.url, link.quality);
@@ -1232,7 +1237,7 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
 
                                 // Only process if it's a driveseed URL
                                 if (currentUrl && currentUrl.includes('driveseed.org')) {
-                                    console.log(`[MoviesMod] Caching driveseed redirect URL for ${targetLink.server}: ${currentUrl}`);
+                                    log(`[MoviesMod] Caching driveseed redirect URL for ${targetLink.server}: ${currentUrl}`);
                                     return { ...targetLink, driveseedRedirectUrl: currentUrl };
                                 }
                                 return null;
@@ -1259,13 +1264,13 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
             }
 
             if (resolvedQualities.length > 0) {
-                console.log(`[MoviesMod] Caching ${resolvedQualities.length} qualities with resolved driveseed redirect URLs for key: ${cacheKey}`);
+                log(`[MoviesMod] Caching ${resolvedQualities.length} qualities with resolved driveseed redirect URLs for key: ${cacheKey}`);
             }
             await saveToCache(cacheKey, resolvedQualities);
         }
 
         if (!resolvedQualities || resolvedQualities.length === 0) {
-            console.log('[MoviesMod] No final file page URLs found from cache or scraping.');
+            log('[MoviesMod] No final file page URLs found from cache or scraping.');
             return [];
         }
 
@@ -1275,7 +1280,7 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
             return [];
         }
 
-        console.log(`[MoviesMod] Processing ${resolvedQualities.length} qualities with cached driveseed redirect URLs to get final streams.`);
+        log(`[MoviesMod] Processing ${resolvedQualities.length} qualities with cached driveseed redirect URLs to get final streams.`);
         const streams = [];
         const processedFileNames = new Set();
 
@@ -1287,7 +1292,7 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
             if ((mediaType === 'tv' || mediaType === 'series') && episodeNum !== null) {
                 targetLinks = await processEpisodesParallel(driveseedRedirectLinks, episodeNum);
                 if (targetLinks.length === 0) {
-                    console.log(`[MoviesMod] No episode ${episodeNum} found for ${quality} after parallel processing`);
+                    log(`[MoviesMod] No episode ${episodeNum} found for ${quality} after parallel processing`);
                     return [];
                 }
             }
@@ -1307,7 +1312,7 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
                         });
                         const $ = resFollow.$;
                         const finalFilePageUrl = resFollow.finalFilePageUrl;
-                        console.log(`[MoviesMod] Resolved redirect to final file page: ${finalFilePageUrl}`);
+                        log(`[MoviesMod] Resolved redirect to final file page: ${finalFilePageUrl}`);
 
                         // Extract file size and name information
                         let driveseedSize = 'Unknown';
@@ -1332,7 +1337,7 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
                         }
 
                         if (fileName && processedFileNames.has(fileName)) {
-                            console.log(`[MoviesMod] Skipping duplicate file: ${fileName}`);
+                            log(`[MoviesMod] Skipping duplicate file: ${fileName}`);
                             return null;
                         }
                         if (fileName) processedFileNames.add(fileName);
@@ -1348,16 +1353,16 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
 
                         // If the URL is a cdn.video-leech.pro link, resolve it to get the final Google Drive URL
                         if (finalDownloadUrl && finalDownloadUrl.includes('cdn.video-leech.pro')) {
-                            console.log(`[MoviesMod] Detected cdn.video-leech.pro URL, resolving redirect to Google Drive...`);
+                            log(`[MoviesMod] Detected cdn.video-leech.pro URL, resolving redirect to Google Drive...`);
                             const resolvedUrl = await resolveVideoLeechRedirect(finalDownloadUrl);
                             if (resolvedUrl && resolvedUrl !== finalDownloadUrl) {
-                                console.log(`[MoviesMod] ✓ Resolved to Google Drive URL: ${resolvedUrl.substring(0, 100)}...`);
+                                log(`[MoviesMod] ✓ Resolved to Google Drive URL: ${resolvedUrl.substring(0, 100)}...`);
                                 finalDownloadUrl = resolvedUrl;
                             }
                         }
 
                         if (!finalDownloadUrl) {
-                            console.log(`[MoviesMod] ✗ Could not extract final link for ${quality}`);
+                            log(`[MoviesMod] ✗ Could not extract final link for ${quality}`);
                             return null;
                         }
 
@@ -1374,7 +1379,7 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
                             quality: actualQuality,
                         };
                     } else {
-                        console.warn(`[MoviesMod] Unsupported URL type for final processing: ${currentUrl}`);
+                        logWarn(`[MoviesMod] Unsupported URL type for final processing: ${currentUrl}`);
                         return null;
                     }
                 } catch (e) {
@@ -1396,7 +1401,7 @@ async function getMoviesModStreams(tmdbId, mediaType, seasonNum = null, episodeN
             return qualityB - qualityA;
         });
 
-        console.log(`[MoviesMod] Successfully extracted and sorted ${streams.length} streams`);
+        log(`[MoviesMod] Successfully extracted and sorted ${streams.length} streams`);
         return streams;
 
     } catch (error) {
