@@ -924,7 +924,7 @@ async function getHDHub4uStreams(tmdbId, mediaType, title, year = null, seasonNu
         await fetchAndUpdateDomain();
 
         // Define cache key
-        const cacheKey = `hdhub4u_final_v1_${mediaType}_${tmdbId}${seasonNum ? `_s${seasonNum}` : ''}${episodeNum ? `_e${episodeNum}` : ''}`;
+        const cacheKey = `hdhub4u_final_v2_${mediaType}_${tmdbId}${seasonNum ? `_s${seasonNum}` : ''}${episodeNum ? `_e${episodeNum}` : ''}`;
         log(`[HDHub4u] Cache key: ${cacheKey}`);
 
         // Try to get from cache first
