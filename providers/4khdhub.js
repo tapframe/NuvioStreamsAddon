@@ -10,8 +10,8 @@ const RedisCache = require('../utils/redisCache');
 
 // Debug logging flag - set DEBUG=true to enable verbose logging
 const DEBUG = process.env.DEBUG === 'true' || process.env['4KHDHUB_DEBUG'] === 'true';
-const log = DEBUG ? console.log : () => {};
-const logWarn = DEBUG ? console.warn : () => {};
+const log = DEBUG ? console.log : () => { };
+const logWarn = DEBUG ? console.warn : () => { };
 
 // Cache configuration
 const CACHE_ENABLED = process.env.DISABLE_CACHE !== 'true';
@@ -81,7 +81,7 @@ async function getTmdbDetails(tmdbId, type) {
 
 // FourKHDHub Logic
 async function fetchPageUrl(name, year, isSeries) {
-    const cacheKey = `search_${name.replace(/[^a-z0-9]/gi, '_')}_${year}`;
+    const cacheKey = `search_v2_${name.replace(/[^a-z0-9]/gi, '_')}_${year}`;
     // [4KHDHub] Checking cache for key: ${cacheKey} (Enabled: ${CACHE_ENABLED})
 
     if (CACHE_ENABLED) {
@@ -139,7 +139,7 @@ async function fetchPageUrl(name, year, isSeries) {
 }
 
 async function resolveRedirectUrl(redirectUrl) {
-    const cacheKey = `redirect_${redirectUrl.replace(/[^a-z0-9]/gi, '')}`;
+    const cacheKey = `redirect_v2_${redirectUrl.replace(/[^a-z0-9]/gi, '')}`;
     if (CACHE_ENABLED) {
         const cached = await redisCache.getFromCache(cacheKey, '', CACHE_DIR);
         if (cached) return cached.data || cached;
@@ -232,7 +232,7 @@ async function extractSourceResults($, el) {
 async function extractHubCloud(hubCloudUrl, baseMeta) {
     if (!hubCloudUrl) return [];
 
-    const cacheKey = `hubcloud_${hubCloudUrl.replace(/[^a-z0-9]/gi, '')}`;
+    const cacheKey = `hubcloud_v2_${hubCloudUrl.replace(/[^a-z0-9]/gi, '')}`;
     if (CACHE_ENABLED) {
         const cached = await redisCache.getFromCache(cacheKey, '', CACHE_DIR);
         if (cached) return cached.data || cached;

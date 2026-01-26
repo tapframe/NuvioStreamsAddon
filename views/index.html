@@ -55,7 +55,7 @@
         }
     </script>
 
-    <title>Nuvio Streams | Elfhosted</title>
+    <title>Nuvio Stremio Addon | Elfhosted</title>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap">
     <style>
         :root {
@@ -73,10 +73,8 @@
             --text-light: #b0b0b0;
             --border: #222222;
             --highlight: #333333;
-            --coming-soon: #6742d9;
-            --nuvio-app: #8c52ff;
-            --nuvio-app-hover: #7038e0;
         }
+
 
         * {
             margin: 0;
@@ -992,155 +990,7 @@
             }
         }
 
-        /* Nuvio App Card Styles - Enhanced Eye-catching Version */
-        .nuvio-app-card {
-            border: 2px solid rgba(106, 59, 184, 0.6);
-            position: relative;
-            overflow: visible;
-            animation: pulse 1.5s infinite;
-            box-shadow: 0 8px 25px rgba(106, 59, 184, 0.3), 0 0 40px rgba(106, 59, 184, 0.2);
-            transform: scale(1.02);
-            transition: all 0.3s ease;
-        }
 
-        .nuvio-app-card:hover {
-            transform: scale(1.05);
-            box-shadow: 0 12px 35px rgba(106, 59, 184, 0.4), 0 0 60px rgba(106, 59, 184, 0.3);
-        }
-
-        .nuvio-app-card:before {
-            background: linear-gradient(45deg, #6a3bb8, #007acc, #008a55, #cc5555, #6a3bb8);
-            background-size: 300% 300%;
-            animation: gradientFlow 8s ease infinite, glowPulse 2s ease-in-out infinite alternate;
-        }
-
-        @keyframes gradientFlow {
-            0% {
-                background-position: 0% 50%;
-            }
-
-            25% {
-                background-position: 100% 0%;
-            }
-
-            50% {
-                background-position: 100% 100%;
-            }
-
-            75% {
-                background-position: 0% 100%;
-            }
-
-            100% {
-                background-position: 0% 50%;
-            }
-        }
-
-        @keyframes pulse {
-            0% {
-                box-shadow: 0 0 0 0 rgba(106, 59, 184, 0.6), 0 8px 25px rgba(106, 59, 184, 0.3);
-            }
-
-            50% {
-                box-shadow: 0 0 0 15px rgba(106, 59, 184, 0), 0 12px 35px rgba(106, 59, 184, 0.5);
-            }
-
-            100% {
-                box-shadow: 0 0 0 0 rgba(106, 59, 184, 0), 0 8px 25px rgba(106, 59, 184, 0.3);
-            }
-        }
-
-        @keyframes breathe {
-
-            0%,
-            100% {
-                transform: scale(1.02);
-            }
-
-            50% {
-                transform: scale(1.04);
-            }
-        }
-
-        @keyframes glowPulse {
-            0% {
-                opacity: 0.6;
-                filter: brightness(1);
-            }
-
-            100% {
-                opacity: 0.9;
-                filter: brightness(1.2);
-            }
-        }
-
-        @keyframes logoGlow {
-            0% {
-                box-shadow: 0 4px 15px rgba(140, 82, 255, 0.6);
-                transform: scale(1.15);
-            }
-
-            100% {
-                box-shadow: 0 6px 25px rgba(106, 59, 184, 0.8), 0 0 20px rgba(204, 85, 85, 0.4);
-                transform: scale(1.2);
-            }
-        }
-
-        .nuvio-app-logo {
-            background: linear-gradient(135deg, #6a3bb8, #2a1459, #cc5555);
-            transform: scale(1.15);
-            position: relative;
-            animation: logoGlow 2s ease-in-out infinite alternate;
-            box-shadow: 0 4px 15px rgba(106, 59, 184, 0.6);
-        }
-
-        .nuvio-app-btn {
-            background: linear-gradient(135deg, #6a3bb8 0%, #552a99 50%, #cc5555 100%);
-            border: 1px solid rgba(106, 59, 184, 0.4);
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .nuvio-app-btn:hover {
-            box-shadow: 0 8px 20px rgba(106, 59, 184, 0.6), 0 0 30px rgba(204, 85, 85, 0.4);
-            transform: translateY(-2px) scale(1.05);
-        }
-
-        /* Enhanced text readability for Nuvio card */
-        .nuvio-app-card .catalog-title,
-        .nuvio-app-card .catalog-desc {
-            color: #ffffff !important;
-            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8), 0 0 8px rgba(0, 0, 0, 0.5);
-            font-weight: 600;
-        }
-
-        .nuvio-app-card .catalog-desc {
-            color: #f0f0f0 !important;
-            font-weight: 500;
-        }
-
-        .nuvio-app-card .catalog-title {
-            color: #ffffff !important;
-            font-weight: 700;
-            text-shadow: 0 3px 6px rgba(0, 0, 0, 0.9), 0 0 12px rgba(106, 59, 184, 0.3);
-        }
-
-        .new-badge {
-            position: absolute;
-            top: -10px;
-            right: -10px;
-            background: linear-gradient(135deg, #ff3a3a, #ff7c7c);
-            color: white;
-            border-radius: 20px;
-            padding: 5px 10px;
-            font-size: 0.7rem;
-            font-weight: 600;
-            box-shadow: 0 4px 8px rgba(255, 58, 58, 0.3);
-            z-index: 2;
-            transform: rotate(5deg);
-            letter-spacing: 0.5px;
-        }
 
         /* Cookie Configuration Styles */
         .cookie-config-container {
@@ -1830,10 +1680,7 @@
                 padding-top: 40px;
             }
 
-            /* Add more bottom padding to Nuvio app card on mobile */
-            .nuvio-app-card {
-                margin-bottom: 5rem !important;
-            }
+
         }
 
         /* Add MP4Hydra icon style after VidZee icon */
@@ -1955,12 +1802,12 @@
             <div class="card-header">
                 <div style="display: flex; justify-content: center; align-items: center; margin-bottom: 1.5rem;">
                     <img src="https://raw.githubusercontent.com/tapframe/NuvioStreaming/main/assets/titlelogo.png"
-                        alt="Nuvio Streams Logo" class="logo"
+                        alt="Nuvio Stremio Addon Logo" class="logo"
                         style="max-width: 180px; height: auto; margin-right: 1.5rem; margin-bottom: 0;">
                     <img src="https://store.elfhosted.com/wp-content/uploads/2024/11/logo.svg" alt="ElfHosted Logo"
                         style="height: 100px; margin-left: 1.5rem;">
                 </div>
-                <h1>Nuvio Streams | Elfhosted</h1>
+                <h1>Nuvio Stremio Addon | Elfhosted</h1>
             </div>
             <div class="card-body">
                 <!-- REMOVE URGENT MIGRATION TOOL SECTION -->
@@ -2130,7 +1977,8 @@
                         <span>Disclaimer</span>
                     </div>
                     <div class="disclaimer-content">
-                        <p>Nuvio Streams is a scraper-based addon that aggregates content from various providers. I do
+                        <p>Nuvio Stremio Addon is a scraper-based addon that aggregates content from various providers.
+                            I do
                             not own or host any of the content provided.</p>
                         <p>Providers (including ShowBox) may become unavailable without notice. As an independent
                             developer, I'll make every effort to maintain functionality, but sources may stop working
@@ -2569,7 +2417,7 @@
                 </div>
             </div>
             <div class="card-footer">
-                <span class="footer-text">Nuvio Streams | Elfhosted • Seamless Streaming, Elevated</span>
+                <span class="footer-text">Nuvio Stremio Addon | Elfhosted • Seamless Streaming, Elevated</span>
                 <div class="footer-text">
                     Developed by <a href="https://github.com/tapframe" target="_blank" class="github-link">TapFrame</a>
                 </div>
@@ -2600,16 +2448,7 @@
                     class="install-catalog-btn star-wars-btn">Install Addon</a>
             </div>
 
-            <!-- New Nuvio App Promo -->
-            <div class="catalog-card nuvio-app-card">
-                <div class="new-badge">Beta</div>
-                <div class="catalog-logo nuvio-app-logo">📱</div>
-                <h3 class="catalog-title">Nuvio Streaming App</h3>
-                <p class="catalog-desc">Like Nuvio addon? Get more provider support at Nuvio's own app with internal
-                    providers! Currently in beta - test it out with many built-in providers for iOS and Android.</p>
-                <a href="https://tapframe.github.io/NuvioStreaming/" target="_blank"
-                    class="install-catalog-btn nuvio-app-btn">Learn More</a>
-            </div>
+
         </div>
     </div>
 
@@ -2656,7 +2495,7 @@
         </div>
         <div class="tutorial-warning">
             <h3>Important Notice:</h3>
-            <p>As an independent developer, I want to make it clear that Nuvio Streams is just a scraper addon.
+            <p>As an independent developer, I want to make it clear that Nuvio Stremio Addon is just a scraper addon.
                 Providers like ShowBox may disappear without notice for reasons beyond my control.</p>
             <p>I'll do my best to maintain this addon, but can't guarantee all sources will always work. Using your own
                 cookie is the best way to maximize reliability while sources are available.</p>
@@ -2694,7 +2533,7 @@
             <div class="step">
                 <div class="step-number">5</div>
                 <div class="step-text">Copy this API Key and paste it into the "ScraperAPI Key" input field on the Nuvio
-                    Streams configuration page.</div>
+                    Stremio Addon configuration page.</div>
             </div>
         </div>
         <div class="tutorial-warning">
