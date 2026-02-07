@@ -2123,15 +2123,16 @@ ${titleSecondLine}` : displayTitle;
 ${warningMessage}`;
         }
 
+        // Use provider's behaviorHints if available, otherwise default to notWebReady: true
+        const behaviorHints = stream.behaviorHints || { notWebReady: true };
+
         return {
             name: nameDisplay,
             title: finalTitle,
             url: stream.url,
             type: 'url', // CRITICAL: This is the type of the stream itself, not the content
             availability: 2,
-            behaviorHints: {
-                notWebReady: true // As per the working example, indicates Stremio might need to handle it carefully or use external player
-            }
+            behaviorHints: behaviorHints
         };
     });
 

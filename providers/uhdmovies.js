@@ -10,8 +10,8 @@ const { followRedirectToFilePage, extractFinalDownloadFromFilePage } = require('
 
 // Debug logging flag - set DEBUG=true to enable verbose logging
 const DEBUG = process.env.DEBUG === 'true' || process.env.UHDMOVIES_DEBUG === 'true';
-const log = DEBUG ? console.log : () => {};
-const logWarn = DEBUG ? console.warn : () => {};
+const log = DEBUG ? console.log : () => { };
+const logWarn = DEBUG ? console.warn : () => { };
 
 // Dynamic import for axios-cookiejar-support
 let axiosCookieJarSupport = null;
@@ -343,7 +343,7 @@ async function extractTvShowDownloadLinks(showPageUrl, season, episode) {
             }
           }
         }
-        
+
         // --- ENHANCED: Check for maxbutton-gdrive-episode structure ---
         if ($el.is('p') && $el.find('a.maxbutton-gdrive-episode').length > 0) {
           const episodeRegex = new RegExp(`^Episode\\s+0*${episode}(?!\\d)`, 'i');
@@ -371,24 +371,24 @@ async function extractTvShowDownloadLinks(showPageUrl, season, episode) {
 
     if (downloadLinks.length === 0) {
       log('[UHDMovies] Main extraction logic failed. Checking if requested season exists on page before fallback.');
-      
+
       // Check if the requested season exists on the page at all
       let seasonExists = false;
       let actualSeasonsOnPage = new Set(); // Track what seasons actually have content
-      
+
       // First pass: Look for actual episode content to see what seasons are available
       $('.entry-content').find('a[href*="tech.unblockedgames.world"], a[href*="tech.examzculture.in"], a.maxbutton-gdrive-episode').each((index, element) => {
         const $el = $(element);
         const linkText = $el.text().trim();
         const episodeText = $el.find('.mb-text').text().trim() || linkText;
-        
+
         // Look for season indicators in episode links
         const seasonMatches = [
           episodeText.match(/S(\d{1,2})/i), // S01, S02, etc.
           episodeText.match(/Season\s+(\d+)/i), // Season 1, Season 2, etc.
           episodeText.match(/S(\d{1,2})E(\d{1,3})/i) // S01E01 format
         ];
-        
+
         for (const match of seasonMatches) {
           if (match && match[1]) {
             const foundSeason = parseInt(match[1], 10);
@@ -396,9 +396,9 @@ async function extractTvShowDownloadLinks(showPageUrl, season, episode) {
           }
         }
       });
-      
-      log(`[UHDMovies] Actual seasons found on page: ${Array.from(actualSeasonsOnPage).sort((a,b) => a-b).join(', ')}`);
-      
+
+      log(`[UHDMovies] Actual seasons found on page: ${Array.from(actualSeasonsOnPage).sort((a, b) => a - b).join(', ')}`);
+
       // Check if requested season is in the actual content
       if (actualSeasonsOnPage.has(season)) {
         seasonExists = true;
@@ -416,7 +416,7 @@ async function extractTvShowDownloadLinks(showPageUrl, season, episode) {
             text.match(/Season\s+\d+\s*[–-]\s*(\d+)/i), // Matches "Season 1-2"
             text.match(/\bS(\d+)/i) // Matches "S2", "S02", etc.
           ];
-          
+
           for (const match of seasonMatches) {
             if (match) {
               const currentSeasonNum = parseInt(match[1], 10);
@@ -442,15 +442,15 @@ async function extractTvShowDownloadLinks(showPageUrl, season, episode) {
           }
         });
       }
-      
+
       if (!seasonExists) {
         log(`[UHDMovies] Season ${season} not found on page. Available seasons may not include the requested season.`);
         // Don't use fallback if the season doesn't exist to avoid wrong episodes
         return { title: showTitle, links: [], seasonNotFound: true };
       }
-      
+
       log(`[UHDMovies] Season ${season} exists on page but episode extraction failed. Trying fallback method with season filtering.`);
-      
+
       // --- ENHANCED FALLBACK LOGIC FOR NEW HTML STRUCTURE ---
       // Try the new maxbutton-gdrive-episode structure first
       $('.entry-content').find('a.maxbutton-gdrive-episode').each((i, el) => {
@@ -462,7 +462,7 @@ async function extractTvShowDownloadLinks(showPageUrl, season, episode) {
           const link = linkElement.attr('href');
           if (link && !downloadLinks.some(item => item.link === link)) {
             let qualityText = 'Unknown Quality';
-            
+
             // Look for quality info in the preceding paragraph or heading
             const parentP = linkElement.closest('p, div');
             const prevElement = parentP.prev();
@@ -482,7 +482,7 @@ async function extractTvShowDownloadLinks(showPageUrl, season, episode) {
               new RegExp(`Season\\s+0*${season}\\b`, 'i'), // Season 1
               new RegExp(`S0*${season}`, 'i')           // S01 anywhere
             ];
-            
+
             const seasonMatch = seasonCheckRegexes.some(regex => regex.test(qualityText));
             if (!seasonMatch) {
               log(`[UHDMovies] Skipping episode from different season: Quality='${qualityText}'`);
@@ -499,7 +499,7 @@ async function extractTvShowDownloadLinks(showPageUrl, season, episode) {
           }
         }
       });
-      
+
       // If still no results, try the original fallback logic
       if (downloadLinks.length === 0) {
         log(`[UHDMovies] Enhanced fallback failed, trying original fallback logic.`);
@@ -529,7 +529,7 @@ async function extractTvShowDownloadLinks(showPageUrl, season, episode) {
                 new RegExp(`Season\\s+0*${season}\\b`, 'i'), // Season 1
                 new RegExp(`S0*${season}`, 'i')           // S01 anywhere
               ];
-              
+
               const seasonMatch = seasonCheckRegexes.some(regex => regex.test(qualityText));
               if (!seasonMatch) {
                 log(`[UHDMovies] Skipping episode from different season: Quality='${qualityText}'`);
@@ -754,11 +754,65 @@ async function tryInstantDownload($) {
   log('[UHDMovies] Found "Instant Download" link, attempting to extract final URL...');
 
   try {
-    const urlParams = new URLSearchParams(new URL(instantDownloadLink).search);
+    const parsedUrl = new URL(instantDownloadLink);
+    const urlParams = new URLSearchParams(parsedUrl.search);
     const keys = urlParams.get('url');
+    const hostname = parsedUrl.hostname;
 
+    // Handle video-seed.dev and video-seed.pro wrapper URLs
+    // These sites wrap direct video URLs in a ?url= parameter
+    if (hostname.includes('video-seed.dev') || hostname.includes('video-seed.pro')) {
+      if (keys) {
+        // Check if the url parameter contains a direct video URL (Google Drive, etc.)
+        const decodedUrl = decodeURIComponent(keys);
+        if (decodedUrl.includes('video-downloads.googleusercontent.com') ||
+          decodedUrl.includes('workers.dev') ||
+          decodedUrl.includes('.r2.dev') ||
+          decodedUrl.includes('.mp4') ||
+          decodedUrl.includes('.mkv')) {
+          log(`[UHDMovies] ✓ Extracted direct URL from ${hostname}: ${decodedUrl.substring(0, 100)}...`);
+          return decodedUrl;
+        }
+
+        // Otherwise, try the API approach for video-seed sites
+        log(`[UHDMovies] Trying ${hostname} API to extract final URL...`);
+        const apiUrl = `${parsedUrl.origin}/api`;
+        const formData = new FormData();
+        formData.append('keys', keys);
+
+        let apiResponse;
+        if (UHDMOVIES_PROXY_URL) {
+          const proxiedApiUrl = `${UHDMOVIES_PROXY_URL}${encodeURIComponent(apiUrl)}`;
+          log(`[UHDMovies] Making proxied POST request for ${hostname} API`);
+          apiResponse = await axiosInstance.post(proxiedApiUrl, formData, {
+            headers: {
+              ...formData.getHeaders(),
+              'x-token': hostname
+            }
+          });
+        } else {
+          apiResponse = await axiosInstance.post(apiUrl, formData, {
+            headers: {
+              ...formData.getHeaders(),
+              'x-token': hostname
+            }
+          });
+        }
+
+        if (apiResponse.data && apiResponse.data.url) {
+          let finalUrl = apiResponse.data.url;
+          log(`[UHDMovies] ✓ ${hostname} API returned: ${String(finalUrl).substring(0, 100)}...`);
+          return finalUrl;
+        }
+      }
+
+      log(`[UHDMovies] Could not extract URL from ${hostname} wrapper`);
+      return null;
+    }
+
+    // Standard flow for other hosts (driveleech, driveseed, etc.)
     if (keys) {
-      const apiUrl = `${new URL(instantDownloadLink).origin}/api`;
+      const apiUrl = `${parsedUrl.origin}/api`;
       const formData = new FormData();
       formData.append('keys', keys);
 
@@ -769,14 +823,14 @@ async function tryInstantDownload($) {
         apiResponse = await axiosInstance.post(proxiedApiUrl, formData, {
           headers: {
             ...formData.getHeaders(),
-            'x-token': new URL(instantDownloadLink).hostname
+            'x-token': hostname
           }
         });
       } else {
         apiResponse = await axiosInstance.post(apiUrl, formData, {
           headers: {
             ...formData.getHeaders(),
-            'x-token': new URL(instantDownloadLink).hostname
+            'x-token': hostname
           }
         });
       }
@@ -918,7 +972,7 @@ async function validateVideoUrl(url, timeout = 10000) {
 
   try {
     log(`[UHDMovies] Validating URL: ${url.substring(0, 100)}...`);
-    
+
     // Use proxy for URL validation if enabled
     let response;
     if (UHDMOVIES_PROXY_URL) {
@@ -991,7 +1045,7 @@ async function validateVideoUrl(url, timeout = 10000) {
 async function resolveVideoLeechRedirect(videoLeechUrl) {
   try {
     log(`[UHDMovies] Resolving video-leech redirect: ${videoLeechUrl.substring(0, 80)}...`);
-    
+
     // Use HEAD request to get redirect location without downloading content
     let response;
     if (UHDMOVIES_PROXY_URL) {
@@ -1008,29 +1062,38 @@ async function resolveVideoLeechRedirect(videoLeechUrl) {
         timeout: 15000
       });
     }
-    
+
     // Check Location header for redirect
     if (response.headers && response.headers.location) {
       const location = response.headers.location;
       log(`[UHDMovies] Found redirect location: ${location.substring(0, 100)}...`);
-      
-      if (location.includes('video-seed.pro')) {
-        // Extract Google Drive URL from the ?url= parameter
+
+      // Handle both video-seed.pro and video-seed.dev wrapper URLs
+      if (location.includes('video-seed.pro') || location.includes('video-seed.dev')) {
+        // Extract direct video URL from the ?url= parameter
         try {
           const urlParams = new URLSearchParams(new URL(location).search);
-          const gdriveUrl = urlParams.get('url');
-          
-          if (gdriveUrl && gdriveUrl.includes('video-downloads.googleusercontent.com')) {
-            const decodedUrl = decodeURIComponent(gdriveUrl);
-            log(`[UHDMovies] ✓ Extracted Google Drive URL from video-seed.pro redirect`);
-            return decodedUrl;
+          const videoUrl = urlParams.get('url');
+
+          if (videoUrl) {
+            const decodedUrl = decodeURIComponent(videoUrl);
+            // Check for various direct video URL patterns
+            if (decodedUrl.includes('video-downloads.googleusercontent.com') ||
+              decodedUrl.includes('workers.dev') ||
+              decodedUrl.includes('.r2.dev') ||
+              decodedUrl.includes('.mp4') ||
+              decodedUrl.includes('.mkv')) {
+              const hostname = new URL(location).hostname;
+              log(`[UHDMovies] ✓ Extracted direct video URL from ${hostname} redirect`);
+              return decodedUrl;
+            }
           }
         } catch (parseError) {
           log(`[UHDMovies] Error parsing redirect URL: ${parseError.message}`);
         }
       }
     }
-    
+
     // Try following the redirect chain with GET request if HEAD didn't work
     try {
       let getResponse;
@@ -1048,26 +1111,32 @@ async function resolveVideoLeechRedirect(videoLeechUrl) {
           timeout: 15000
         });
       }
-      
+
       // Check the final request URL after redirects
       const finalUrl = getResponse.request?.res?.responseUrl || getResponse.request?.responseURL;
-      if (finalUrl && finalUrl.includes('video-seed.pro')) {
+      if (finalUrl && (finalUrl.includes('video-seed.pro') || finalUrl.includes('video-seed.dev'))) {
         const urlParams = new URLSearchParams(new URL(finalUrl).search);
-        const gdriveUrl = urlParams.get('url');
-        if (gdriveUrl && gdriveUrl.includes('video-downloads.googleusercontent.com')) {
-          const decodedUrl = decodeURIComponent(gdriveUrl);
-          log(`[UHDMovies] ✓ Extracted Google Drive URL from GET redirect chain`);
-          return decodedUrl;
+        const videoUrl = urlParams.get('url');
+        if (videoUrl) {
+          const decodedUrl = decodeURIComponent(videoUrl);
+          if (decodedUrl.includes('video-downloads.googleusercontent.com') ||
+            decodedUrl.includes('workers.dev') ||
+            decodedUrl.includes('.r2.dev') ||
+            decodedUrl.includes('.mp4') ||
+            decodedUrl.includes('.mkv')) {
+            log(`[UHDMovies] ✓ Extracted direct video URL from GET redirect chain`);
+            return decodedUrl;
+          }
         }
       }
     } catch (getError) {
       log(`[UHDMovies] GET redirect follow failed: ${getError.message}`);
     }
-    
+
     // If we can't extract Google Drive URL, return original URL (it might work directly)
     log(`[UHDMovies] Could not extract Google Drive URL, returning original URL`);
     return videoLeechUrl;
-    
+
   } catch (error) {
     console.error(`[UHDMovies] Error resolving video-leech redirect: ${error.message}`);
     // Return original URL on error
@@ -1271,7 +1340,7 @@ function scoreResult(title, requestedSeason = null) {
         log(`[UHDMovies] Season range bonus (+50): ${startSeason}-${endSeason} includes requested season ${requestedSeason}`);
       }
     }
-    
+
     // Check for specific season mentions
     const specificSeasonMatch = lowerTitle.match(/season\s+(\d+)/i);
     if (specificSeasonMatch) {
@@ -1284,7 +1353,7 @@ function scoreResult(title, requestedSeason = null) {
         log(`[UHDMovies] Season penalty (-20): Season ${mentionedSeason} is older than requested season ${requestedSeason}`);
       }
     }
-    
+
     // Check for "Season X Added" or similar indicators
     if (lowerTitle.includes('season') && lowerTitle.includes('added')) {
       const addedSeasonMatch = lowerTitle.match(/season\s+(\d+)\s+added/i);
@@ -1350,7 +1419,7 @@ const getCookiesForUrl = async (jar, url) => {
 // Helper function to create a proxied session for SID resolution
 const createProxiedSession = async (jar) => {
   const { wrapper } = await getAxiosCookieJarSupport();
-  
+
   const sessionConfig = {
     jar,
     headers: {
@@ -1373,7 +1442,7 @@ const createProxiedSession = async (jar) => {
     session.get = async (url, options = {}) => {
       const proxiedUrl = `${UHDMOVIES_PROXY_URL}${encodeURIComponent(url)}`;
       log(`[UHDMovies] Making proxied SID GET request to: ${url}`);
-      
+
       // Extract cookies from jar and add to headers
       const cookieString = await getCookiesForUrl(jar, url);
       if (cookieString) {
@@ -1383,14 +1452,14 @@ const createProxiedSession = async (jar) => {
           'Cookie': cookieString
         };
       }
-      
+
       return originalGet(proxiedUrl, options);
     };
 
     session.post = async (url, data, options = {}) => {
       const proxiedUrl = `${UHDMOVIES_PROXY_URL}${encodeURIComponent(url)}`;
       log(`[UHDMovies] Making proxied SID POST request to: ${url}`);
-      
+
       // Extract cookies from jar and add to headers
       const cookieString = await getCookiesForUrl(jar, url);
       if (cookieString) {
@@ -1400,7 +1469,7 @@ const createProxiedSession = async (jar) => {
           'Cookie': cookieString
         };
       }
-      
+
       return originalPost(proxiedUrl, data, options);
     };
   }
@@ -1607,25 +1676,25 @@ async function getUHDMoviesStreams(tmdbId, mediaType = 'movie', season = null, e
 
       // 5. Extract SID links from the movie/show page
       let downloadInfo = await (mediaType === 'tv' ? extractTvShowDownloadLinks(matchingResult.link, season, episode) : extractDownloadLinks(matchingResult.link, mediaInfo.year));
-      
+
       // Check if season was not found or episode extraction failed, and we have multiple results to try
-      if (downloadInfo.links.length === 0 && matchingResults.length > 1 && scoredResults && 
-          (downloadInfo.seasonNotFound || (mediaType === 'tv' && downloadInfo.title))) {
+      if (downloadInfo.links.length === 0 && matchingResults.length > 1 && scoredResults &&
+        (downloadInfo.seasonNotFound || (mediaType === 'tv' && downloadInfo.title))) {
         log(`[UHDMovies] Season ${season} not found or episode extraction failed on best match. Trying next best match...`);
-        
+
         // Try the next best match
         const nextBestMatch = scoredResults[1];
         log(`[UHDMovies] Trying next best match: "${nextBestMatch.title}"`);
-        
+
         downloadInfo = await (mediaType === 'tv' ? extractTvShowDownloadLinks(nextBestMatch.link, season, episode) : extractDownloadLinks(nextBestMatch.link, mediaInfo.year));
-        
+
         if (downloadInfo.links.length > 0) {
           log(`[UHDMovies] Successfully found links on next best match!`);
         } else {
           log(`[UHDMovies] Next best match also failed. No download links found.`);
         }
       }
-      
+
       if (downloadInfo.links.length === 0) {
         log('[UHDMovies] No download links found on page.');
         // Don't cache empty results to allow retrying later
