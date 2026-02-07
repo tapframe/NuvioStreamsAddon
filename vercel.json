@@ -4,7 +4,14 @@
     {
       "src": "server.js",
       "use": "@vercel/node",
-      "config": { "includeFiles": ["providers/**", "views/**"] }
+      "config": {
+        "maxDuration": 60,
+        "memory": 1024,
+        "includeFiles": [
+          "providers/**",
+          "views/**"
+        ]
+      }
     }
   ],
   "routes": [
