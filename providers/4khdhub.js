@@ -7,11 +7,11 @@ const { URL } = require('url');
 const path = require('path');
 const fs = require('fs').promises;
 const RedisCache = require('../utils/redisCache');
+const { findCountryCodes, getFlags } = require('../utils/language');
 
-// Debug logging flag - set DEBUG=true to enable verbose logging
-const DEBUG = process.env.DEBUG === 'true' || process.env['4KHDHUB_DEBUG'] === 'true';
-const log = DEBUG ? console.log : () => { };
-const logWarn = DEBUG ? console.warn : () => { };
+// Debug logging - always enabled for now to track issues
+const log = console.log;
+const logWarn = console.warn;
 
 // Cache configuration
 const CACHE_ENABLED = process.env.DISABLE_CACHE !== 'true';
@@ -29,7 +29,7 @@ const ensureCacheDir = async () => {
 };
 ensureCacheDir();
 
-const BASE_URL = 'https://4khdhub.fans';
+const BASE_URL = 'https://4khdhub.dad';
 const TMDB_API_KEY = '439c478a771f35c05022f9feabcca01c';
 
 // Polyfill for atob if not available globally
@@ -79,22 +79,20 @@ async function getTmdbDetails(tmdbId, type) {
     }
 }
 
-// FourKHDHub Logic
+// FourKHDHub Logic - search by name ONLY, not name+year
 async function fetchPageUrl(name, year, isSeries) {
     const cacheKey = `search_v2_${name.replace(/[^a-z0-9]/gi, '_')}_${year}`;
-    // [4KHDHub] Checking cache for key: ${cacheKey} (Enabled: ${CACHE_ENABLED})
 
     if (CACHE_ENABLED) {
         const cached = await redisCache.getFromCache(cacheKey, '', CACHE_DIR);
         if (cached) {
-            // [4KHDHub] Cache HIT for search: ${name}
             return cached.data || cached;
-        } else {
-            // [4KHDHub] Cache MISS for search: ${name}
         }
     }
 
-    const searchUrl = `${BASE_URL}/?s=${encodeURIComponent(`${name} ${year}`)}`;
+    // CRITICAL: Search by NAME ONLY (webstrymr does this, searching with year fails)
+    const searchUrl = `${BASE_URL}/?s=${encodeURIComponent(name)}`;
+    log(`[4KHDHub] Searching: ${searchUrl}`);
     const html = await fetchText(searchUrl);
     if (!html) return null;
 
@@ -118,9 +116,11 @@ async function fetchPageUrl(name, year, isSeries) {
                 .replace(/\[.*?]/g, '')
                 .trim();
 
-            // Allow exact match or close Levenshtein distance
-            // Also user's code used: useCollator: true, but fast-levenshtein is simpler
-            return levenshtein.get(movieCardTitle.toLowerCase(), name.toLowerCase()) < 5;
+            // Use webstrymr's exact matching logic
+            const diff = levenshtein.get(movieCardTitle, name, { useCollator: true });
+
+            // Allow exact match (diff < 5) OR partial match if title contains name (diff < 16)
+            return diff < 5 || (movieCardTitle.includes(name) && diff < 16);
         })
         .map((_i, el) => {
             let href = $(el).attr('href');
@@ -132,6 +132,12 @@ async function fetchPageUrl(name, year, isSeries) {
         .get();
 
     const result = matchingCards.length > 0 ? matchingCards[0] : null;
+    if (result) {
+        log(`[4KHDHub] Found page: ${result}`);
+    } else {
+        log(`[4KHDHub] No matching pages found for "${name}" (${year})`);
+    }
+
     if (CACHE_ENABLED && result) {
         await redisCache.saveToCache(cacheKey, { data: result }, '', CACHE_DIR, 86400); // 1 day TTL
     }
@@ -152,11 +158,11 @@ async function resolveRedirectUrl(redirectUrl) {
         const redirectDataMatch = redirectHtml.match(/'o','(.*?)'/);
         if (!redirectDataMatch) return null;
 
-        // JSON.parse(atob(rot13Cipher(atob(atob(redirectDataMatch[1] as string)))))
-        const step1 = atob(redirectDataMatch[1]);
-        const step2 = atob(step1);
-        const step3 = rot13Cipher(step2);
-        const step4 = atob(step3);
+        // Correct decode order: atob(rot13Cipher(atob(atob(data))))
+        const step1 = atob(redirectDataMatch[1]);      // First base64 decode
+        const step2 = atob(step1);                     // Second base64 decode
+        const step3 = rot13Cipher(step2);              // ROT13 decode
+        const step4 = atob(step3);                     // Third base64 decode
         const redirectData = JSON.parse(step4);
 
         if (redirectData && redirectData.o) {
@@ -190,112 +196,123 @@ async function extractSourceResults($, el) {
         height = 2160;
     }
 
+    // Detect country codes from HTML content (for language flags)
+    const countryCodes = ['multi', ...findCountryCodes(localHtml)];
+
     const meta = {
         bytes: sizeMatch ? bytes.parse(sizeMatch[1]) : 0,
         height: height,
-        title: title
+        title: title,
+        countryCodes: countryCodes
     };
 
-    // Check for HubCloud link
+    // Prefer HubCloud link (usually more reliable)
     let hubCloudLink = $(el).find('a')
         .filter((_i, a) => $(a).text().includes('HubCloud'))
         .attr('href');
 
     if (hubCloudLink) {
         const resolved = await resolveRedirectUrl(hubCloudLink);
-        return { url: resolved, meta };
+        if (resolved) {
+            return { url: resolved, meta, source: 'HubCloud' };
+        }
     }
 
-    // Check for HubDrive link
+    // Fallback to HubDrive link
     let hubDriveLink = $(el).find('a')
         .filter((_i, a) => $(a).text().includes('HubDrive'))
         .attr('href');
 
     if (hubDriveLink) {
-        const resolvedDrive = await resolveRedirectUrl(hubDriveLink);
-        if (resolvedDrive) {
-            const hubDriveHtml = await fetchText(resolvedDrive);
-            if (hubDriveHtml) {
-                const $2 = cheerio.load(hubDriveHtml);
-                const innerCloudLink = $2('a:contains("HubCloud")').attr('href');
-                if (innerCloudLink) {
-                    return { url: innerCloudLink, meta };
-                }
-            }
+        const resolved = await resolveRedirectUrl(hubDriveLink);
+        if (resolved) {
+            return { url: resolved, meta, source: 'HubDrive' };
         }
     }
 
     return null;
 }
 
-// HubCloud Extractor Logic
+// HubCloud Extractor - extracts FSL and PixelServer links
 async function extractHubCloud(hubCloudUrl, baseMeta) {
     if (!hubCloudUrl) return [];
 
-    const cacheKey = `hubcloud_v2_${hubCloudUrl.replace(/[^a-z0-9]/gi, '')}`;
-    if (CACHE_ENABLED) {
-        const cached = await redisCache.getFromCache(cacheKey, '', CACHE_DIR);
-        if (cached) return cached.data || cached;
-    }
+    try {
+        // Step 1: Fetch the redirect page
+        const headers = { Referer: hubCloudUrl };
+        const redirectHtml = await fetchText(hubCloudUrl, { headers });
+        if (!redirectHtml) return [];
 
-    const headers = { Referer: hubCloudUrl }; // or should it be the previous page? User's code uses meta.referer ?? url.href. HubCloud.ts says Referer: meta.referer ?? url.href.
-    // In extractInternal(ctx, url, meta): const headers = { Referer: meta.referer ?? url.href };
-    // Then fetches redirectHtml.
-
-    // We'll trust the url itself as referer if we don't have the parent page readily passed down, or just no referer.
-    // Let's use the HubCloud URL itself as referer for the first request, that's usually safe or standard.
-
-    const redirectHtml = await fetchText(hubCloudUrl, { headers: { Referer: hubCloudUrl } });
-    if (!redirectHtml) return [];
-
-    const redirectUrlMatch = redirectHtml.match(/var url ?= ?'(.*?)'/);
-    if (!redirectUrlMatch) return [];
-
-    const finalLinksUrl = redirectUrlMatch[1];
-    const linksHtml = await fetchText(finalLinksUrl, { headers: { Referer: hubCloudUrl } });
-    if (!linksHtml) return [];
-
-    const $ = cheerio.load(linksHtml);
-    const results = [];
-    const sizeText = $('#size').text();
-    const titleText = $('title').text().trim();
-
-    // Combine meta from page with baseMeta (user's code does this)
-    const currentMeta = {
-        ...baseMeta,
-        bytes: bytes.parse(sizeText) || baseMeta.bytes,
-        title: titleText || baseMeta.title
-    };
-
-    // FSL Links
-    $('a').each((_i, el) => {
-        const text = $(el).text();
-        const href = $(el).attr('href');
-        if (!href) return;
-
-        if (text.includes('FSL') || text.includes('Download File')) {
-            results.push({
-                source: 'FSL',
-                url: href,
-                meta: currentMeta
-            });
+        // Step 2: Extract the var url = '...' from the page
+        const redirectUrlMatch = redirectHtml.match(/var url ?= ?'(.*?)'/);
+        if (!redirectUrlMatch) {
+            log(`[4KHDHub] No redirect URL found in HubCloud page`);
+            return [];
         }
-        else if (text.includes('PixelServer')) {
-            const pixelUrl = href.replace('/u/', '/api/file/');
-            results.push({
-                source: 'PixelServer',
-                url: pixelUrl,
-                meta: currentMeta
-            });
-        }
-    });
 
-    if (CACHE_ENABLED && results.length > 0) {
-        await redisCache.saveToCache(cacheKey, { data: results }, '', CACHE_DIR, 3600); // 1 hour TTL
+        // Step 3: Fetch the actual links page
+        const finalLinksUrl = redirectUrlMatch[1];
+        log(`[4KHDHub] Fetching links from: ${finalLinksUrl.substring(0, 50)}...`);
+        const linksHtml = await fetchText(finalLinksUrl, { headers: { Referer: hubCloudUrl } });
+        if (!linksHtml) return [];
+
+        const $ = cheerio.load(linksHtml);
+        const results = [];
+
+        // Extract size and title from the page
+        const sizeText = $('#size').text();
+        const titleText = $('title').text().trim();
+        const parsedSize = bytes.parse(sizeText) || baseMeta.bytes;
+
+        // Update meta with page info
+        const currentMeta = {
+            ...baseMeta,
+            bytes: parsedSize,
+            title: titleText || baseMeta.title
+        };
+
+        // Step 4: Find FSL link
+        $('a').each((_i, el) => {
+            const text = $(el).text();
+            const href = $(el).attr('href');
+            if (!href) return;
+
+            if (text.includes('FSL') && !text.includes('FSLv2')) {
+                results.push({
+                    source: 'FSL',
+                    url: href,
+                    meta: currentMeta
+                });
+                log(`[4KHDHub] Found FSL link`);
+            }
+        });
+
+        // Step 5: Find PixelServer link
+        $('a').each((_i, el) => {
+            const text = $(el).text();
+            const href = $(el).attr('href');
+            if (!href) return;
+
+            if (text.includes('PixelServer')) {
+                // Convert /u/ to /api/file/ for direct download
+                const pixelUrl = href.replace('/u/', '/api/file/');
+                results.push({
+                    source: 'PixelDrain',  // Using PixelDrain for display
+                    url: pixelUrl,
+                    meta: currentMeta
+                });
+                log(`[4KHDHub] Found PixelServer link`);
+            }
+        });
+
+        log(`[4KHDHub] HubCloud extraction found ${results.length} servers`);
+        return results;
+    } catch (e) {
+        console.error(`[4KHDHub] HubCloud extraction error: ${e.message}`);
+        return [];
     }
-
-    return results;
 }
+
 
 async function get4KHDHubStreams(tmdbId, type, season = null, episode = null) {
     const tmdbDetails = await getTmdbDetails(tmdbId, type);
@@ -318,7 +335,7 @@ async function get4KHDHubStreams(tmdbId, type, season = null, episode = null) {
 
     let itemsToProcess = [];
 
-    if (isSeries && season && episode) { // Use isSeries here
+    if (isSeries && season && episode) {
         // Find specific season and episode
         const seasonStr = `S${String(season).padStart(2, '0')}`;
         const episodeStr = `Episode-${String(episode).padStart(2, '0')}`;
@@ -348,17 +365,39 @@ async function get4KHDHubStreams(tmdbId, type, season = null, episode = null) {
         try {
             const sourceResult = await extractSourceResults($, item);
             if (sourceResult && sourceResult.url) {
-                log(`[4KHDHub] Extracting from HubCloud: ${sourceResult.url}`);
-                const extractedLinks = await extractHubCloud(sourceResult.url, sourceResult.meta);
+                // If it's a HubCloud link, extract multiple servers (FSL + PixelDrain)
+                if (sourceResult.source === 'HubCloud') {
+                    log(`[4KHDHub] Processing HubCloud link...`);
+                    const hubCloudLinks = await extractHubCloud(sourceResult.url, sourceResult.meta);
 
-                for (const link of extractedLinks) {
+                    for (const link of hubCloudLinks) {
+                        const flags = getFlags(link.meta.countryCodes || sourceResult.meta.countryCodes);
+                        const qualityStr = sourceResult.meta.height ? `${sourceResult.meta.height}p` : '';
+
+                        streams.push({
+                            name: `4KHDHub | Hayduk ${flags}`,  // Format: "4KHDHub | Hayduk 🇺🇸🇮🇳"
+                            title: `${link.meta.title}\n📦 ${bytes.format(link.meta.bytes || 0)} 🔗 HubCloud(${link.source})`,
+                            url: link.url,
+                            quality: qualityStr || undefined,
+                            behaviorHints: {
+                                bingeGroup: `4khdhub-hubcloud-${link.source.toLowerCase()}`
+                            }
+                        });
+                    }
+                } else {
+                    // Direct HubDrive link
+                    log(`[4KHDHub] Extracted ${sourceResult.source} link: ${sourceResult.url.substring(0, 50)}...`);
+
+                    const flags = getFlags(sourceResult.meta.countryCodes);
+                    const qualityStr = sourceResult.meta.height ? `${sourceResult.meta.height}p` : '';
+
                     streams.push({
-                        name: `4KHDHub - ${link.source} ${sourceResult.meta.height ? sourceResult.meta.height + 'p' : ''}`,
-                        title: `${link.meta.title}\n${bytes.format(link.meta.bytes || 0)}`,
-                        url: link.url,
-                        quality: sourceResult.meta.height ? `${sourceResult.meta.height}p` : undefined,
+                        name: `4KHDHub | Hayduk ${flags}`,
+                        title: `${sourceResult.meta.title}\n📦 ${bytes.format(sourceResult.meta.bytes || 0)}`,
+                        url: sourceResult.url,
+                        quality: qualityStr || undefined,
                         behaviorHints: {
-                            bingeGroup: `4khdhub-${link.source}`
+                            bingeGroup: `4khdhub-${sourceResult.source.toLowerCase()}`
                         }
                     });
                 }
@@ -368,6 +407,7 @@ async function get4KHDHubStreams(tmdbId, type, season = null, episode = null) {
         }
     }
 
+    log(`[4KHDHub] Returning ${streams.length} streams`);
     return streams;
 }
 
