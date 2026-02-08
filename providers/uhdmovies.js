@@ -755,11 +755,65 @@ async function tryInstantDownload($) {
   log('[UHDMovies] Found "Instant Download" link, attempting to extract final URL...');
 
   try {
-    const urlParams = new URLSearchParams(new URL(instantDownloadLink).search);
+    const parsedUrl = new URL(instantDownloadLink);
+    const urlParams = new URLSearchParams(parsedUrl.search);
     const keys = urlParams.get('url');
+    const hostname = parsedUrl.hostname;
 
+    // Handle video-seed.dev and video-seed.pro wrapper URLs
+    // These sites wrap direct video URLs in a ?url= parameter
+    if (hostname.includes('video-seed.dev') || hostname.includes('video-seed.pro')) {
+      if (keys) {
+        // Check if the url parameter contains a direct video URL (Google Drive, etc.)
+        const decodedUrl = decodeURIComponent(keys);
+        if (decodedUrl.includes('video-downloads.googleusercontent.com') ||
+          decodedUrl.includes('workers.dev') ||
+          decodedUrl.includes('.r2.dev') ||
+          decodedUrl.includes('.mp4') ||
+          decodedUrl.includes('.mkv')) {
+          log(`[UHDMovies] ✓ Extracted direct URL from ${hostname}: ${decodedUrl.substring(0, 100)}...`);
+          return decodedUrl;
+        }
+
+        // Otherwise, try the API approach for video-seed sites
+        log(`[UHDMovies] Trying ${hostname} API to extract final URL...`);
+        const apiUrl = `${parsedUrl.origin}/api`;
+        const formData = new FormData();
+        formData.append('keys', keys);
+
+        let apiResponse;
+        if (UHDMOVIES_PROXY_URL) {
+          const proxiedApiUrl = `${UHDMOVIES_PROXY_URL}${encodeURIComponent(apiUrl)}`;
+          log(`[UHDMovies] Making proxied POST request for ${hostname} API`);
+          apiResponse = await axiosInstance.post(proxiedApiUrl, formData, {
+            headers: {
+              ...formData.getHeaders(),
+              'x-token': hostname
+            }
+          });
+        } else {
+          apiResponse = await axiosInstance.post(apiUrl, formData, {
+            headers: {
+              ...formData.getHeaders(),
+              'x-token': hostname
+            }
+          });
+        }
+
+        if (apiResponse.data && apiResponse.data.url) {
+          let finalUrl = apiResponse.data.url;
+          log(`[UHDMovies] ✓ ${hostname} API returned: ${String(finalUrl).substring(0, 100)}...`);
+          return finalUrl;
+        }
+      }
+
+      log(`[UHDMovies] Could not extract URL from ${hostname} wrapper`);
+      return null;
+    }
+
+    // Standard flow for other hosts (driveleech, driveseed, etc.)
     if (keys) {
-      const apiUrl = `${new URL(instantDownloadLink).origin}/api`;
+      const apiUrl = `${parsedUrl.origin}/api`;
       const formData = new FormData();
       formData.append('keys', keys);
 
@@ -770,14 +824,14 @@ async function tryInstantDownload($) {
         apiResponse = await axiosInstance.post(proxiedApiUrl, formData, {
           headers: {
             ...formData.getHeaders(),
-            'x-token': new URL(instantDownloadLink).hostname
+            'x-token': hostname
           }
         });
       } else {
         apiResponse = await axiosInstance.post(apiUrl, formData, {
           headers: {
             ...formData.getHeaders(),
-            'x-token': new URL(instantDownloadLink).hostname
+            'x-token': hostname
           }
         });
       }
@@ -1054,11 +1108,17 @@ async function resolveVideoLeechRedirect(videoLeechUrl) {
       const finalUrl = getResponse.request?.res?.responseUrl || getResponse.request?.responseURL;
       if (finalUrl && (finalUrl.includes('video-seed.pro') || finalUrl.includes('video-seed.dev'))) {
         const urlParams = new URLSearchParams(new URL(finalUrl).search);
-        const gdriveUrl = urlParams.get('url');
-        if (gdriveUrl && gdriveUrl.includes('video-downloads.googleusercontent.com')) {
-          const decodedUrl = decodeURIComponent(gdriveUrl);
-          log(`[UHDMovies] ✓ Extracted Google Drive URL from GET redirect chain`);
-          return decodedUrl;
+        const videoUrl = urlParams.get('url');
+        if (videoUrl) {
+          const decodedUrl = decodeURIComponent(videoUrl);
+          if (decodedUrl.includes('video-downloads.googleusercontent.com') ||
+            decodedUrl.includes('workers.dev') ||
+            decodedUrl.includes('.r2.dev') ||
+            decodedUrl.includes('.mp4') ||
+            decodedUrl.includes('.mkv')) {
+            log(`[UHDMovies] ✓ Extracted direct video URL from GET redirect chain`);
+            return decodedUrl;
+          }
         }
       }
     } catch (getError) {
