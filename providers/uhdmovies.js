@@ -7,6 +7,7 @@ const fs = require('fs').promises;
 const path = require('path');
 const RedisCache = require('../utils/redisCache');
 const { followRedirectToFilePage, extractFinalDownloadFromFilePage } = require('../utils/linkResolver');
+const TMDBFetcher = require('../utils/TMDBFetcher');
 
 // Debug logging flag - set DEBUG=true to enable verbose logging
 const DEBUG = process.env.DEBUG === 'true' || process.env.UHDMOVIES_DEBUG === 'true';
@@ -1068,25 +1069,16 @@ async function resolveVideoLeechRedirect(videoLeechUrl) {
       const location = response.headers.location;
       log(`[UHDMovies] Found redirect location: ${location.substring(0, 100)}...`);
 
-      // Handle both video-seed.pro and video-seed.dev wrapper URLs
       if (location.includes('video-seed.pro') || location.includes('video-seed.dev')) {
-        // Extract direct video URL from the ?url= parameter
+        // Extract Google Drive URL from the ?url= parameter
         try {
           const urlParams = new URLSearchParams(new URL(location).search);
-          const videoUrl = urlParams.get('url');
+          const gdriveUrl = urlParams.get('url');
 
-          if (videoUrl) {
-            const decodedUrl = decodeURIComponent(videoUrl);
-            // Check for various direct video URL patterns
-            if (decodedUrl.includes('video-downloads.googleusercontent.com') ||
-              decodedUrl.includes('workers.dev') ||
-              decodedUrl.includes('.r2.dev') ||
-              decodedUrl.includes('.mp4') ||
-              decodedUrl.includes('.mkv')) {
-              const hostname = new URL(location).hostname;
-              log(`[UHDMovies] ✓ Extracted direct video URL from ${hostname} redirect`);
-              return decodedUrl;
-            }
+          if (gdriveUrl && gdriveUrl.includes('video-downloads.googleusercontent.com')) {
+            const decodedUrl = decodeURIComponent(gdriveUrl);
+            log(`[UHDMovies] ✓ Extracted Google Drive URL from video-seed redirect`);
+            return decodedUrl;
           }
         } catch (parseError) {
           log(`[UHDMovies] Error parsing redirect URL: ${parseError.message}`);
@@ -1606,9 +1598,8 @@ async function getUHDMoviesStreams(tmdbId, mediaType = 'movie', season = null, e
       }
       log(`[UHDMovies] Cache MISS for ${cacheKey}. Fetching from source.`);
       // 2. If cache miss, get TMDB info to perform search
-      const tmdbUrl = `https://api.themoviedb.org/3/${mediaType === 'tv' ? 'tv' : 'movie'}/${tmdbId}?api_key=${TMDB_API_KEY_UHDMOVIES}`;
-      const tmdbResponse = await axios.get(tmdbUrl);
-      const tmdbData = tmdbResponse.data;
+      const tmdbFetcher = new TMDBFetcher(TMDB_API_KEY_UHDMOVIES);
+      const tmdbData = await tmdbFetcher.getDetails(tmdbId, mediaType === 'tv' ? 'tv' : 'movie');
       const mediaInfo = {
         title: mediaType === 'tv' ? tmdbData.name : tmdbData.title,
         year: parseInt(((mediaType === 'tv' ? tmdbData.first_air_date : tmdbData.release_date) || '').split('-')[0], 10)

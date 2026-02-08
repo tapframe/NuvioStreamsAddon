@@ -943,8 +943,9 @@ builder.defineStreamHandler(async (args) => {
             console.log(`  Parsed season ${seasonNum}, episode ${episodeNum} from IMDb ID parts`);
         }
 
-        // Pass userRegionPreference and expected type to convertImdbToTmdb
-        const conversionResult = await convertImdbToTmdb(baseImdbId, userRegionPreference, type);
+        // Pass userRegionPreference, type, season, and episode to convertImdbToTmdb
+        // Season/episode presence allows auto-detection of TV vs Movie (webstreamr logic)
+        const conversionResult = await convertImdbToTmdb(baseImdbId, userRegionPreference, type, seasonNum, episodeNum);
         if (conversionResult && conversionResult.tmdbId && conversionResult.tmdbType) {
             tmdbId = conversionResult.tmdbId;
             tmdbTypeFromId = conversionResult.tmdbType;

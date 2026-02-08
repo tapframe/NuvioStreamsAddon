@@ -7,11 +7,14 @@
     "start": "node server.js"
   },
   "dependencies": {
+    "@keyvhq/core": "^2.1.15",
     "aromanize": "^0.1.5",
+    "async-mutex": "^0.5.0",
     "axios": "^1.9.0",
     "axios-cookiejar-support": "^6.0.2",
     "body-parser": "^2.2.0",
     "bytes": "^3.1.2",
+    "cacheable": "^2.3.2",
     "cheerio": "^1.0.0",
     "cors": "^2.8.5",
     "crypto-js": "^4.2.0",
@@ -22,6 +25,7 @@
     "hls-parser": "^0.13.5",
     "ioredis": "^5.6.1",
     "jsdom": "^26.1.0",
+    "keyv": "^5.6.0",
     "node-fetch": "^2.7.0",
     "p-limit": "^6.2.0",
     "puppeteer": "^24.11.0",
