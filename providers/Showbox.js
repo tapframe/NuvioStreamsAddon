@@ -1,5 +1,6 @@
 require('dotenv').config();
 const axios = require('axios');
+const TMDBFetcher = require('../utils/TMDBFetcher');
 
 // TMDB API Configuration (for convertImdbToTmdb helper)
 const TMDB_API_KEY = process.env.TMDB_API_KEY || '439c478a771f35c05022f9feabcca01c';
@@ -164,79 +165,71 @@ const sortStreamsByQuality = (streams) => {
 
 /**
  * Convert IMDb ID to TMDB ID
- * Used by addon.js for IMDb ID resolution
+ * Ported from webstreamr's tmdb.ts with cleaner logic
+ * Auto-detects TV vs Movie using season/episode presence
  */
-const convertImdbToTmdb = async (imdbId, regionPreference = null, expectedType = null) => {
-    console.time(`convertImdbToTmdb_total_${imdbId}`);
+const imdbTmdbCache = new Map();
+const convertImdbToTmdb = async (imdbId, regionPreference = null, expectedType = null, season = null, episode = null) => {
+    const timerLabel = `convertImdbToTmdb_total_${imdbId}`;
+    console.time(timerLabel);
+
     if (!imdbId || !imdbId.startsWith('tt')) {
         console.log('  Invalid IMDb ID format provided for conversion.', imdbId);
-        console.timeEnd(`convertImdbToTmdb_total_${imdbId}`);
+        console.timeEnd(timerLabel);
         return null;
     }
-    console.log(`  Attempting to convert IMDb ID: ${imdbId} to TMDB ID${expectedType ? ` (expected type: ${expectedType})` : ''}.`);
 
-    const findApiUrl = `${TMDB_BASE_URL}/find/${imdbId}?api_key=${TMDB_API_KEY}&external_source=imdb_id`;
-    console.log(`    Fetching from TMDB find API: ${findApiUrl}`);
+    // Check cache first
+    const cacheKey = `${imdbId}_${season || 'movie'}`;
+    if (imdbTmdbCache.has(cacheKey)) {
+        const cached = imdbTmdbCache.get(cacheKey);
+        console.log(`  Using cached conversion: IMDb ${imdbId} → TMDB ${cached.tmdbType}/${cached.tmdbId}`);
+        console.timeEnd(timerLabel);
+        return cached;
+    }
+
+    console.log(`  Converting IMDb ID: ${imdbId} ${season ? `(S${season}E${episode || 1})` : '(movie)'}`);
     console.time(`convertImdbToTmdb_apiCall_${imdbId}`);
 
     try {
-        const response = await axios.get(findApiUrl, { timeout: 10000 });
+        // Use TMDBFetcher with retry logic and mutex locks
+        const tmdbFetcher = new TMDBFetcher(TMDB_API_KEY);
+        const findResults = await tmdbFetcher.tmdbFetch(`/find/${imdbId}`, {
+            external_source: 'imdb_id'
+        });
         console.timeEnd(`convertImdbToTmdb_apiCall_${imdbId}`);
-        const findResults = response.data;
 
-        if (findResults) {
-            let result = null;
+        // Auto-detect type using season presence (like webstreamr)
+        const isTv = season !== null && season !== undefined;
+        const results = isTv ? findResults.tv_results : findResults.movie_results;
 
-            // Context-aware prioritization based on expected type
-            if (expectedType === 'tv' || expectedType === 'series') {
-                // For series requests, prioritize TV results
-                if (findResults.tv_results && findResults.tv_results.length > 0) {
-                    result = { tmdbId: String(findResults.tv_results[0].id), tmdbType: 'tv', title: findResults.tv_results[0].name || findResults.tv_results[0].original_name };
-                    console.log(`    Prioritized TV result for series request: ${result.title}`);
-                } else if (findResults.movie_results && findResults.movie_results.length > 0) {
-                    result = { tmdbId: String(findResults.movie_results[0].id), tmdbType: 'movie', title: findResults.movie_results[0].title || findResults.movie_results[0].original_title };
-                    console.log(`    Fallback to movie result for series request: ${result.title}`);
-                }
-            } else if (expectedType === 'movie') {
-                // For movie requests, prioritize movie results
-                if (findResults.movie_results && findResults.movie_results.length > 0) {
-                    result = { tmdbId: String(findResults.movie_results[0].id), tmdbType: 'movie', title: findResults.movie_results[0].title || findResults.movie_results[0].original_title };
-                    console.log(`    Prioritized movie result for movie request: ${result.title}`);
-                } else if (findResults.tv_results && findResults.tv_results.length > 0) {
-                    result = { tmdbId: String(findResults.tv_results[0].id), tmdbType: 'tv', title: findResults.tv_results[0].name || findResults.tv_results[0].original_name };
-                    console.log(`    Fallback to TV result for movie request: ${result.title}`);
-                }
-            } else {
-                // Default behavior: prioritize movie results, then tv results (backward compatibility)
-                if (findResults.movie_results && findResults.movie_results.length > 0) {
-                    result = { tmdbId: String(findResults.movie_results[0].id), tmdbType: 'movie', title: findResults.movie_results[0].title || findResults.movie_results[0].original_title };
-                } else if (findResults.tv_results && findResults.tv_results.length > 0) {
-                    result = { tmdbId: String(findResults.tv_results[0].id), tmdbType: 'tv', title: findResults.tv_results[0].name || findResults.tv_results[0].original_name };
-                }
-            }
-
-            if (findResults.person_results && findResults.person_results.length > 0 && !result) {
-                // Could handle other types if necessary, e.g. person, but for streams, movie/tv are key
-                console.log(`    IMDb ID ${imdbId} resolved to a person, not a movie or TV show on TMDB.`);
-            } else if (!result) {
-                console.log(`    No movie or TV results found on TMDB for IMDb ID ${imdbId}. Response:`, JSON.stringify(findResults).substring(0, 200));
-            }
-
-            if (result && result.tmdbId && result.tmdbType) {
-                console.log(`    Successfully converted IMDb ID ${imdbId} to TMDB ${result.tmdbType} ID ${result.tmdbId} (${result.title})`);
-                console.timeEnd(`convertImdbToTmdb_total_${imdbId}`);
-                return result;
-            } else {
-                console.log(`    Could not convert IMDb ID ${imdbId} to a usable TMDB movie/tv ID.`);
-            }
+        if (!results || results.length === 0) {
+            console.log(`  No ${isTv ? 'TV' : 'movie'} results found for IMDb ID ${imdbId}`);
+            console.timeEnd(timerLabel);
+            return null;
         }
+
+        const firstResult = results[0];
+        const result = {
+            tmdbId: String(firstResult.id),
+            tmdbType: isTv ? 'tv' : 'movie',
+            title: isTv ? (firstResult.name || firstResult.original_name) : (firstResult.title || firstResult.original_title)
+        };
+
+        // Cache the result
+        imdbTmdbCache.set(cacheKey, result);
+
+        console.log(`  Successfully converted IMDb ID ${imdbId} to TMDB ${result.tmdbType} ID ${result.tmdbId} (${result.title})`);
+        console.timeEnd(timerLabel);
+        return result;
+
     } catch (error) {
-        if (console.timeEnd && typeof console.timeEnd === 'function') console.timeEnd(`convertImdbToTmdb_apiCall_${imdbId}`); // Ensure timer ends on error
+        if (console.timeEnd && typeof console.timeEnd === 'function') console.timeEnd(`convertImdbToTmdb_apiCall_${imdbId}`);
         const errorMessage = error.response ? `${error.message} (Status: ${error.response.status})` : error.message;
-        console.log(`    Error during TMDB find API call for IMDb ID ${imdbId}: ${errorMessage}`);
+        console.log(`  Error during TMDB find API call for IMDb ID ${imdbId}: ${errorMessage}`);
+        console.timeEnd(timerLabel);
+        return null;
     }
-    console.timeEnd(`convertImdbToTmdb_total_${imdbId}`);
-    return null;
 };
 
 /**

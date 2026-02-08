@@ -1,4 +1,3 @@
-const axios = require('axios');
 const cheerio = require('cheerio');
 const bytes = require('bytes');
 const levenshtein = require('fast-levenshtein');
@@ -8,6 +7,9 @@ const path = require('path');
 const fs = require('fs').promises;
 const RedisCache = require('../utils/redisCache');
 const { findCountryCodes, getFlags } = require('../utils/language');
+const fetcher = require('../utils/Fetcher');
+const TMDBFetcher = require('../utils/TMDBFetcher');
+const { extractResolution } = require('../utils/resolution');
 
 // Debug logging - always enabled for now to track issues
 const log = console.log;
@@ -32,20 +34,22 @@ ensureCacheDir();
 const BASE_URL = 'https://4khdhub.dad';
 const TMDB_API_KEY = '439c478a771f35c05022f9feabcca01c';
 
+// Initialize TMDB fetcher with mutex locking
+const tmdbFetcher = new TMDBFetcher(TMDB_API_KEY);
+
 // Polyfill for atob if not available globally
 const atob = (str) => Buffer.from(str, 'base64').toString('binary');
 
 // Helper to fetch text content
 async function fetchText(url, options = {}) {
     try {
-        const response = await axios.get(url, {
+        return await fetcher.text(url, {
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
                 ...options.headers
             },
             timeout: 10000
         });
-        return response.data;
     } catch (error) {
         console.error(`[4KHDHub] Request failed for ${url}: ${error.message}`);
         return null;
@@ -56,11 +60,9 @@ async function fetchText(url, options = {}) {
 async function getTmdbDetails(tmdbId, type) {
     try {
         const isSeries = type === 'series' || type === 'tv';
-        const url = `https://api.themoviedb.org/3/${isSeries ? 'tv' : 'movie'}/${tmdbId}?api_key=${TMDB_API_KEY}`;
-        log(`[4KHDHub] Fetching TMDB details from: ${url}`);
-        const response = await axios.get(url);
-        const data = response.data;
-        // ...
+        log(`[4KHDHub] Fetching TMDB details for ${isSeries ? 'tv' : 'movie'}/${tmdbId}`);
+
+        const data = await tmdbFetcher.getDetails(tmdbId, isSeries ? 'tv' : 'movie');
 
         if (isSeries) {
             return {
@@ -116,11 +118,14 @@ async function fetchPageUrl(name, year, isSeries) {
                 .replace(/\[.*?]/g, '')
                 .trim();
 
-            // Use webstrymr's exact matching logic
+            // Use webstrymr's exact matching logic with improvements for subtitles
             const diff = levenshtein.get(movieCardTitle, name, { useCollator: true });
 
-            // Allow exact match (diff < 5) OR partial match if title contains name (diff < 16)
-            return diff < 5 || (movieCardTitle.includes(name) && diff < 16);
+            // Allow exact match (diff < 5) OR partial match if title contains name
+            // Increased threshold to 25 to handle subtitles like "The Hedge Knight"
+            // Also allow if movieCardTitle starts with name (handles subtitles after main title)
+            const startsWithName = movieCardTitle.toLowerCase().startsWith(name.toLowerCase());
+            return diff < 5 || startsWithName || (movieCardTitle.includes(name) && diff < 25);
         })
         .map((_i, el) => {
             let href = $(el).attr('href');
@@ -372,13 +377,14 @@ async function get4KHDHubStreams(tmdbId, type, season = null, episode = null) {
 
                     for (const link of hubCloudLinks) {
                         const flags = getFlags(link.meta.countryCodes || sourceResult.meta.countryCodes);
-                        const qualityStr = sourceResult.meta.height ? `${sourceResult.meta.height}p` : '';
+                        const resolution = extractResolution(link.meta.title) || '';
+                        const resolutionStr = resolution ? ` | ${resolution}` : '';
 
                         streams.push({
-                            name: `4KHDHub | Hayduk ${flags}`,  // Format: "4KHDHub | Hayduk 🇺🇸🇮🇳"
+                            name: `4KHDHub | ${flags}${resolutionStr}`,
                             title: `${link.meta.title}\n📦 ${bytes.format(link.meta.bytes || 0)} 🔗 HubCloud(${link.source})`,
                             url: link.url,
-                            quality: qualityStr || undefined,
+                            quality: resolution || undefined,
                             behaviorHints: {
                                 bingeGroup: `4khdhub-hubcloud-${link.source.toLowerCase()}`
                             }
@@ -389,13 +395,14 @@ async function get4KHDHubStreams(tmdbId, type, season = null, episode = null) {
                     log(`[4KHDHub] Extracted ${sourceResult.source} link: ${sourceResult.url.substring(0, 50)}...`);
 
                     const flags = getFlags(sourceResult.meta.countryCodes);
-                    const qualityStr = sourceResult.meta.height ? `${sourceResult.meta.height}p` : '';
+                    const resolution = extractResolution(sourceResult.meta.title) || '';
+                    const resolutionStr = resolution ? ` | ${resolution}` : '';
 
                     streams.push({
-                        name: `4KHDHub | Hayduk ${flags}`,
+                        name: `4KHDHub | ${flags}${resolutionStr}`,
                         title: `${sourceResult.meta.title}\n📦 ${bytes.format(sourceResult.meta.bytes || 0)}`,
                         url: sourceResult.url,
-                        quality: qualityStr || undefined,
+                        quality: resolution || undefined,
                         behaviorHints: {
                             bingeGroup: `4khdhub-${sourceResult.source.toLowerCase()}`
                         }

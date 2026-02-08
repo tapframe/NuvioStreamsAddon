@@ -7,6 +7,7 @@ const fs = require('fs').promises;
 const path = require('path');
 const RedisCache = require('../utils/redisCache');
 const { followRedirectToFilePage, extractFinalDownloadFromFilePage } = require('../utils/linkResolver');
+const TMDBFetcher = require('../utils/TMDBFetcher');
 
 // Debug logging flag - set DEBUG=true to enable verbose logging
 const DEBUG = process.env.DEBUG === 'true' || process.env.UHDMOVIES_DEBUG === 'true';
@@ -1537,9 +1538,8 @@ async function getUHDMoviesStreams(tmdbId, mediaType = 'movie', season = null, e
       }
       log(`[UHDMovies] Cache MISS for ${cacheKey}. Fetching from source.`);
       // 2. If cache miss, get TMDB info to perform search
-      const tmdbUrl = `https://api.themoviedb.org/3/${mediaType === 'tv' ? 'tv' : 'movie'}/${tmdbId}?api_key=${TMDB_API_KEY_UHDMOVIES}`;
-      const tmdbResponse = await axios.get(tmdbUrl);
-      const tmdbData = tmdbResponse.data;
+      const tmdbFetcher = new TMDBFetcher(TMDB_API_KEY_UHDMOVIES);
+      const tmdbData = await tmdbFetcher.getDetails(tmdbId, mediaType === 'tv' ? 'tv' : 'movie');
       const mediaInfo = {
         title: mediaType === 'tv' ? tmdbData.name : tmdbData.title,
         year: parseInt(((mediaType === 'tv' ? tmdbData.first_air_date : tmdbData.release_date) || '').split('-')[0], 10)
